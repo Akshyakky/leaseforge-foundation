@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { useAppSelector } from '@/lib/hooks';
+import { useAppSelector, useAppDispatch } from '@/lib/hooks';
+import { toggleSidebar } from '@/features/ui/uiSlice';
 import {
   BarChart3,
   Building,
@@ -16,28 +16,33 @@ import {
   Package,
   Settings,
   Users,
+  ChevronLeft,
+  Layers,
 } from 'lucide-react';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
 
 interface NavItemProps {
   href: string;
   icon: React.ElementType;
   label: string;
   active?: boolean;
+  collapsed?: boolean;
 }
 
-const NavItem = ({ href, icon: Icon, label, active }: NavItemProps) => (
+const NavItem = ({ href, icon: Icon, label, active, collapsed }: NavItemProps) => (
   <Link
     to={href}
     className={cn(
       'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
       active
         ? 'bg-primary/10 text-primary font-medium'
-        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      collapsed && 'hidden'
     )}
   >
     <Icon className="h-4 w-4" />
@@ -85,22 +90,44 @@ const NavGroup = ({ label, icon: Icon, children, defaultOpen }: NavGroupProps) =
 
 const Sidebar = () => {
   const location = useLocation();
+  const dispatch = useAppDispatch();
   const { sidebarOpen } = useAppSelector(state => state.ui);
+
+  const handleToggle = () => {
+    dispatch(toggleSidebar());
+  };
 
   return (
     <aside 
       className={cn(
-        'fixed inset-y-0 left-0 z-20 flex h-full w-64 flex-col border-r border-border bg-background transition-transform duration-300 ease-in-out',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:w-64'
+        'fixed inset-y-0 left-0 z-20 flex h-full flex-col border-r border-border bg-background transition-all duration-300 ease-in-out',
+        sidebarOpen ? 'w-64' : 'w-16'
       )}
     >
-      <div className="flex h-16 items-center border-b border-border px-6">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-semibold">LE</span>
+      <div className="flex h-16 items-center justify-between border-b border-border px-4">
+        {sidebarOpen ? (
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-semibold">LE</span>
+            </div>
+            <span className="font-semibold">Lease ERP</span>
+          </Link>
+        ) : (
+          <div className="mx-auto">
+            <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-semibold">LE</span>
+            </div>
           </div>
-          <span className="font-semibold">Lease ERP</span>
-        </Link>
+        )}
+        
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={handleToggle} 
+          className={cn("flex md:flex", !sidebarOpen && "mx-auto")}
+        >
+          {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
@@ -110,12 +137,21 @@ const Sidebar = () => {
             icon={LayoutDashboard} 
             label="Dashboard" 
             active={location.pathname === '/dashboard'} 
+            collapsed={!sidebarOpen}
           />
           <NavItem 
             href="/calendar" 
             icon={Home} 
             label="Calendar" 
             active={location.pathname === '/calendar'} 
+            collapsed={!sidebarOpen}
+          />
+          <NavItem 
+            href="/ui-examples" 
+            icon={Layers} 
+            label="UI Examples" 
+            active={location.pathname === '/ui-examples'} 
+            collapsed={!sidebarOpen}
           />
         </div>
 
@@ -127,12 +163,14 @@ const Sidebar = () => {
               icon={Building} 
               label="All Companies" 
               active={location.pathname === '/companies'} 
+              collapsed={!sidebarOpen}
             />
             <NavItem 
               href="/companies/add" 
               icon={Building} 
               label="Add Company" 
               active={location.pathname === '/companies/add'} 
+              collapsed={!sidebarOpen}
             />
           </NavGroup>
           <NavGroup label="Contracts" icon={FileText}>
@@ -141,12 +179,14 @@ const Sidebar = () => {
               icon={FileText} 
               label="All Contracts" 
               active={location.pathname === '/contracts'} 
+              collapsed={!sidebarOpen}
             />
             <NavItem 
               href="/contracts/add" 
               icon={FileText} 
               label="Add Contract" 
               active={location.pathname === '/contracts/add'} 
+              collapsed={!sidebarOpen}
             />
           </NavGroup>
           <NavItem 
@@ -154,6 +194,7 @@ const Sidebar = () => {
             icon={CreditCard} 
             label="Invoices" 
             active={location.pathname === '/invoices'} 
+            collapsed={!sidebarOpen}
           />
         </div>
 
@@ -164,6 +205,7 @@ const Sidebar = () => {
             icon={BarChart3} 
             label="Reports" 
             active={location.pathname === '/reports'} 
+            collapsed={!sidebarOpen}
           />
         </div>
 
@@ -174,12 +216,14 @@ const Sidebar = () => {
             icon={Users} 
             label="Users" 
             active={location.pathname === '/users'} 
+            collapsed={!sidebarOpen}
           />
           <NavItem 
             href="/products" 
             icon={Package} 
             label="Products" 
             active={location.pathname === '/products'} 
+            collapsed={!sidebarOpen}
           />
         </div>
       </div>
@@ -190,12 +234,14 @@ const Sidebar = () => {
           icon={Settings} 
           label="Settings" 
           active={location.pathname === '/settings'} 
+          collapsed={!sidebarOpen}
         />
         <NavItem 
           href="/support" 
           icon={LifeBuoy} 
           label="Support" 
           active={location.pathname === '/support'} 
+          collapsed={!sidebarOpen}
         />
       </div>
     </aside>

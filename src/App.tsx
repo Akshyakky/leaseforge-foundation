@@ -20,6 +20,7 @@ const Login = lazy(() => import("@/pages/Login"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Users = lazy(() => import("@/pages/Users"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const UIExamples = lazy(() => import("@/pages/UIExamples"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -88,6 +89,7 @@ const AppRoutes = () => {
               </ProtectedRoute>
             } />
             <Route path="settings" element={<Settings />} />
+            <Route path="ui-examples" element={<UIExamples />} />
             {/* Add other routes here */}
           </Route>
           
