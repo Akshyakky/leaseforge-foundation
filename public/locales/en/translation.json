@@ -5,6 +5,7 @@
     "dashboard": "Dashboard",
     "calendar": "Calendar",
     "uiExamples": "UI Examples",
+    "dataExamples": "Data Examples",
     "companies": "Companies",
     "allCompanies": "All Companies",
     "addCompany": "Add Company",
@@ -49,6 +50,35 @@
     "success": "Success",
     "error": "Error",
     "warning": "Warning",
-    "info": "Information"
+    "info": "Information",
+    "export": "Export",
+    "results": "{{count}} results",
+    "page": "Page",
+    "of": "of",
+    "previous": "Previous",
+    "next": "Next",
+    "columnSettings": "Column Settings",
+    "actions": "Actions",
+    "filter": "Filter"
+  },
+  "forms": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email address",
+    "minLength": "Must be at least {{min}} characters",
+    "maxLength": "Must be at most {{max}} characters",
+    "passwordMatch": "Passwords do not match",
+    "submit": "Submit",
+    "formError": "There was an error submitting the form",
+    "formSuccess": "Form submitted successfully"
+  },
+  "dataDisplay": {
+    "table": {
+      "title": "Data Table",
+      "showColumns": "Show Columns",
+      "filter": "Filter",
+      "noResults": "No results found",
+      "rowsPerPage": "Rows per page",
+      "rowCount": "Showing {{start}} to {{end}} of {{total}} entries"
+    }
   }
 }

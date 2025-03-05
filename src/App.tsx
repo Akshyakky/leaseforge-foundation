@@ -24,6 +24,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Users = lazy(() => import("@/pages/Users"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const UIExamples = lazy(() => import("@/pages/UIExamples"));
+const DataDisplayExamples = lazy(() => import("@/pages/DataDisplayExamples"));
 const LanguageSettings = lazy(() => import("@/pages/LanguageSettings"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -95,6 +96,7 @@ const AppRoutes = () => {
             <Route path="settings" element={<Settings />} />
             <Route path="language-settings" element={<LanguageSettings />} />
             <Route path="ui-examples" element={<UIExamples />} />
+            <Route path="data-examples" element={<DataDisplayExamples />} />
             {/* Add other routes here */}
           </Route>
           
