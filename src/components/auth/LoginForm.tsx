@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 const formSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  rememberMe: z.boolean().optional(),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -45,7 +45,13 @@ const LoginForm = () => {
   const onSubmit = async (data: FormValues) => {
     try {
       setIsSubmitting(true);
-      await dispatch(login(data));
+      // Since data.email and data.password are guaranteed to be strings due to the zod schema,
+      // we can safely pass them to the login function
+      await dispatch(login({
+        email: data.email,
+        password: data.password,
+        rememberMe: data.rememberMe,
+      }));
       navigate('/dashboard');
     } catch (error) {
       console.error(error);

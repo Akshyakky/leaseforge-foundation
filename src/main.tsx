@@ -16,9 +16,11 @@ const validateEnv = () => {
     );
   }
 
-  // Set defaults if needed
+  // Check if API_TIMEOUT is missing, but don't try to set it directly
+  // as import.meta.env properties are read-only
   if (!import.meta.env.VITE_API_TIMEOUT) {
-    import.meta.env.VITE_API_TIMEOUT = '30000';
+    console.warn('VITE_API_TIMEOUT is not set, using default of 30000ms');
+    // Instead of modifying import.meta.env directly, we can use the value conditionally when needed
   }
 };
 
