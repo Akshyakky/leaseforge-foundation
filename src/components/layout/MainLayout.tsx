@@ -6,6 +6,7 @@ import { setSidebarState } from '@/features/ui/uiSlice';
 import { checkAuthStatus } from '@/features/auth/authService';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const MainLayout = () => {
@@ -47,9 +48,12 @@ const MainLayout = () => {
         }`}
       >
         <Navbar />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="mx-auto max-w-7xl animate-fade-in">
-            <Outlet />
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-7xl px-4 md:px-6">
+            <Breadcrumbs />
+            <div className="animate-fade-in py-4">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
