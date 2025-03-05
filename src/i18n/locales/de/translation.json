@@ -1,0 +1,54 @@
+
+{
+  "appName": "Lease ERP",
+  "nav": {
+    "dashboard": "Dashboard",
+    "calendar": "Kalender",
+    "uiExamples": "UI-Beispiele",
+    "companies": "Unternehmen",
+    "allCompanies": "Alle Unternehmen",
+    "addCompany": "Unternehmen hinzufügen",
+    "contracts": "Verträge",
+    "allContracts": "Alle Verträge",
+    "addContract": "Vertrag hinzufügen",
+    "invoices": "Rechnungen",
+    "reports": "Berichte",
+    "users": "Benutzer",
+    "products": "Produkte",
+    "settings": "Einstellungen",
+    "support": "Support",
+    "language": "Sprache",
+    "sections": {
+      "leasing": "Leasing",
+      "analytics": "Analytik",
+      "management": "Verwaltung"
+    }
+  },
+  "language": {
+    "title": "Spracheinstellungen",
+    "selectLanguage": "Sprache auswählen",
+    "english": "Englisch",
+    "spanish": "Spanisch",
+    "french": "Französisch",
+    "german": "Deutsch",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "success": "Sprache erfolgreich geändert"
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "view": "Anzeigen",
+    "add": "Hinzufügen",
+    "search": "Suchen...",
+    "loading": "Laden...",
+    "noData": "Keine Daten verfügbar",
+    "confirm": "Bestätigen",
+    "success": "Erfolg",
+    "error": "Fehler",
+    "warning": "Warnung",
+    "info": "Information"
+  }
+}

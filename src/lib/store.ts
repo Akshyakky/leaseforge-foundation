@@ -26,7 +26,7 @@ const authPersistConfig = {
 const uiPersistConfig = {
   key: 'ui',
   storage,
-  whitelist: ['theme'], // only persist theme preference
+  whitelist: ['theme', 'language'], // persist theme and language preferences
 };
 
 // Create persisted reducers

@@ -1,0 +1,54 @@
+
+{
+  "appName": "Lease ERP",
+  "nav": {
+    "dashboard": "Dashboard",
+    "calendar": "Calendar",
+    "uiExamples": "UI Examples",
+    "companies": "Companies",
+    "allCompanies": "All Companies",
+    "addCompany": "Add Company",
+    "contracts": "Contracts",
+    "allContracts": "All Contracts",
+    "addContract": "Add Contract",
+    "invoices": "Invoices",
+    "reports": "Reports",
+    "users": "Users",
+    "products": "Products",
+    "settings": "Settings",
+    "support": "Support",
+    "language": "Language",
+    "sections": {
+      "leasing": "Leasing",
+      "analytics": "Analytics",
+      "management": "Management"
+    }
+  },
+  "language": {
+    "title": "Language Settings",
+    "selectLanguage": "Select Language",
+    "english": "English",
+    "spanish": "Spanish",
+    "french": "French",
+    "german": "German",
+    "save": "Save",
+    "cancel": "Cancel",
+    "success": "Language changed successfully"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "add": "Add",
+    "search": "Search...",
+    "loading": "Loading...",
+    "noData": "No data available",
+    "confirm": "Confirm",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information"
+  }
+}

@@ -1,9 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { useAppSelector, useAppDispatch } from '@/lib/hooks';
-import { toggleSidebar } from '@/features/ui/uiSlice';
+import { useAppSelector } from '@/lib/hooks';
 import {
   BarChart3,
   Building,
@@ -17,15 +16,16 @@ import {
   Package,
   Settings,
   Users,
-  ChevronLeft,
   Layers,
+  Globe,
 } from 'lucide-react';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTranslation } from 'react-i18next';
 
 interface NavItemProps {
   href: string;
@@ -35,20 +35,45 @@ interface NavItemProps {
   collapsed?: boolean;
 }
 
-const NavItem = ({ href, icon: Icon, label, active, collapsed }: NavItemProps) => (
-  <Link
-    to={href}
-    className={cn(
-      'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-      active
-        ? 'bg-primary/10 text-primary font-medium'
-        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-    )}
-  >
-    <Icon className="h-4 w-4 min-w-4" />
-    {!collapsed && <span>{label}</span>}
-  </Link>
-);
+const NavItem = ({ href, icon: Icon, label, active, collapsed }: NavItemProps) => {
+  if (collapsed) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to={href}
+              className={cn(
+                'flex items-center justify-center rounded-md h-10 w-10 mx-auto text-sm transition-colors',
+                active
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <Icon className="h-5 w-5" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">{label}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <Link
+      to={href}
+      className={cn(
+        'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+        active
+          ? 'bg-primary/10 text-primary font-medium'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+      )}
+    >
+      <Icon className="h-4 w-4 min-w-4" />
+      <span>{label}</span>
+    </Link>
+  );
+};
 
 interface NavGroupProps {
   label: string;
@@ -59,11 +84,28 @@ interface NavGroupProps {
 }
 
 const NavGroup = ({ label, icon: Icon, children, defaultOpen, collapsed }: NavGroupProps) => {
-  const [isOpen, setIsOpen] = React.useState(defaultOpen || false);
+  const [isOpen, setIsOpen] = useState(defaultOpen || false);
+  const { t } = useTranslation();
 
-  // Don't show collapsible UI when sidebar is collapsed
+  // When sidebar is collapsed, show tooltip with submenu
   if (collapsed) {
-    return <div className="space-y-1">{children}</div>;
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="h-10 w-10 mx-auto flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+              <Icon className="h-5 w-5" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="p-0 bg-background border border-border w-48">
+            <div className="py-1">
+              <div className="px-3 py-2 text-sm font-medium border-b border-border">{t(label)}</div>
+              <div className="py-1">{children}</div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   }
 
   return (
@@ -78,7 +120,7 @@ const NavGroup = ({ label, icon: Icon, children, defaultOpen, collapsed }: NavGr
         >
           <div className="flex items-center gap-3">
             <Icon className="h-4 w-4" />
-            <span>{label}</span>
+            <span>{t(label)}</span>
           </div>
           {isOpen ? (
             <ChevronDown className="h-4 w-4" />
@@ -96,12 +138,8 @@ const NavGroup = ({ label, icon: Icon, children, defaultOpen, collapsed }: NavGr
 
 const Sidebar = () => {
   const location = useLocation();
-  const dispatch = useAppDispatch();
   const { sidebarOpen } = useAppSelector(state => state.ui);
-
-  const handleToggle = () => {
-    dispatch(toggleSidebar());
-  };
+  const { t } = useTranslation();
 
   const renderNavItems = (collapsed: boolean) => {
     return (
@@ -109,21 +147,21 @@ const Sidebar = () => {
         <NavItem 
           href="/dashboard" 
           icon={LayoutDashboard} 
-          label="Dashboard" 
+          label={t('nav.dashboard')} 
           active={location.pathname === '/dashboard'} 
           collapsed={collapsed}
         />
         <NavItem 
           href="/calendar" 
           icon={Home} 
-          label="Calendar" 
+          label={t('nav.calendar')} 
           active={location.pathname === '/calendar'} 
           collapsed={collapsed}
         />
         <NavItem 
           href="/ui-examples" 
           icon={Layers} 
-          label="UI Examples" 
+          label={t('nav.uiExamples')} 
           active={location.pathname === '/ui-examples'} 
           collapsed={collapsed}
         />
@@ -132,98 +170,75 @@ const Sidebar = () => {
   };
 
   const renderNavGroups = (collapsed: boolean) => {
-    if (collapsed) {
-      // When collapsed, render just the icons
-      return (
-        <>
-          <div className="py-2">
-            <NavItem href="/companies" icon={Building} label="Companies" active={location.pathname.includes('/companies')} collapsed={true} />
-          </div>
-          <div className="py-2">
-            <NavItem href="/contracts" icon={FileText} label="Contracts" active={location.pathname.includes('/contracts')} collapsed={true} />
-          </div>
-          <NavItem href="/invoices" icon={CreditCard} label="Invoices" active={location.pathname === '/invoices'} collapsed={true} />
-          <div className="py-2">
-            <NavItem href="/reports" icon={BarChart3} label="Reports" active={location.pathname === '/reports'} collapsed={true} />
-          </div>
-          <div className="py-2">
-            <NavItem href="/users" icon={Users} label="Users" active={location.pathname === '/users'} collapsed={true} />
-          </div>
-          <NavItem href="/products" icon={Package} label="Products" active={location.pathname === '/products'} collapsed={true} />
-        </>
-      );
-    }
-
-    // When expanded, render full navigation with groups
     return (
       <>
-        <div className="space-y-1">
-          <p className="px-3 text-xs font-medium text-muted-foreground">Leasing</p>
-          <NavGroup label="Companies" icon={Building} defaultOpen collapsed={collapsed}>
+        <div className={collapsed ? 'space-y-4' : 'space-y-1'}>
+          {!collapsed && <p className="px-3 text-xs font-medium text-muted-foreground">{t('nav.sections.leasing')}</p>}
+          <NavGroup label="nav.companies" icon={Building} defaultOpen={location.pathname.includes('/companies')} collapsed={collapsed}>
             <NavItem 
               href="/companies" 
               icon={Building} 
-              label="All Companies" 
+              label={t('nav.allCompanies')} 
               active={location.pathname === '/companies'} 
-              collapsed={collapsed}
+              collapsed={false}
             />
             <NavItem 
               href="/companies/add" 
               icon={Building} 
-              label="Add Company" 
+              label={t('nav.addCompany')} 
               active={location.pathname === '/companies/add'} 
-              collapsed={collapsed}
+              collapsed={false}
             />
           </NavGroup>
-          <NavGroup label="Contracts" icon={FileText} collapsed={collapsed}>
+          <NavGroup label="nav.contracts" icon={FileText} defaultOpen={location.pathname.includes('/contracts')} collapsed={collapsed}>
             <NavItem 
               href="/contracts" 
               icon={FileText} 
-              label="All Contracts" 
+              label={t('nav.allContracts')} 
               active={location.pathname === '/contracts'} 
-              collapsed={collapsed}
+              collapsed={false}
             />
             <NavItem 
               href="/contracts/add" 
               icon={FileText} 
-              label="Add Contract" 
+              label={t('nav.addContract')} 
               active={location.pathname === '/contracts/add'} 
-              collapsed={collapsed}
+              collapsed={false}
             />
           </NavGroup>
           <NavItem 
             href="/invoices" 
             icon={CreditCard} 
-            label="Invoices" 
+            label={t('nav.invoices')} 
             active={location.pathname === '/invoices'} 
             collapsed={collapsed}
           />
         </div>
 
-        <div className="space-y-1">
-          <p className="px-3 text-xs font-medium text-muted-foreground">Analytics</p>
+        <div className={collapsed ? 'space-y-4' : 'space-y-1'}>
+          {!collapsed && <p className="px-3 text-xs font-medium text-muted-foreground">{t('nav.sections.analytics')}</p>}
           <NavItem 
             href="/reports" 
             icon={BarChart3} 
-            label="Reports" 
+            label={t('nav.reports')} 
             active={location.pathname === '/reports'} 
             collapsed={collapsed}
           />
         </div>
 
-        <div className="space-y-1">
-          <p className="px-3 text-xs font-medium text-muted-foreground">Management</p>
+        <div className={collapsed ? 'space-y-4' : 'space-y-1'}>
+          {!collapsed && <p className="px-3 text-xs font-medium text-muted-foreground">{t('nav.sections.management')}</p>}
           <NavItem 
             href="/users" 
             icon={Users} 
-            label="Users" 
+            label={t('nav.users')} 
             active={location.pathname === '/users'} 
             collapsed={collapsed}
           />
           <NavItem 
             href="/products" 
             icon={Package} 
-            label="Products" 
+            label={t('nav.products')} 
             active={location.pathname === '/products'} 
             collapsed={collapsed}
           />
@@ -245,7 +260,7 @@ const Sidebar = () => {
             <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-semibold">LE</span>
             </div>
-            <span className="font-semibold">Lease ERP</span>
+            <span className="font-semibold">{t('appName')}</span>
           </Link>
         ) : (
           <div className="mx-auto">
@@ -254,15 +269,6 @@ const Sidebar = () => {
             </div>
           </div>
         )}
-        
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={handleToggle} 
-          className={cn("flex md:flex", !sidebarOpen && "mx-auto hidden md:flex")}
-        >
-          {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
@@ -277,15 +283,22 @@ const Sidebar = () => {
         <NavItem 
           href="/settings" 
           icon={Settings} 
-          label="Settings" 
+          label={t('nav.settings')} 
           active={location.pathname === '/settings'} 
           collapsed={!sidebarOpen}
         />
         <NavItem 
           href="/support" 
           icon={LifeBuoy} 
-          label="Support" 
+          label={t('nav.support')} 
           active={location.pathname === '/support'} 
+          collapsed={!sidebarOpen}
+        />
+        <NavItem 
+          href="/language-settings" 
+          icon={Globe} 
+          label={t('nav.language')} 
+          active={location.pathname === '/language-settings'} 
           collapsed={!sidebarOpen}
         />
       </div>

@@ -4,6 +4,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface UiState {
   sidebarOpen: boolean;
   theme: 'light' | 'dark' | 'system';
+  language: string;
   notifications: Array<{
     id: string;
     message: string;
@@ -14,6 +15,7 @@ interface UiState {
 const initialState: UiState = {
   sidebarOpen: true,
   theme: 'system',
+  language: 'en',
   notifications: [],
 };
 
@@ -29,6 +31,9 @@ const uiSlice = createSlice({
     },
     setTheme: (state, action: PayloadAction<'light' | 'dark' | 'system'>) => {
       state.theme = action.payload;
+    },
+    setLanguage: (state, action: PayloadAction<string>) => {
+      state.language = action.payload;
     },
     addNotification: (state, action: PayloadAction<{
       id: string;
@@ -50,6 +55,7 @@ export const {
   toggleSidebar,
   setSidebarState,
   setTheme,
+  setLanguage,
   addNotification,
   removeNotification,
   clearNotifications,

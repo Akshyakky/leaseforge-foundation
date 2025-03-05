@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useIsMobile } from '@/hooks/use-mobile';
+import useLanguageSync from '@/hooks/use-language-sync';
 
 const MainLayout = () => {
   const dispatch = useAppDispatch();
@@ -15,6 +16,9 @@ const MainLayout = () => {
   const isMobile = useIsMobile();
   const { isAuthenticated } = useAppSelector(state => state.auth);
   const { sidebarOpen } = useAppSelector(state => state.ui);
+
+  // Sync language between i18n and Redux
+  useLanguageSync();
 
   useEffect(() => {
     dispatch(checkAuthStatus());

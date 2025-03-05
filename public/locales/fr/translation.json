@@ -1,0 +1,54 @@
+
+{
+  "appName": "Lease ERP",
+  "nav": {
+    "dashboard": "Tableau de Bord",
+    "calendar": "Calendrier",
+    "uiExamples": "Exemples d'UI",
+    "companies": "Entreprises",
+    "allCompanies": "Toutes les Entreprises",
+    "addCompany": "Ajouter une Entreprise",
+    "contracts": "Contrats",
+    "allContracts": "Tous les Contrats",
+    "addContract": "Ajouter un Contrat",
+    "invoices": "Factures",
+    "reports": "Rapports",
+    "users": "Utilisateurs",
+    "products": "Produits",
+    "settings": "Paramètres",
+    "support": "Support",
+    "language": "Langue",
+    "sections": {
+      "leasing": "Location",
+      "analytics": "Analyses",
+      "management": "Gestion"
+    }
+  },
+  "language": {
+    "title": "Paramètres de Langue",
+    "selectLanguage": "Sélectionner la Langue",
+    "english": "Anglais",
+    "spanish": "Espagnol",
+    "french": "Français",
+    "german": "Allemand",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "success": "Langue changée avec succès"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "view": "Voir",
+    "add": "Ajouter",
+    "search": "Rechercher...",
+    "loading": "Chargement...",
+    "noData": "Aucune donnée disponible",
+    "confirm": "Confirmer",
+    "success": "Succès",
+    "error": "Erreur",
+    "warning": "Avertissement",
+    "info": "Information"
+  }
+}

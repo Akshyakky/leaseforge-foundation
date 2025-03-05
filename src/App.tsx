@@ -12,6 +12,9 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { checkAuthStatus } from "@/features/auth/authService";
 import LoadingPage from "@/components/common/LoadingPage";
 
+// Import i18n
+import '@/i18n/i18n';
+
 // Layouts
 import MainLayout from "@/components/layout/MainLayout";
 
@@ -21,6 +24,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Users = lazy(() => import("@/pages/Users"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const UIExamples = lazy(() => import("@/pages/UIExamples"));
+const LanguageSettings = lazy(() => import("@/pages/LanguageSettings"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -89,6 +93,7 @@ const AppRoutes = () => {
               </ProtectedRoute>
             } />
             <Route path="settings" element={<Settings />} />
+            <Route path="language-settings" element={<LanguageSettings />} />
             <Route path="ui-examples" element={<UIExamples />} />
             {/* Add other routes here */}
           </Route>
