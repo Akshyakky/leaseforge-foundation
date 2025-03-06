@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/lib/hooks';
@@ -48,7 +47,7 @@ const MainLayout = () => {
       {/* Main content */}
       <div 
         className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
-          sidebarOpen ? 'md:ml-64' : 'ml-16'
+          sidebarOpen ? 'md:ml-64' : 'ml-0 md:ml-16'
         }`}
       >
         <Navbar />
