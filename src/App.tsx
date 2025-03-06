@@ -1,5 +1,5 @@
 
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +11,7 @@ import { store, persistor } from "@/lib/store";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { checkAuthStatus } from "@/features/auth/authService";
 import LoadingPage from "@/components/common/LoadingPage";
+import { lazyLoad } from "@/lib/performance";
 
 // Import i18n
 import '@/i18n/i18n';
@@ -18,21 +19,25 @@ import '@/i18n/i18n';
 // Layouts
 import MainLayout from "@/components/layout/MainLayout";
 
-// Lazy-loaded pages for code-splitting
-const Login = lazy(() => import("@/pages/Login"));
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Users = lazy(() => import("@/pages/Users"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const UIExamples = lazy(() => import("@/pages/UIExamples"));
-const DataDisplayExamples = lazy(() => import("@/pages/DataDisplayExamples"));
-const LanguageSettings = lazy(() => import("@/pages/LanguageSettings"));
-const NotFound = lazy(() => import("@/pages/NotFound"));
+// Lazy-loaded pages for code-splitting and performance optimization
+const Login = lazyLoad(() => import("@/pages/Login"));
+const Dashboard = lazyLoad(() => import("@/pages/Dashboard"));
+const Users = lazyLoad(() => import("@/pages/Users"));
+const Settings = lazyLoad(() => import("@/pages/Settings"));
+const UIExamples = lazyLoad(() => import("@/pages/UIExamples"));
+const DataDisplayExamples = lazyLoad(() => import("@/pages/DataDisplayExamples"));
+const LanguageSettings = lazyLoad(() => import("@/pages/LanguageSettings"));
+const FormExamples = lazyLoad(() => import("@/pages/FormExamples"));
+const NotFound = lazyLoad(() => import("@/pages/NotFound"));
 
+// Create a client with better settings for performance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
     },
   },
 });
@@ -97,6 +102,7 @@ const AppRoutes = () => {
             <Route path="language-settings" element={<LanguageSettings />} />
             <Route path="ui-examples" element={<UIExamples />} />
             <Route path="data-examples" element={<DataDisplayExamples />} />
+            <Route path="form-examples" element={<FormExamples />} />
             {/* Add other routes here */}
           </Route>
           

@@ -1,15 +1,12 @@
 
 import React from 'react';
 import { 
-  Bell, 
   Menu, 
-  Moon, 
   Search, 
-  Sun, 
   UserCircle,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/lib/hooks';
-import { toggleSidebar, setTheme } from '@/features/ui/uiSlice';
+import { toggleSidebar } from '@/features/ui/uiSlice';
 import { logoutUser } from '@/features/auth/authService';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,25 +18,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
+import ThemeCustomizer from '@/components/theme/ThemeCustomizer';
 
 const Navbar = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector(state => state.auth);
-  const { theme } = useAppSelector(state => state.ui);
 
   const handleToggleSidebar = () => {
     dispatch(toggleSidebar());
-  };
-
-  const handleThemeChange = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    dispatch(setTheme(newTheme));
-    
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
   };
 
   const handleLogout = () => {
@@ -73,26 +60,11 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center space-x-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleThemeChange}
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
+          {/* Theme Customizer */}
+          <ThemeCustomizer />
+          
+          {/* Notification Center */}
+          <NotificationCenter />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
