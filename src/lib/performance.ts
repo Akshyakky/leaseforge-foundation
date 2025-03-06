@@ -9,14 +9,16 @@ import LoadingPage from '@/components/common/LoadingPage';
  */
 export function lazyLoad<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
-  fallback: React.ReactNode = <LoadingPage />
+  fallback: React.ReactNode = React.createElement(LoadingPage)
 ) {
   const LazyComponent = lazy(importFn);
   
   return (props: React.ComponentProps<T>) => (
-    <Suspense fallback={fallback}>
-      <LazyComponent {...props} />
-    </Suspense>
+    React.createElement(
+      Suspense,
+      { fallback },
+      React.createElement(LazyComponent, props)
+    )
   );
 }
 
@@ -44,7 +46,7 @@ export function withPerformanceTracking<P extends object>(
       console.log(`[Performance] ${componentName} rendered in ${endTime - startTime}ms`);
     }, []);
     
-    return <Component {...props} />;
+    return React.createElement(Component, props);
   };
 }
 
