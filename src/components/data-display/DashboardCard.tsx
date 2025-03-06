@@ -24,7 +24,8 @@ const cardVariants = cva(
   }
 );
 
-export interface DashboardCardProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {
+// Remove HTMLAttributes extension to avoid title property conflict
+export interface DashboardCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'>, VariantProps<typeof cardVariants> {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   icon?: React.ReactNode;

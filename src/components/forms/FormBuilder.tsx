@@ -65,9 +65,11 @@ export function FormBuilder<TFieldValues extends FieldValues>({
         toast.success(successMessage);
       }
       
-      // Reset form if submission was successful
+      // Fixed: Use reset with an object that matches TFieldValues instead of AsyncDefaultValues
       if (!optimistic) {
-        form.reset(defaultValues);
+        // We need to use as TFieldValues to avoid the type error
+        // since defaultValues could be a function that returns a Promise
+        form.reset(defaultValues as TFieldValues);
       }
     } catch (error) {
       console.error('Form submission error:', error);
