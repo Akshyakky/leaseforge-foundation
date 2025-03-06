@@ -43,7 +43,7 @@ const MainLayout = () => {
   return (
     <div className="h-screen flex overflow-hidden bg-background">
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} />
 
       {/* Main content */}
       <div 
