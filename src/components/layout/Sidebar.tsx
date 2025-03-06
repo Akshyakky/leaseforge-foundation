@@ -85,79 +85,96 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-card transition-transform duration-300 ease-in-out lg:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-16"
+        "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300",
+        isOpen ? "w-64" : "w-16"
       )}
     >
       <div className="flex h-16 items-center border-b px-6">
-        <h2 className={cn("text-lg font-semibold transition-opacity", !isOpen && "md:opacity-0")}>
+        <h2 className={cn("text-lg font-semibold transition-opacity", !isOpen && "opacity-0")}>
           {t('appName')}
         </h2>
       </div>
       <div className="flex-1 overflow-auto py-4 px-3">
-        <div className="space-y-1">
+        <nav className="space-y-1">
           <NavItem 
             to="/dashboard" 
             icon={<LayoutDashboard size={18} />} 
-            label={t('nav.dashboard')} 
+            label={isOpen ? t('nav.dashboard') : ""}
           />
           
-          <SubMenu 
-            icon={<Users size={18} />} 
-            label={t('nav.users')}
-          >
-            <NavItem 
-              to="/users" 
-              icon={<Users size={16} />} 
-              label="All Users" 
-            />
-            <NavItem 
-              to="/users/new" 
-              icon={<Users size={16} />} 
-              label="Add User" 
-            />
-          </SubMenu>
-          
-          <SubMenu 
-            icon={<Database size={18} />} 
-            label="Data Display"
-          >
-            <NavItem 
-              to="/data-examples" 
-              icon={<Database size={16} />} 
-              label="Examples" 
-            />
-            <NavItem 
-              to="/data-examples/tables" 
-              icon={<ListOrdered size={16} />} 
-              label="Tables" 
-            />
-          </SubMenu>
+          {isOpen ? (
+            <>
+              <SubMenu 
+                icon={<Users size={18} />} 
+                label={t('nav.users')}
+              >
+                <NavItem 
+                  to="/users" 
+                  icon={<Users size={16} />} 
+                  label="All Users" 
+                />
+                <NavItem 
+                  to="/users/new" 
+                  icon={<Users size={16} />} 
+                  label="Add User" 
+                />
+              </SubMenu>
+              
+              <SubMenu 
+                icon={<Database size={18} />} 
+                label="Data Display"
+              >
+                <NavItem 
+                  to="/data-examples" 
+                  icon={<Database size={16} />} 
+                  label="Examples" 
+                />
+                <NavItem 
+                  to="/data-examples/tables" 
+                  icon={<ListOrdered size={16} />} 
+                  label="Tables" 
+                />
+              </SubMenu>
+            </>
+          ) : (
+            <>
+              <NavItem 
+                to="/users" 
+                icon={<Users size={18} />} 
+                label="" 
+              />
+              <NavItem 
+                to="/data-examples" 
+                icon={<Database size={18} />} 
+                label="" 
+              />
+            </>
+          )}
           
           <NavItem 
             to="/form-examples" 
             icon={<FormInput size={18} />} 
-            label="Form Examples" 
+            label={isOpen ? "Form Examples" : ""} 
           />
           
           <NavItem 
             to="/ui-examples" 
             icon={<Palette size={18} />} 
-            label={t('nav.uiExamples')} 
+            label={isOpen ? t('nav.uiExamples') : ""} 
           />
           
           <NavItem 
             to="/settings" 
             icon={<Settings size={18} />} 
-            label={t('nav.settings')} 
+            label={isOpen ? t('nav.settings') : ""} 
           />
           
           <NavItem 
             to="/language-settings" 
             icon={<ServerCog size={18} />} 
-            label={t('nav.language')} 
+            label={isOpen ? t('nav.language') : ""} 
           />
-        </div>
+        </nav>
       </div>
     </aside>
   );
