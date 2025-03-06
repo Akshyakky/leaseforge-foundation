@@ -12,7 +12,9 @@ import {
   ListOrdered, 
   FormInput,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  HelpCircle,
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,15 +26,17 @@ interface NavItemProps {
   to: string;
   icon: React.ReactNode;
   label: string;
+  isOpen: boolean;
 }
 
 interface SubMenuProps {
   icon: React.ReactNode;
   label: string;
+  isOpen: boolean;
   children: React.ReactNode;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
   return (
     <NavLink
       to={to}
@@ -46,18 +50,33 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
       }
     >
       {icon}
-      <span className="truncate">{label}</span>
+      {isOpen && <span className="truncate">{label}</span>}
     </NavLink>
   );
 };
 
-const SubMenu: React.FC<SubMenuProps> = ({ icon, label, children }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
+
+  if (!isOpen) {
+    return (
+      <div className="space-y-1">
+        <button
+          className={cn(
+            "w-full flex items-center rounded-md px-3 py-2 text-sm transition-colors",
+            "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {icon}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsSubmenuOpen(!isSubmenuOpen)}
         className={cn(
           "w-full flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
           "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
@@ -67,10 +86,10 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, children }) => {
           {icon}
           <span className="truncate">{label}</span>
         </div>
-        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {isSubmenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
       
-      {isOpen && (
+      {isSubmenuOpen && (
         <div className="pl-6 space-y-1">
           {children}
         </div>
@@ -85,21 +104,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-width duration-300 ease-in-out",
         isOpen ? "w-64" : "w-16"
       )}
     >
       <div className="flex h-16 items-center border-b px-6">
-        <h2 className={cn("text-lg font-semibold transition-opacity", !isOpen && "opacity-0")}>
-          {t('appName')}
-        </h2>
+        {isOpen ? (
+          <div className="flex items-center gap-2">
+            <Building2 size={24} className="text-[#1EAEDB]" />
+            <h2 className="text-lg font-semibold">
+              {t('appName')}
+            </h2>
+          </div>
+        ) : (
+          <Building2 size={24} className="text-[#1EAEDB] mx-auto" />
+        )}
       </div>
-      <div className="flex-1 overflow-auto py-4 px-3">
+      
+      <div className="flex-1 overflow-auto py-4 px-3 flex flex-col justify-between">
+        {/* Main navigation */}
         <nav className="space-y-1">
           <NavItem 
             to="/dashboard" 
             icon={<LayoutDashboard size={18} />} 
-            label={isOpen ? t('nav.dashboard') : ""}
+            label={t('nav.dashboard')}
+            isOpen={isOpen}
           />
           
           {isOpen ? (
@@ -107,32 +136,38 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               <SubMenu 
                 icon={<Users size={18} />} 
                 label={t('nav.users')}
+                isOpen={isOpen}
               >
                 <NavItem 
                   to="/users" 
                   icon={<Users size={16} />} 
-                  label="All Users" 
+                  label="All Users"
+                  isOpen={isOpen}
                 />
                 <NavItem 
                   to="/users/new" 
                   icon={<Users size={16} />} 
-                  label="Add User" 
+                  label="Add User"
+                  isOpen={isOpen}
                 />
               </SubMenu>
               
               <SubMenu 
                 icon={<Database size={18} />} 
                 label="Data Display"
+                isOpen={isOpen}
               >
                 <NavItem 
                   to="/data-examples" 
                   icon={<Database size={16} />} 
-                  label="Examples" 
+                  label="Examples"
+                  isOpen={isOpen}
                 />
                 <NavItem 
                   to="/data-examples/tables" 
                   icon={<ListOrdered size={16} />} 
-                  label="Tables" 
+                  label="Tables"
+                  isOpen={isOpen}
                 />
               </SubMenu>
             </>
@@ -141,12 +176,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               <NavItem 
                 to="/users" 
                 icon={<Users size={18} />} 
-                label="" 
+                label=""
+                isOpen={isOpen} 
               />
               <NavItem 
                 to="/data-examples" 
                 icon={<Database size={18} />} 
-                label="" 
+                label=""
+                isOpen={isOpen}
               />
             </>
           )}
@@ -154,25 +191,39 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
           <NavItem 
             to="/form-examples" 
             icon={<FormInput size={18} />} 
-            label={isOpen ? "Form Examples" : ""} 
+            label="Form Examples"
+            isOpen={isOpen}
           />
           
           <NavItem 
             to="/ui-examples" 
             icon={<Palette size={18} />} 
-            label={isOpen ? t('nav.uiExamples') : ""} 
+            label={t('nav.uiExamples')}
+            isOpen={isOpen}
           />
-          
+        </nav>
+
+        {/* Footer navigation - settings and support */}
+        <nav className="space-y-1 mt-auto pt-4 border-t border-border/50">
           <NavItem 
             to="/settings" 
             icon={<Settings size={18} />} 
-            label={isOpen ? t('nav.settings') : ""} 
+            label={t('nav.settings')}
+            isOpen={isOpen}
           />
           
           <NavItem 
             to="/language-settings" 
             icon={<ServerCog size={18} />} 
-            label={isOpen ? t('nav.language') : ""} 
+            label={t('nav.language')}
+            isOpen={isOpen}
+          />
+
+          <NavItem 
+            to="/support" 
+            icon={<HelpCircle size={18} />} 
+            label="Support"
+            isOpen={isOpen}
           />
         </nav>
       </div>
