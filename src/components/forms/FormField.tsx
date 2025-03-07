@@ -17,6 +17,7 @@ export interface FieldProps<
   type?: string;
   autoComplete?: string;
   className?: string;
+  disabled?: boolean;
   render?: (props: { field: any; fieldState: any }) => React.ReactNode;
 }
 
@@ -32,6 +33,7 @@ export function FormField<
   type = 'text',
   autoComplete,
   className,
+  disabled,
   render,
   form
 }: FieldProps<TFieldValues, TName> & { form: UseFormReturn<TFieldValues> }) {
@@ -54,6 +56,7 @@ export function FormField<
                 type={type}
                 placeholder={placeholder}
                 autoComplete={autoComplete}
+                disabled={disabled}
                 className={fieldState.error ? "border-destructive" : ""}
               />
             </FormControl>

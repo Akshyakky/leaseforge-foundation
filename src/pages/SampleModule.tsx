@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -9,7 +8,6 @@ import {
   Edit,
   Trash,
   Eye,
-  FilePdf,
   FileSpreadsheet,
   Search
 } from 'lucide-react';
@@ -23,7 +21,6 @@ import { generateFakeData } from '@/lib/fakeData';
 import { generatePdf } from '@/lib/pdfGenerator';
 import { generateExcel } from '@/lib/excelGenerator';
 
-// Define the item type for our sample module
 export interface Item {
   id: number;
   name: string;
@@ -41,13 +38,11 @@ const SampleModule = () => {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch data using React Query
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ['items'],
     queryFn: () => generateFakeData(50),
   });
 
-  // Filter items based on search query
   const filteredItems = searchQuery
     ? items.filter(item => 
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -56,7 +51,6 @@ const SampleModule = () => {
       )
     : items;
 
-  // Define table columns
   const columns: Column<Item>[] = [
     {
       header: 'ID',
@@ -116,7 +110,6 @@ const SampleModule = () => {
     },
   ];
 
-  // Define row actions
   const rowActions: RowAction<Item>[] = [
     {
       label: 'View',
@@ -135,7 +128,6 @@ const SampleModule = () => {
     },
   ];
 
-  // Item handlers
   const handleAddItem = () => {
     setModalMode('create');
     setSelectedItem(null);
@@ -178,7 +170,6 @@ const SampleModule = () => {
     refetch();
   };
 
-  // Export handlers
   const handleExportPdf = () => {
     generatePdf(filteredItems, columns);
     toast.success("PDF export started", {
@@ -225,7 +216,7 @@ const SampleModule = () => {
             Add Item
           </Button>
           <Button variant="outline" onClick={handleExportPdf}>
-            <FilePdf className="mr-2 h-4 w-4" />
+            <FileText className="mr-2 h-4 w-4" />
             Export PDF
           </Button>
           <Button variant="outline" onClick={handleExportExcel}>
@@ -248,7 +239,7 @@ const SampleModule = () => {
           pageSize: 10,
           pageIndex: 0,
           pageCount: Math.ceil(filteredItems.length / 10),
-          onPageChange: () => {}, // This would be implemented for real pagination
+          onPageChange: () => {},
         }}
       />
 
