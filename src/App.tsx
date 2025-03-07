@@ -30,6 +30,12 @@ const LanguageSettings = lazyLoad(() => import("@/pages/LanguageSettings"));
 const FormExamples = lazyLoad(() => import("@/pages/FormExamples"));
 const NotFound = lazyLoad(() => import("@/pages/NotFound"));
 
+// New dashboard pages
+const AnalyticsDashboard = lazyLoad(() => import("@/pages/dashboards/AnalyticsDashboard"));
+const SalesDashboard = lazyLoad(() => import("@/pages/dashboards/SalesDashboard"));
+const OperationsDashboard = lazyLoad(() => import("@/pages/dashboards/OperationsDashboard"));
+const SampleModule = lazyLoad(() => import("@/pages/SampleModule"));
+
 // Create a client with better settings for performance
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +99,13 @@ const AppRoutes = () => {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            
+            {/* New dashboard routes */}
+            <Route path="analytics-dashboard" element={<AnalyticsDashboard />} />
+            <Route path="sales-dashboard" element={<SalesDashboard />} />
+            <Route path="operations-dashboard" element={<OperationsDashboard />} />
+            <Route path="sample-module" element={<SampleModule />} />
+            
             <Route path="users" element={
               <ProtectedRoute requiredRoles={['admin', 'manager']}>
                 <Users />
@@ -103,7 +116,6 @@ const AppRoutes = () => {
             <Route path="ui-examples" element={<UIExamples />} />
             <Route path="data-examples" element={<DataDisplayExamples />} />
             <Route path="form-examples" element={<FormExamples />} />
-            {/* Add other routes here */}
           </Route>
           
           {/* Catch-all route */}

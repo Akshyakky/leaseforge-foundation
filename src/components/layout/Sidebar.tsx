@@ -14,7 +14,12 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
-  Building2
+  Building2,
+  TrendingUp,
+  BarChart,
+  LineChart,
+  PieChart,
+  Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -128,6 +133,49 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
             to="/dashboard" 
             icon={<LayoutDashboard size={18} />} 
             label={t('nav.dashboard')}
+            isOpen={isOpen}
+          />
+          
+          {/* Dashboards Submenu */}
+          {isOpen ? (
+            <SubMenu 
+              icon={<BarChart size={18} />} 
+              label="Dashboards"
+              isOpen={isOpen}
+            >
+              <NavItem 
+                to="/analytics-dashboard" 
+                icon={<LineChart size={16} />} 
+                label="Analytics"
+                isOpen={isOpen}
+              />
+              <NavItem 
+                to="/sales-dashboard" 
+                icon={<TrendingUp size={16} />} 
+                label="Sales"
+                isOpen={isOpen}
+              />
+              <NavItem 
+                to="/operations-dashboard" 
+                icon={<PieChart size={16} />} 
+                label="Operations"
+                isOpen={isOpen}
+              />
+            </SubMenu>
+          ) : (
+            <NavItem 
+              to="/analytics-dashboard" 
+              icon={<BarChart size={18} />} 
+              label=""
+              isOpen={isOpen}
+            />
+          )}
+          
+          {/* Sample Module */}
+          <NavItem 
+            to="/sample-module" 
+            icon={<Package size={18} />} 
+            label="Sample Module"
             isOpen={isOpen}
           />
           
