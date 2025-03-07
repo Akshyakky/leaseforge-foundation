@@ -22,6 +22,12 @@ import {
   Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -42,6 +48,33 @@ interface SubMenuProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
+  if (!isOpen) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors",
+                  isActive
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                )
+              }
+            >
+              {icon}
+            </NavLink>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {label}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  
   return (
     <NavLink
       to={to}
@@ -55,7 +88,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
       }
     >
       {icon}
-      {isOpen && <span className="truncate">{label}</span>}
+      <span className="truncate">{label}</span>
     </NavLink>
   );
 };
@@ -64,17 +97,30 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
   const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
 
   if (!isOpen) {
+    // When the sidebar is collapsed, show a tooltip with submenu items
     return (
-      <div className="space-y-1">
-        <button
-          className={cn(
-            "w-full flex items-center rounded-md px-3 py-2 text-sm transition-colors",
-            "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {icon}
-        </button>
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex justify-center">
+              <button
+                className={cn(
+                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors",
+                  "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {icon}
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="p-2 w-40">
+            <div className="font-medium mb-2">{label}</div>
+            <div className="space-y-1">
+              {React.Children.map(children, (child) => child)}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -137,39 +183,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
           />
           
           {/* Dashboards Submenu */}
-          {isOpen ? (
-            <SubMenu 
-              icon={<BarChart size={18} />} 
-              label="Dashboards"
-              isOpen={isOpen}
-            >
-              <NavItem 
-                to="/analytics-dashboard" 
-                icon={<LineChart size={16} />} 
-                label="Analytics"
-                isOpen={isOpen}
-              />
-              <NavItem 
-                to="/sales-dashboard" 
-                icon={<TrendingUp size={16} />} 
-                label="Sales"
-                isOpen={isOpen}
-              />
-              <NavItem 
-                to="/operations-dashboard" 
-                icon={<PieChart size={16} />} 
-                label="Operations"
-                isOpen={isOpen}
-              />
-            </SubMenu>
-          ) : (
+          <SubMenu 
+            icon={<BarChart size={18} />} 
+            label="Dashboards"
+            isOpen={isOpen}
+          >
             <NavItem 
               to="/analytics-dashboard" 
-              icon={<BarChart size={18} />} 
-              label=""
-              isOpen={isOpen}
+              icon={<LineChart size={16} />} 
+              label="Analytics"
+              isOpen={true}
             />
-          )}
+            <NavItem 
+              to="/sales-dashboard" 
+              icon={<TrendingUp size={16} />} 
+              label="Sales"
+              isOpen={true}
+            />
+            <NavItem 
+              to="/operations-dashboard" 
+              icon={<PieChart size={16} />} 
+              label="Operations"
+              isOpen={true}
+            />
+          </SubMenu>
           
           {/* Sample Module */}
           <NavItem 
@@ -179,62 +216,43 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
             isOpen={isOpen}
           />
           
-          {isOpen ? (
-            <>
-              <SubMenu 
-                icon={<Users size={18} />} 
-                label={t('nav.users')}
-                isOpen={isOpen}
-              >
-                <NavItem 
-                  to="/users" 
-                  icon={<Users size={16} />} 
-                  label="All Users"
-                  isOpen={isOpen}
-                />
-                <NavItem 
-                  to="/users/new" 
-                  icon={<Users size={16} />} 
-                  label="Add User"
-                  isOpen={isOpen}
-                />
-              </SubMenu>
-              
-              <SubMenu 
-                icon={<Database size={18} />} 
-                label="Data Display"
-                isOpen={isOpen}
-              >
-                <NavItem 
-                  to="/data-examples" 
-                  icon={<Database size={16} />} 
-                  label="Examples"
-                  isOpen={isOpen}
-                />
-                <NavItem 
-                  to="/data-examples/tables" 
-                  icon={<ListOrdered size={16} />} 
-                  label="Tables"
-                  isOpen={isOpen}
-                />
-              </SubMenu>
-            </>
-          ) : (
-            <>
-              <NavItem 
-                to="/users" 
-                icon={<Users size={18} />} 
-                label=""
-                isOpen={isOpen} 
-              />
-              <NavItem 
-                to="/data-examples" 
-                icon={<Database size={18} />} 
-                label=""
-                isOpen={isOpen}
-              />
-            </>
-          )}
+          <SubMenu 
+            icon={<Users size={18} />} 
+            label={t('nav.users')}
+            isOpen={isOpen}
+          >
+            <NavItem 
+              to="/users" 
+              icon={<Users size={16} />} 
+              label="All Users"
+              isOpen={true}
+            />
+            <NavItem 
+              to="/users/new" 
+              icon={<Users size={16} />} 
+              label="Add User"
+              isOpen={true}
+            />
+          </SubMenu>
+          
+          <SubMenu 
+            icon={<Database size={18} />} 
+            label="Data Display"
+            isOpen={isOpen}
+          >
+            <NavItem 
+              to="/data-examples" 
+              icon={<Database size={16} />} 
+              label="Examples"
+              isOpen={true}
+            />
+            <NavItem 
+              to="/data-examples/tables" 
+              icon={<ListOrdered size={16} />} 
+              label="Tables"
+              isOpen={true}
+            />
+          </SubMenu>
           
           <NavItem 
             to="/form-examples" 
