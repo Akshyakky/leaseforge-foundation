@@ -57,14 +57,16 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
               to={to}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors w-full",
                   isActive
                     ? "bg-accent text-accent-foreground font-medium"
                     : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                 )
               }
             >
-              {icon}
+              <div className="flex items-center justify-center">
+                {icon}
+              </div>
             </NavLink>
           </TooltipTrigger>
           <TooltipContent side="right">
@@ -102,10 +104,10 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex justify-center">
+            <div className="flex w-full justify-center">
               <button
                 className={cn(
-                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors w-full",
                   "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -159,7 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
         isOpen ? "w-64" : "w-16"
       )}
     >
-      <div className="flex h-16 items-center border-b px-6">
+      <div className="flex h-16 items-center justify-center border-b px-6">
         {isOpen ? (
           <div className="flex items-center gap-2">
             <Building2 size={24} className="text-[#1EAEDB]" />
@@ -168,13 +170,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
             </h2>
           </div>
         ) : (
-          <Building2 size={24} className="text-[#1EAEDB] mx-auto" />
+          <Building2 size={24} className="text-[#1EAEDB]" />
         )}
       </div>
       
       <div className="flex-1 overflow-auto py-4 px-3 flex flex-col justify-between">
         {/* Main navigation */}
-        <nav className="space-y-1">
+        <nav className="space-y-1 w-full">
           <NavItem 
             to="/dashboard" 
             icon={<LayoutDashboard size={18} />} 
@@ -270,7 +272,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
         </nav>
 
         {/* Footer navigation - settings and support */}
-        <nav className="space-y-1 mt-auto pt-4 border-t border-border/50">
+        <nav className="space-y-1 mt-auto pt-4 border-t border-border/50 w-full">
           <NavItem 
             to="/settings" 
             icon={<Settings size={18} />} 
@@ -298,3 +300,4 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 };
 
 export default Sidebar;
+
