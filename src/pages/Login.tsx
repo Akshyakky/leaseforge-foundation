@@ -29,9 +29,8 @@ const Login = () => {
         </div>
         
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>Demo credentials:</p>
-          <p>Email: admin@example.com | Password: admin123</p>
-          <p>Email: manager@example.com | Password: manager123</p>
+          <p>Lease ERP - Enterprise Resource Planning System</p>
+          <p>© 2023-2025 Lease ERP Systems</p>
         </div>
       </div>
     </div>

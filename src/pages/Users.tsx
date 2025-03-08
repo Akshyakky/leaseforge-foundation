@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { 
   ChevronDown,
+  Loader2,
   MoreHorizontal, 
-  Plus, 
   Search,
   UserPlus
 } from 'lucide-react';
@@ -27,81 +27,90 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-// Sample users data
-const users = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    email: 'alex@example.com',
-    role: 'Admin',
-    status: 'Active',
-    lastActive: '2 hours ago',
-  },
-  {
-    id: '2',
-    name: 'Sarah Davis',
-    email: 'sarah@example.com',
-    role: 'Manager',
-    status: 'Active',
-    lastActive: '5 minutes ago',
-  },
-  {
-    id: '3',
-    name: 'Michael Brown',
-    email: 'michael@example.com',
-    role: 'Staff',
-    status: 'Inactive',
-    lastActive: '3 days ago',
-  },
-  {
-    id: '4',
-    name: 'Emily Wilson',
-    email: 'emily@example.com',
-    role: 'Manager',
-    status: 'Active',
-    lastActive: '1 hour ago',
-  },
-  {
-    id: '5',
-    name: 'David Thompson',
-    email: 'david@example.com',
-    role: 'Staff',
-    status: 'Active',
-    lastActive: 'Just now',
-  },
-  {
-    id: '6',
-    name: 'Jennifer Clark',
-    email: 'jennifer@example.com',
-    role: 'Staff',
-    status: 'Active',
-    lastActive: '45 minutes ago',
-  },
-  {
-    id: '7',
-    name: 'Daniel Rodriguez',
-    email: 'daniel@example.com',
-    role: 'Manager',
-    status: 'Inactive',
-    lastActive: '1 week ago',
-  },
-];
+import { userService, User } from '@/services/userService';
+import { useNavigate } from 'react-router-dom';
+import { debounce } from 'lodash';
+import { toast } from 'sonner';
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Fetch users from API
+  const fetchUsers = async (search?: string) => {
+    try {
+      setLoading(true);
+      
+      let userData: User[];
+      if (search) {
+        userData = await userService.searchUsers(search);
+      } else {
+        userData = await userService.getAllUsers();
+      }
+      
+      setUsers(userData);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Failed to fetch users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Handle search with debounce
+  const debouncedSearch = debounce((value: string) => {
+    if (value.length >= 2 || value === '') {
+      fetchUsers(value);
+    }
+  }, 500);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
+  };
+
+  const handleAddUser = () => {
+    navigate('/users/new');
+  };
+
+  const handleEditUser = (userId: number) => {
+    navigate(`/users/edit/${userId}`);
+  };
+
+  const handleViewUser = (userId: number) => {
+    navigate(`/users/view/${userId}`);
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        const success = await userService.deleteUser(userId);
+        if (success) {
+          // Remove user from state
+          setUsers(users.filter(user => user.userID !== userId));
+        }
+      } catch (error) {
+        console.error('Error deleting user:', error);
+      }
+    }
+  };
+
+  const handleResetPassword = (userId: number, userName: string) => {
+    toast.info(`Password reset functionality will be implemented for ${userName}`);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Users</h1>
-        <Button>
+        <Button onClick={handleAddUser}>
           <UserPlus className="mr-2 h-4 w-4" />
           Add User
         </Button>
@@ -123,7 +132,7 @@ const Users = () => {
                 placeholder="Search users..."
                 className="pl-9"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={handleSearchChange}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -139,72 +148,91 @@ const Users = () => {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem>Role</DropdownMenuItem>
                   <DropdownMenuItem>Status</DropdownMenuItem>
-                  <DropdownMenuItem>Date added</DropdownMenuItem>
+                  <DropdownMenuItem>Department</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
           
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Active</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.role === 'Admin' ? 'default' : 'outline'}>
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={user.status === 'Active' ? 'outline' : 'secondary'}
-                        className={`${
-                          user.status === 'Active' 
-                            ? 'text-emerald-500 bg-emerald-50' 
-                            : 'text-red-500 bg-red-50'
-                        }`}
-                      >
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {user.lastActive}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <DropdownMenuItem>View details</DropdownMenuItem>
-                          <DropdownMenuItem>Reset password</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-500">
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              {searchTerm ? "No users found matching your search." : "No users found."}
+            </div>
+          ) : (
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.userID}>
+                      <TableCell className="font-medium">{user.userFullName}</TableCell>
+                      <TableCell>{user.emailID}</TableCell>
+                      <TableCell>
+                        <Badge variant={user.roleName === 'Admin' ? 'default' : 'outline'}>
+                          {user.roleName || 'User'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={user.isActive ? 'outline' : 'secondary'}
+                          className={`${
+                            user.isActive 
+                              ? 'text-emerald-500 bg-emerald-50' 
+                              : 'text-red-500 bg-red-50'
+                          }`}
+                        >
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {user.departmentName || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditUser(user.userID)}>
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewUser(user.userID)}>
+                              View details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleResetPassword(user.userID, user.userName)}>
+                              Reset password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-500"
+                              onClick={() => handleDeleteUser(user.userID)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

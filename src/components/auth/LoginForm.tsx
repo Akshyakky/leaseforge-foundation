@@ -20,8 +20,8 @@ import { EyeIcon, EyeOffIcon, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const formSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
   rememberMe: z.boolean().optional().default(false),
 });
 
@@ -36,7 +36,7 @@ const LoginForm = () => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      username: '',
       password: '',
       rememberMe: false,
     },
@@ -45,14 +45,15 @@ const LoginForm = () => {
   const onSubmit = async (data: FormValues) => {
     try {
       setIsSubmitting(true);
-      // Since data.email and data.password are guaranteed to be strings due to the zod schema,
-      // we can safely pass them to the login function
-      await dispatch(login({
-        email: data.email,
+      
+      const success = await dispatch(login({
+        username: data.username,
         password: data.password,
-        rememberMe: data.rememberMe,
       }));
-      navigate('/dashboard');
+      
+      if (success) {
+        navigate('/dashboard');
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -63,7 +64,7 @@ const LoginForm = () => {
   return (
     <div className="w-full max-w-md mx-auto p-6 space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-semibold">Welcome back</h1>
+        <h1 className="text-2xl font-semibold">Welcome to LeaseERP</h1>
         <p className="text-muted-foreground">Enter your credentials to access your account</p>
       </div>
 
@@ -71,12 +72,12 @@ const LoginForm = () => {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
             control={form.control}
-            name="email"
+            name="username"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>Username</FormLabel>
                 <FormControl>
-                  <Input placeholder="you@example.com" {...field} />
+                  <Input placeholder="Enter your username" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

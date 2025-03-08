@@ -4,7 +4,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/lib/hooks';
 import { setSidebarState } from '@/features/ui/uiSlice';
 import { checkAuthStatus } from '@/features/auth/authService';
-import Sidebar from './Sidebar';
+import DynamicSidebar from './DynamicSidebar';
 import Navbar from './Navbar';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -45,7 +45,7 @@ const MainLayout = () => {
   return (
     <div className="h-screen flex overflow-hidden bg-background">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} />
+      <DynamicSidebar isOpen={sidebarOpen} />
 
       {/* Main content */}
       <div 

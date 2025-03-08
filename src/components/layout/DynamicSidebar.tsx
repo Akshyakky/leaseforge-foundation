@@ -1,11 +1,7 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { 
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { 
   Tooltip,
@@ -13,6 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useAppSelector } from '@/lib/hooks';
+import { menuService, MenuItem, SubMenuItem } from '@/services/menuService';
 import { getLucideIcon } from '@/lib/iconMapper';
 
 interface SidebarProps {
@@ -137,8 +135,36 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
+const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   const { t } = useTranslation();
+  const { user } = useAppSelector(state => state.auth);
+  const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        setLoading(true);
+        let menuData: MenuItem[] = [];
+        
+        // If user ID is available, fetch user-specific menus
+        if (user?.id) {
+          menuData = await menuService.getUserMenus(parseInt(user.id));
+        } else {
+          // Otherwise fetch all menus (for development/testing)
+          menuData = await menuService.getAllMenus();
+        }
+        
+        setMenus(menuData);
+      } catch (error) {
+        console.error('Error fetching menus:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchMenus();
+  }, [user?.id]);
 
   return (
     <aside
@@ -167,98 +193,60 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
       <div className="flex-1 overflow-auto py-4 px-3 flex flex-col justify-between">
         {/* Main navigation */}
         <nav className="space-y-1 w-full">
-          <NavItem 
-            to="/dashboard" 
-            icon={getLucideIcon('LayoutDashboard', 18)} 
-            label={t('nav.dashboard')}
-            isOpen={isOpen}
-          />
-          
-          {/* Dashboards Submenu */}
-          <SubMenu 
-            icon={getLucideIcon('BarChart', 18)} 
-            label="Dashboards"
-            isOpen={isOpen}
-          >
-            <NavItem 
-              to="/analytics-dashboard" 
-              icon={getLucideIcon('LineChart', 16)} 
-              label="Analytics"
-              isOpen={true}
-            />
-            <NavItem 
-              to="/sales-dashboard" 
-              icon={getLucideIcon('TrendingUp', 16)} 
-              label="Sales"
-              isOpen={true}
-            />
-            <NavItem 
-              to="/operations-dashboard" 
-              icon={getLucideIcon('PieChart', 16)} 
-              label="Operations"
-              isOpen={true}
-            />
-          </SubMenu>
-          
-          {/* Sample Module */}
-          <NavItem 
-            to="/sample-module" 
-            icon={getLucideIcon('Package', 18)} 
-            label="Sample Module"
-            isOpen={isOpen}
-          />
-          
-          <SubMenu 
-            icon={getLucideIcon('Users', 18)} 
-            label={t('nav.users')}
-            isOpen={isOpen}
-          >
-            <NavItem 
-              to="/users" 
-              icon={getLucideIcon('Users', 16)} 
-              label="All Users"
-              isOpen={true}
-            />
-            <NavItem 
-              to="/users/new" 
-              icon={getLucideIcon('UserPlus', 16)} 
-              label="Add User"
-              isOpen={true}
-            />
-          </SubMenu>
-          
-          <SubMenu 
-            icon={getLucideIcon('Database', 18)} 
-            label="Data Display"
-            isOpen={isOpen}
-          >
-            <NavItem 
-              to="/data-examples" 
-              icon={getLucideIcon('Database', 16)} 
-              label="Examples"
-              isOpen={true}
-            />
-            <NavItem 
-              to="/data-examples/tables" 
-              icon={getLucideIcon('Table', 16)} 
-              label="Tables"
-              isOpen={true}
-            />
-          </SubMenu>
-          
-          <NavItem 
-            to="/form-examples" 
-            icon={getLucideIcon('FormInput', 18)} 
-            label="Form Examples"
-            isOpen={isOpen}
-          />
-          
-          <NavItem 
-            to="/ui-examples" 
-            icon={getLucideIcon('Palette', 18)} 
-            label={t('nav.uiExamples')}
-            isOpen={isOpen}
-          />
+          {loading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              {/* Home dashboard is always available */}
+              <NavItem 
+                to="/dashboard" 
+                icon={getLucideIcon('LayoutDashboard', 18)} 
+                label={t('nav.dashboard')}
+                isOpen={isOpen}
+              />
+              
+              {/* Render dynamic menu items */}
+              {menus.map(menu => {
+                const menuIcon = getLucideIcon(menu.menuIcon || 'CircleDot', 18);
+                
+                // Menu with submenus
+                if (menu.subMenus && menu.subMenus.length > 0) {
+                  return (
+                    <SubMenu 
+                      key={`menu-${menu.menuID}`}
+                      icon={menuIcon}
+                      label={menu.menuName}
+                      isOpen={isOpen}
+                    >
+                      {menu.subMenus.map(subMenu => (
+                        <NavItem 
+                          key={`submenu-${subMenu.subMenuID}`}
+                          to={subMenu.subMenuPath || '#'}
+                          icon={getLucideIcon(subMenu.subMenuIcon || 'Circle', 16)}
+                          label={subMenu.subMenuName}
+                          isOpen={true}
+                        />
+                      ))}
+                    </SubMenu>
+                  );
+                } 
+                // Menu without submenus
+                else {
+                  return (
+                    <NavItem 
+                      key={`menu-${menu.menuID}`}
+                      to={menu.menuPath || '#'} 
+                      icon={menuIcon} 
+                      label={menu.menuName}
+                      isOpen={isOpen}
+                    />
+                  );
+                }
+              })}
+            </>
+          )}
         </nav>
 
         {/* Footer navigation - settings and support */}
@@ -289,4 +277,4 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   );
 };
 
-export default Sidebar;
+export default DynamicSidebar;
