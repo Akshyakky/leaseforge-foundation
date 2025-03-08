@@ -60,7 +60,7 @@ export const menuService = {
         }
       };
       
-      const response = await api.post('/Master/MenuMaster', request);
+      const response = await api.post('/Master/menu', request);
       
       if (response.data.success) {
         const menus: MenuItem[] = response.data.table1 || [];
@@ -88,7 +88,7 @@ export const menuService = {
         actionBy: 'WebApp'
       };
       
-      const response = await api.post('/Master/MenuMaster', request);
+      const response = await api.post('/Master/menu', request);
       
       if (response.data.success) {
         const menus: MenuItem[] = response.data.table1 || [];

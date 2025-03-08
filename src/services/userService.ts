@@ -55,7 +55,7 @@ export const userService = {
         actionBy: 'WebApp'
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success) {
         return response.data.data || [];
@@ -80,7 +80,7 @@ export const userService = {
         }
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success && response.data.data?.length > 0) {
         return response.data.data[0];
@@ -105,7 +105,7 @@ export const userService = {
         }
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success) {
         toast.success('User created successfully');
@@ -131,7 +131,7 @@ export const userService = {
         }
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success) {
         toast.success('User updated successfully');
@@ -157,7 +157,7 @@ export const userService = {
         }
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success) {
         toast.success('User deleted successfully');
@@ -183,7 +183,7 @@ export const userService = {
         }
       };
       
-      const response = await api.post('/Master/UserMaster', request);
+      const response = await api.post('/Master/user', request);
       
       if (response.data.success) {
         return response.data.data || [];

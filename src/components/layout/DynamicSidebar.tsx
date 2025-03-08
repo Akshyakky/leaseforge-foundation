@@ -1,17 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { useAppSelector } from '@/lib/hooks';
-import { menuService, MenuItem, SubMenuItem } from '@/services/menuService';
-import { getLucideIcon } from '@/lib/iconMapper';
+import React, { useState, useEffect } from "react";
+import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAppSelector } from "@/lib/hooks";
+import { menuService, MenuItem, SubMenuItem } from "@/services/menuService";
+import { getLucideIcon } from "@/lib/iconMapper";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -42,34 +37,26 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
               className={({ isActive }) =>
                 cn(
                   "flex items-center justify-center rounded-md px-3 py-2 text-sm transition-colors w-full",
-                  isActive
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                  isActive ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                 )
               }
             >
-              <div className="flex items-center justify-center">
-                {icon}
-              </div>
+              <div className="flex items-center justify-center">{icon}</div>
             </NavLink>
           </TooltipTrigger>
-          <TooltipContent side="right">
-            {label}
-          </TooltipContent>
+          <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
   }
-  
+
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-          isActive
-            ? "bg-accent text-accent-foreground font-medium"
-            : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+          isActive ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
         )
       }
     >
@@ -101,9 +88,7 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
           </TooltipTrigger>
           <TooltipContent side="right" className="p-2 w-40">
             <div className="font-medium mb-2">{label}</div>
-            <div className="space-y-1">
-              {React.Children.map(children, (child) => child)}
-            </div>
+            <div className="space-y-1">{React.Children.map(children, (child) => child)}</div>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -114,10 +99,7 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
     <div className="space-y-1">
       <button
         onClick={() => setIsSubmenuOpen(!isSubmenuOpen)}
-        className={cn(
-          "w-full flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
-          "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
-        )}
+        className={cn("w-full flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors", "hover:bg-accent/50 text-muted-foreground hover:text-foreground")}
       >
         <div className="flex items-center gap-3">
           {icon}
@@ -125,19 +107,15 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
         </div>
         {isSubmenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
-      
-      {isSubmenuOpen && (
-        <div className="pl-6 space-y-1">
-          {children}
-        </div>
-      )}
+
+      {isSubmenuOpen && <div className="pl-6 space-y-1">{children}</div>}
     </div>
   );
 };
 
 const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   const { t } = useTranslation();
-  const { user } = useAppSelector(state => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -146,7 +124,7 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
       try {
         setLoading(true);
         let menuData: MenuItem[] = [];
-        
+
         // If user ID is available, fetch user-specific menus
         if (user?.id) {
           menuData = await menuService.getUserMenus(parseInt(user.id));
@@ -154,34 +132,27 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
           // Otherwise fetch all menus (for development/testing)
           menuData = await menuService.getAllMenus();
         }
-        
+
         setMenus(menuData);
       } catch (error) {
-        console.error('Error fetching menus:', error);
+        console.error("Error fetching menus:", error);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchMenus();
   }, [user?.id]);
 
   return (
-    <aside
-      className={cn(
-        "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-width duration-300 ease-in-out",
-        isOpen ? "w-64" : "w-16"
-      )}
-    >
+    <aside className={cn("fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-width duration-300 ease-in-out", isOpen ? "w-64" : "w-16")}>
       <div className="flex h-16 items-center justify-center border-b px-6">
         {isOpen ? (
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground text-sm font-semibold">LE</span>
             </div>
-            <h2 className="text-lg font-semibold">
-              {t('appName')}
-            </h2>
+            <h2 className="text-lg font-semibold">{t("appName")}</h2>
           </div>
         ) : (
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -189,7 +160,7 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
           </div>
         )}
       </div>
-      
+
       <div className="flex-1 overflow-auto py-4 px-3 flex flex-col justify-between">
         {/* Main navigation */}
         <nav className="space-y-1 w-full">
@@ -200,49 +171,31 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
           ) : (
             <>
               {/* Home dashboard is always available */}
-              <NavItem 
-                to="/dashboard" 
-                icon={getLucideIcon('LayoutDashboard', 18)} 
-                label={t('nav.dashboard')}
-                isOpen={isOpen}
-              />
-              
+              <NavItem to="/dashboard" icon={getLucideIcon("LayoutDashboard", 18)} label={t("nav.dashboard")} isOpen={isOpen} />
+
               {/* Render dynamic menu items */}
-              {menus.map(menu => {
-                const menuIcon = getLucideIcon(menu.menuIcon || 'CircleDot', 18);
-                
+              {menus.map((menu) => {
+                const menuIcon = getLucideIcon(menu.menuIcon || "CircleDot", 18);
+
                 // Menu with submenus
                 if (menu.subMenus && menu.subMenus.length > 0) {
                   return (
-                    <SubMenu 
-                      key={`menu-${menu.menuID}`}
-                      icon={menuIcon}
-                      label={menu.menuName}
-                      isOpen={isOpen}
-                    >
-                      {menu.subMenus.map(subMenu => (
-                        <NavItem 
+                    <SubMenu key={`menu-${menu.menuID}`} icon={menuIcon} label={menu.menuName} isOpen={isOpen}>
+                      {menu.subMenus.map((subMenu) => (
+                        <NavItem
                           key={`submenu-${subMenu.subMenuID}`}
-                          to={subMenu.subMenuPath || '#'}
-                          icon={getLucideIcon(subMenu.subMenuIcon || 'Circle', 16)}
+                          to={subMenu.subMenuPath || "#"}
+                          icon={getLucideIcon(subMenu.subMenuIcon || "Circle", 16)}
                           label={subMenu.subMenuName}
                           isOpen={true}
                         />
                       ))}
                     </SubMenu>
                   );
-                } 
+                }
                 // Menu without submenus
                 else {
-                  return (
-                    <NavItem 
-                      key={`menu-${menu.menuID}`}
-                      to={menu.menuPath || '#'} 
-                      icon={menuIcon} 
-                      label={menu.menuName}
-                      isOpen={isOpen}
-                    />
-                  );
+                  return <NavItem key={`menu-${menu.menuID}`} to={menu.menuPath || "#"} icon={menuIcon} label={menu.menuName} isOpen={isOpen} />;
                 }
               })}
             </>
@@ -251,26 +204,11 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
         {/* Footer navigation - settings and support */}
         <nav className="space-y-1 mt-auto pt-4 border-t border-border/50 w-full">
-          <NavItem 
-            to="/settings" 
-            icon={getLucideIcon('Settings', 18)} 
-            label={t('nav.settings')}
-            isOpen={isOpen}
-          />
-          
-          <NavItem 
-            to="/language-settings" 
-            icon={getLucideIcon('Languages', 18)} 
-            label={t('nav.language')}
-            isOpen={isOpen}
-          />
+          <NavItem to="/settings" icon={getLucideIcon("Settings", 18)} label={t("nav.settings")} isOpen={isOpen} />
 
-          <NavItem 
-            to="/support" 
-            icon={getLucideIcon('HelpCircle', 18)} 
-            label="Support"
-            isOpen={isOpen}
-          />
+          <NavItem to="/language-settings" icon={getLucideIcon("Languages", 18)} label={t("nav.language")} isOpen={isOpen} />
+
+          <NavItem to="/support" icon={getLucideIcon("HelpCircle", 18)} label="Support" isOpen={isOpen} />
         </nav>
       </div>
     </aside>
