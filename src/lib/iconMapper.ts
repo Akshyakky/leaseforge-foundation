@@ -1,6 +1,8 @@
+
 import * as LucideIcons from 'lucide-react';
 import { FC } from 'react';
 import { LucideIcon } from 'lucide-react';
+import React from 'react';
 
 /**
  * Maps string icon names from the API to Lucide React components
@@ -269,7 +271,7 @@ export function mapIconToComponent(iconName: string | null | undefined): LucideI
 }
 
 // Add this function as an alias to maintain backward compatibility
-export const getLucideIcon = (iconName: string | null | undefined, size?: number) => {
-  const Icon = mapIconToComponent(iconName);
-  return Icon ? <Icon size={size} /> : null;
+export const getLucideIcon = (iconName: string | null | undefined, size?: number): React.ReactNode => {
+  const IconComponent = mapIconToComponent(iconName);
+  return IconComponent ? React.createElement(IconComponent, { size }) : null;
 };
