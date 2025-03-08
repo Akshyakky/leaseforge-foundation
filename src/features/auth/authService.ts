@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { 
   login as loginAction,
   logout as logoutAction,
-  checkAuthStatus
+  checkAuthStatus as checkAuthStatusAction
 } from './authSlice';
 import { AppDispatch } from '@/lib/store';
 
@@ -25,6 +25,6 @@ export const logoutUser = () => (dispatch: AppDispatch) => {
   toast.info('Logged out successfully');
 };
 
-export const checkAuthStatus = () => (dispatch: AppDispatch) => {
-  dispatch(checkAuthStatus());
+export const checkAuth = () => (dispatch: AppDispatch) => {
+  dispatch(checkAuthStatusAction());
 };

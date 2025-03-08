@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/lib/hooks';
 import { setSidebarState } from '@/features/ui/uiSlice';
-import { checkAuthStatus } from '@/features/auth/authService';
+import { checkAuth } from '@/features/auth/authService';
 import DynamicSidebar from './DynamicSidebar';
 import Navbar from './Navbar';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
@@ -21,7 +21,7 @@ const MainLayout = () => {
   useLanguageSync();
 
   useEffect(() => {
-    dispatch(checkAuthStatus());
+    dispatch(checkAuth());
   }, [dispatch]);
 
   useEffect(() => {

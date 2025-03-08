@@ -9,7 +9,7 @@ import { Provider } from "react-redux";
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from "@/lib/store";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { checkAuthStatus } from "@/features/auth/authService";
+import { checkAuth } from "@/features/auth/authService";
 import LoadingPage from "@/components/common/LoadingPage";
 import { lazyLoad } from "@/lib/performance";
 
@@ -60,7 +60,7 @@ const ProtectedRoute = ({
   const { isAuthenticated, isLoading, user } = useAppSelector(state => state.auth);
 
   useEffect(() => {
-    dispatch(checkAuthStatus());
+    dispatch(checkAuth());
   }, [dispatch]);
 
   if (isLoading) {
