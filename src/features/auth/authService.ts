@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { 
   login as loginAction,
   logout as logoutAction,
-  checkAuthStatus as checkAuthStatusAction
+  checkAuthStatus as checkAuthStatusAction 
 } from './authSlice';
 import { AppDispatch } from '@/lib/store';
 

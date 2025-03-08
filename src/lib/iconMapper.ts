@@ -1,4 +1,3 @@
-
 import * as LucideIcons from 'lucide-react';
 import { FC } from 'react';
 import { LucideIcon } from 'lucide-react';
@@ -272,5 +271,5 @@ export function mapIconToComponent(iconName: string | null | undefined): LucideI
 // Add this function as an alias to maintain backward compatibility
 export const getLucideIcon = (iconName: string | null | undefined, size?: number) => {
   const Icon = mapIconToComponent(iconName);
-  return <Icon size={size} />;
+  return Icon ? <Icon size={size} /> : null;
 };
