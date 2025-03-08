@@ -84,15 +84,15 @@ export const checkAuthStatus = createAsyncThunk(
   async (_, { dispatch, getState }) => {
     // Check for token in storage
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshTokenStr = localStorage.getItem('refreshToken');
     
     if (!token) {
       return false;
     }
     
-    if (refreshToken) {
+    if (refreshTokenStr) {
       try {
-        // Try to refresh the token
+        // Try to refresh the token - call the refreshToken thunk with proper dispatch
         await dispatch(refreshToken()).unwrap();
         return true;
       } catch (error) {

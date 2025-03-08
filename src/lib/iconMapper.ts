@@ -1,12 +1,14 @@
 
 import * as LucideIcons from 'lucide-react';
+import { FC } from 'react';
+import { LucideIcon } from 'lucide-react';
 
 /**
  * Maps string icon names from the API to Lucide React components
  * If an exact match isn't found, tries to find a similar icon
  * Falls back to CircleIcon if no match is found
  */
-export function mapIconToComponent(iconName: string | null | undefined): React.FC {
+export function mapIconToComponent(iconName: string | null | undefined): LucideIcon {
   if (!iconName) {
     return LucideIcons.CircleIcon;
   }
@@ -23,7 +25,7 @@ export function mapIconToComponent(iconName: string | null | undefined): React.F
   );
 
   if (directMatch) {
-    return LucideIcons[directMatch as keyof typeof LucideIcons];
+    return LucideIcons[directMatch as keyof typeof LucideIcons] as LucideIcon;
   }
 
   // Try finding a similar match if direct match fails
@@ -32,7 +34,7 @@ export function mapIconToComponent(iconName: string | null | undefined): React.F
   );
 
   if (similarMatch) {
-    return LucideIcons[similarMatch as keyof typeof LucideIcons];
+    return LucideIcons[similarMatch as keyof typeof LucideIcons] as LucideIcon;
   }
 
   // Common icon name mappings (add more as needed)
@@ -244,9 +246,9 @@ export function mapIconToComponent(iconName: string | null | undefined): React.F
     'vendor': 'BuildingIcon',
     'supplier': 'TruckIcon',
     'partner': 'UsersIcon',
-    'contract': 'FileContractIcon',
-    'lease': 'FileContractIcon',
-    'agreement': 'FileContractIcon',
+    'contract': 'FileTextIcon',
+    'lease': 'FileTextIcon',
+    'agreement': 'FileTextIcon',
     'asset': 'BuildingIcon',
     'property': 'BuildingIcon',
     'maintenance': 'WrenchIcon',
@@ -260,9 +262,15 @@ export function mapIconToComponent(iconName: string | null | undefined): React.F
   // Check if we have a mapping for this icon
   if (normalizedName in iconMappings) {
     const mappedIcon = iconMappings[normalizedName];
-    return LucideIcons[mappedIcon];
+    return LucideIcons[mappedIcon] as LucideIcon;
   }
 
   // Last resort - return a generic icon
   return LucideIcons.CircleIcon;
 }
+
+// Add this function as an alias to maintain backward compatibility
+export const getLucideIcon = (iconName: string | null | undefined, size?: number) => {
+  const Icon = mapIconToComponent(iconName);
+  return <Icon size={size} />;
+};
