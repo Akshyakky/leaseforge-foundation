@@ -1,3 +1,4 @@
+
 {
   "appName": "Lease ERP",
   "nav": {
@@ -13,6 +14,9 @@
     "invoices": "Invoices",
     "reports": "Reports",
     "users": "Users",
+    "usersManagement": "Users Management",
+    "userRoles": "User Roles",
+    "userPermissions": "User Permissions",
     "products": "Products",
     "settings": "Settings",
     "support": "Support",
