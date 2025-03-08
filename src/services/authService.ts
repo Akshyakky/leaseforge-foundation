@@ -7,6 +7,9 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 export interface LoginRequest {
   username: string;
   password: string;
+  mode?: number;
+  action?: string;
+  parameters?: Record<string, any>;
 }
 
 export interface LoginResponse {
@@ -69,7 +72,18 @@ authApi.interceptors.request.use(
 export const authService = {
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
-      const response = await authApi.post<LoginResponse>('/login', credentials);
+      // Format request body based on Mode 7 format if mode is specified
+      const requestBody = credentials.mode === 7 
+        ? {
+            mode: 7,
+            action: credentials.action || "akshay",
+            parameters: credentials.parameters || {},
+            username: credentials.username,
+            password: credentials.password
+          }
+        : credentials;
+          
+      const response = await authApi.post<LoginResponse>('/login', requestBody);
       
       if (response.data.success && response.data.token) {
         // Store token and user info

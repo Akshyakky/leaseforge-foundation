@@ -11,7 +11,15 @@ import { AppDispatch } from '@/lib/store';
 // Wrapper functions for the API service
 export const login = (credentials: LoginRequest) => async (dispatch: AppDispatch) => {
   try {
-    await dispatch(loginAction(credentials)).unwrap();
+    // Set mode 7 for authentication as shown in the example
+    const mode7Credentials = {
+      ...credentials,
+      mode: 7,
+      action: "akshay",
+      parameters: {}
+    };
+    
+    await dispatch(loginAction(mode7Credentials)).unwrap();
     toast.success('Logged in successfully');
     return true;
   } catch (error) {

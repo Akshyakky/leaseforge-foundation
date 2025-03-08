@@ -46,6 +46,7 @@ const LoginForm = () => {
     try {
       setIsSubmitting(true);
       
+      // Login with mode 7 (will be added in authService.ts)
       const success = await dispatch(login({
         username: data.username,
         password: data.password,
