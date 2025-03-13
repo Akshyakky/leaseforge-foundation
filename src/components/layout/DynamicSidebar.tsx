@@ -175,18 +175,18 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
               {/* Render dynamic menu items */}
               {menus.map((menu) => {
-                const menuIcon = getLucideIcon(menu.menuIcon || "CircleDot", 18);
+                const menuIcon = getLucideIcon(menu.MenuIcon || "CircleDot", 18);
 
                 // Menu with submenus
                 if (menu.subMenus && menu.subMenus.length > 0) {
                   return (
-                    <SubMenu key={`menu-${menu.menuID}`} icon={menuIcon} label={menu.menuName} isOpen={isOpen}>
+                    <SubMenu key={`menu-${menu.MenuID}`} icon={menuIcon} label={menu.MenuName} isOpen={isOpen}>
                       {menu.subMenus.map((subMenu) => (
                         <NavItem
-                          key={`submenu-${subMenu.subMenuID}`}
-                          to={subMenu.subMenuPath || "#"}
-                          icon={getLucideIcon(subMenu.subMenuIcon || "Circle", 16)}
-                          label={subMenu.subMenuName}
+                          key={`submenu-${subMenu.SubMenuID}`}
+                          to={subMenu.SubMenuPath || "#"}
+                          icon={getLucideIcon(subMenu.SubMenuIcon || "Circle", 16)}
+                          label={subMenu.SubMenuName}
                           isOpen={true}
                         />
                       ))}
@@ -195,7 +195,7 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
                 }
                 // Menu without submenus
                 else {
-                  return <NavItem key={`menu-${menu.menuID}`} to={menu.menuPath || "#"} icon={menuIcon} label={menu.menuName} isOpen={isOpen} />;
+                  return <NavItem key={`menu-${menu.MenuID}`} to={menu.MenuPath || "#"} icon={menuIcon} label={menu.MenuName} isOpen={isOpen} />;
                 }
               })}
             </>

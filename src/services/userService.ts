@@ -1,22 +1,21 @@
+import axios from "axios";
+import { toast } from "sonner";
 
-import axios from 'axios';
-import { toast } from 'sonner';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export interface User {
-  userID: number;
-  compID?: number;
-  userName: string;
-  userFullName: string;
-  phoneNo?: string;
-  emailID: string;
-  departmentID?: number;
-  roleID?: number;
-  isActive: boolean;
-  companyName?: string;
-  departmentName?: string;
-  roleName?: string;
+  UserID: number;
+  CompID?: number;
+  UserName: string;
+  UserFullName: string;
+  PhoneNo?: string;
+  EmailID: string;
+  DepartmentID?: number;
+  RoleID?: number;
+  IsActive: boolean;
+  CompanyName?: string;
+  DepartmentName?: string;
+  RoleName?: string;
 }
 
 export interface BaseRequest {
@@ -29,16 +28,16 @@ export interface BaseRequest {
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Set up interceptor to include token in requests
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
   },
@@ -52,45 +51,46 @@ export const userService = {
     try {
       const request: BaseRequest = {
         mode: 3, // Mode 3: Fetch All Active Users
-        actionBy: 'WebApp'
+        actionBy: "WebApp",
+        parameters: {},
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success) {
         return response.data.data || [];
       } else {
-        toast.error(response.data.message || 'Failed to fetch users');
+        toast.error(response.data.message || "Failed to fetch users");
         return [];
       }
     } catch (error) {
-      toast.error('Error fetching users');
-      console.error('Error fetching users:', error);
+      toast.error("Error fetching users");
+      console.error("Error fetching users:", error);
       return [];
     }
   },
-  
+
   async getUserById(userId: number): Promise<User | null> {
     try {
       const request: BaseRequest = {
         mode: 4, // Mode 4: Fetch User by ID
-        actionBy: 'WebApp',
+        actionBy: "WebApp",
         parameters: {
-          UserID: userId
-        }
+          UserID: userId,
+        },
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success && response.data.data?.length > 0) {
         return response.data.data[0];
       } else {
-        toast.error(response.data.message || 'User not found');
+        toast.error(response.data.message || "User not found");
         return null;
       }
     } catch (error) {
-      toast.error('Error fetching user');
-      console.error('Error fetching user:', error);
+      toast.error("Error fetching user");
+      console.error("Error fetching user:", error);
       return null;
     }
   },
@@ -99,24 +99,24 @@ export const userService = {
     try {
       const request: BaseRequest = {
         mode: 1, // Mode 1: Insert New User
-        actionBy: 'WebApp',
+        actionBy: "WebApp",
         parameters: {
-          ...user
-        }
+          ...user,
+        },
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success) {
-        toast.success('User created successfully');
+        toast.success("User created successfully");
         return true;
       } else {
-        toast.error(response.data.message || 'Failed to create user');
+        toast.error(response.data.message || "Failed to create user");
         return false;
       }
     } catch (error) {
-      toast.error('Error creating user');
-      console.error('Error creating user:', error);
+      toast.error("Error creating user");
+      console.error("Error creating user:", error);
       return false;
     }
   },
@@ -125,24 +125,24 @@ export const userService = {
     try {
       const request: BaseRequest = {
         mode: 2, // Mode 2: Update Existing User
-        actionBy: 'WebApp',
+        actionBy: "WebApp",
         parameters: {
-          ...user
-        }
+          ...user,
+        },
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success) {
-        toast.success('User updated successfully');
+        toast.success("User updated successfully");
         return true;
       } else {
-        toast.error(response.data.message || 'Failed to update user');
+        toast.error(response.data.message || "Failed to update user");
         return false;
       }
     } catch (error) {
-      toast.error('Error updating user');
-      console.error('Error updating user:', error);
+      toast.error("Error updating user");
+      console.error("Error updating user:", error);
       return false;
     }
   },
@@ -151,24 +151,24 @@ export const userService = {
     try {
       const request: BaseRequest = {
         mode: 5, // Mode 5: Soft Delete User
-        actionBy: 'WebApp',
+        actionBy: "WebApp",
         parameters: {
-          UserID: userId
-        }
+          UserID: userId,
+        },
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success) {
-        toast.success('User deleted successfully');
+        toast.success("User deleted successfully");
         return true;
       } else {
-        toast.error(response.data.message || 'Failed to delete user');
+        toast.error(response.data.message || "Failed to delete user");
         return false;
       }
     } catch (error) {
-      toast.error('Error deleting user');
-      console.error('Error deleting user:', error);
+      toast.error("Error deleting user");
+      console.error("Error deleting user:", error);
       return false;
     }
   },
@@ -177,24 +177,24 @@ export const userService = {
     try {
       const request: BaseRequest = {
         mode: 6, // Mode 6: Search Users
-        actionBy: 'WebApp',
+        actionBy: "WebApp",
         parameters: {
-          SearchText: searchText
-        }
+          SearchText: searchText,
+        },
       };
-      
-      const response = await api.post('/Master/user', request);
-      
+
+      const response = await api.post("/Master/user", request);
+
       if (response.data.success) {
         return response.data.data || [];
       } else {
-        toast.error(response.data.message || 'Search failed');
+        toast.error(response.data.message || "Search failed");
         return [];
       }
     } catch (error) {
-      toast.error('Error searching users');
-      console.error('Error searching users:', error);
+      toast.error("Error searching users");
+      console.error("Error searching users:", error);
       return [];
     }
-  }
+  },
 };

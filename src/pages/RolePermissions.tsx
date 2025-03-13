@@ -1,37 +1,29 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { roleService, Role } from '@/services/roleService';
-import { userRightsService, UserRight } from '@/services/userRightsService';
-import { menuService, MenuItem } from '@/services/menuService';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
-import { Separator } from '@/components/ui/separator';
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { roleService, Role } from "@/services/roleService";
+import { userRightsService, UserRight } from "@/services/userRightsService";
+import { menuService, MenuItem } from "@/services/menuService";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { Separator } from "@/components/ui/separator";
 
 interface Permission {
-  menuID: number;
-  menuName: string;
+  MenuID: number;
+  MenuName: string;
   subMenus: {
-    subMenuID: number;
-    subMenuName: string;
+    SubMenuID: number;
+    SubMenuName: string;
     rights: {
-      canView: boolean;
-      canAdd: boolean;
-      canEdit: boolean;
-      canDelete: boolean;
-      canExport: boolean;
-      canPrint: boolean;
+      CanView: boolean;
+      CanAdd: boolean;
+      CanEdit: boolean;
+      CanDelete: boolean;
+      CanExport: boolean;
+      CanPrint: boolean;
     };
   }[];
 }
@@ -44,160 +36,152 @@ const RolePermissions = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [originalRights, setOriginalRights] = useState<UserRight[]>([]);
-  
+
   useEffect(() => {
     const fetchData = async () => {
       if (!id) {
-        navigate('/roles');
+        navigate("/roles");
         return;
       }
-      
+
       try {
         setLoading(true);
-        
+
         // Fetch role details
         const roleData = await roleService.getRoleById(parseInt(id));
         if (!roleData) {
-          toast.error('Role not found');
-          navigate('/roles');
+          toast.error("Role not found");
+          navigate("/roles");
           return;
         }
         setRole(roleData);
-        
+
         // Fetch all menus and submenus
         const menuData = await menuService.getAllMenus();
-        
+
         // Fetch current role permissions
         const rightsData = await userRightsService.getRoleRights(parseInt(id));
         setOriginalRights(rightsData);
-        
+
         // Build permissions structure
         const permissionsData = buildPermissionsStructure(menuData, rightsData);
         setPermissions(permissionsData);
       } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load permissions data');
+        console.error("Error fetching data:", error);
+        toast.error("Failed to load permissions data");
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, [id, navigate]);
-  
+
   const buildPermissionsStructure = (menus: MenuItem[], rights: UserRight[]): Permission[] => {
-    return menus.map(menu => {
+    return menus.map((menu) => {
       const menuPermission: Permission = {
-        menuID: menu.menuID,
-        menuName: menu.menuName,
-        subMenus: []
+        MenuID: menu.MenuID,
+        MenuName: menu.MenuName,
+        subMenus: [],
       };
-      
+
       if (menu.subMenus && menu.subMenus.length > 0) {
-        menuPermission.subMenus = menu.subMenus.map(subMenu => {
+        menuPermission.subMenus = menu.subMenus.map((subMenu) => {
           // Find existing rights for this submenu
-          const existingRights = rights.find(r => 
-            r.menuID === menu.menuID && r.subMenuID === subMenu.subMenuID
-          );
-          
+          const existingRights = rights.find((r) => r.MenuID === menu.MenuID && r.SubMenuID === subMenu.SubMenuID);
+
           return {
-            subMenuID: subMenu.subMenuID,
-            subMenuName: subMenu.subMenuName,
+            SubMenuID: subMenu.SubMenuID,
+            SubMenuName: subMenu.SubMenuName,
             rights: {
-              canView: existingRights?.canView || false,
-              canAdd: existingRights?.canAdd || false,
-              canEdit: existingRights?.canEdit || false,
-              canDelete: existingRights?.canDelete || false,
-              canExport: existingRights?.canExport || false,
-              canPrint: existingRights?.canPrint || false
-            }
+              CanView: existingRights?.CanView || false,
+              CanAdd: existingRights?.CanAdd || false,
+              CanEdit: existingRights?.CanEdit || false,
+              CanDelete: existingRights?.CanDelete || false,
+              CanExport: existingRights?.CanExport || false,
+              CanPrint: existingRights?.CanPrint || false,
+            },
           };
         });
       }
-      
+
       return menuPermission;
     });
   };
-  
-  const handleTogglePermission = (
-    menuIndex: number, 
-    subMenuIndex: number, 
-    permission: keyof Permission['subMenus'][0]['rights']
-  ) => {
-    setPermissions(prev => {
+
+  const handleTogglePermission = (menuIndex: number, subMenuIndex: number, permission: keyof Permission["subMenus"][0]["rights"]) => {
+    setPermissions((prev) => {
       const updated = [...prev];
       const currentValue = updated[menuIndex].subMenus[subMenuIndex].rights[permission];
-      
+
       // If turning off view permission, turn off all other permissions
-      if (permission === 'canView' && currentValue) {
+      if (permission === "CanView" && currentValue) {
         updated[menuIndex].subMenus[subMenuIndex].rights = {
-          canView: false,
-          canAdd: false,
-          canEdit: false,
-          canDelete: false,
-          canExport: false,
-          canPrint: false
+          CanView: false,
+          CanAdd: false,
+          CanEdit: false,
+          CanDelete: false,
+          CanExport: false,
+          CanPrint: false,
         };
-      } 
+      }
       // If turning on any other permission, make sure view is enabled
-      else if (permission !== 'canView' && !currentValue) {
+      else if (permission !== "CanView" && !currentValue) {
         updated[menuIndex].subMenus[subMenuIndex].rights[permission] = true;
-        updated[menuIndex].subMenus[subMenuIndex].rights.canView = true;
-      } 
+        updated[menuIndex].subMenus[subMenuIndex].rights.CanView = true;
+      }
       // Default toggle behavior
       else {
         updated[menuIndex].subMenus[subMenuIndex].rights[permission] = !currentValue;
       }
-      
+
       return updated;
     });
   };
-  
+
   const handleSavePermissions = async () => {
     if (!role) return;
-    
+
     try {
       setSaving(true);
-      
+
       // Convert permissions structure back to UserRight array
       const updatedRights: UserRight[] = [];
-      
-      permissions.forEach(menu => {
-        menu.subMenus.forEach(subMenu => {
+
+      permissions.forEach((menu) => {
+        menu.subMenus.forEach((subMenu) => {
           // Only add rights if at least canView is true
-          if (subMenu.rights.canView) {
+          if (subMenu.rights.CanView) {
             // Find existing right to preserve ID if exists
-            const existingRight = originalRights.find(r => 
-              r.menuID === menu.menuID && r.subMenuID === subMenu.subMenuID
-            );
-            
+            const existingRight = originalRights.find((r) => r.MenuID === menu.MenuID && r.SubMenuID === subMenu.SubMenuID);
+
             updatedRights.push({
-              userRightID: existingRight?.userRightID || 0,
-              roleID: role.roleID,
-              menuID: menu.menuID,
-              subMenuID: subMenu.subMenuID,
-              menuName: menu.menuName,
-              subMenuName: subMenu.subMenuName,
-              ...subMenu.rights
+              UserRightID: existingRight?.UserRightID || 0,
+              RoleID: role.RoleID,
+              MenuID: menu.MenuID,
+              SubMenuID: subMenu.SubMenuID,
+              MenuName: menu.MenuName,
+              SubMenuName: subMenu.SubMenuName,
+              ...subMenu.rights,
             });
           }
         });
       });
-      
-      const success = await userRightsService.saveRoleRights(role.roleID, updatedRights);
-      
+
+      const success = await userRightsService.saveRoleRights(role.RoleID, updatedRights);
+
       if (success) {
-        toast.success('Permissions saved successfully');
-        navigate('/roles');
+        toast.success("Permissions saved successfully");
+        navigate("/roles");
       }
     } catch (error) {
-      console.error('Error saving permissions:', error);
-      toast.error('Failed to save permissions');
+      console.error("Error saving permissions:", error);
+      toast.error("Failed to save permissions");
     } finally {
       setSaving(false);
     }
   };
-  
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -205,22 +189,20 @@ const RolePermissions = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <Button variant="outline" size="icon" onClick={() => navigate('/roles')}>
+        <Button variant="outline" size="icon" onClick={() => navigate("/roles")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold">Role Permissions</h1>
       </div>
-      
+
       <Card>
         <CardHeader>
-          <CardTitle>Manage Permissions for {role?.roleName}</CardTitle>
-          <CardDescription>
-            Define which actions users with this role can perform on each module
-          </CardDescription>
+          <CardTitle>Manage Permissions for {role?.RoleName}</CardTitle>
+          <CardDescription>Define which actions users with this role can perform on each module</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="border rounded-md overflow-hidden">
@@ -238,54 +220,51 @@ const RolePermissions = () => {
               </TableHeader>
               <TableBody>
                 {permissions.map((menu, menuIndex) => (
-                  <React.Fragment key={menu.menuID}>
+                  <React.Fragment key={menu.MenuID}>
                     <TableRow className="bg-muted/30">
                       <TableCell colSpan={7} className="font-semibold">
-                        {menu.menuName}
+                        {menu.MenuName}
                       </TableCell>
                     </TableRow>
                     {menu.subMenus.map((subMenu, subMenuIndex) => (
-                      <TableRow key={subMenu.subMenuID}>
-                        <TableCell className="pl-6">{subMenu.subMenuName}</TableCell>
+                      <TableRow key={subMenu.SubMenuID}>
+                        <TableCell className="pl-6">{subMenu.SubMenuName}</TableCell>
                         <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canView')}
+                          <Switch checked={subMenu.rights.CanView} onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanView")} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={subMenu.rights.CanAdd}
+                            disabled={!subMenu.rights.CanView}
+                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanAdd")}
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canAdd}
-                            disabled={!subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canAdd')}
+                          <Switch
+                            checked={subMenu.rights.CanEdit}
+                            disabled={!subMenu.rights.CanView}
+                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanEdit")}
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canEdit}
-                            disabled={!subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canEdit')}
+                          <Switch
+                            checked={subMenu.rights.CanDelete}
+                            disabled={!subMenu.rights.CanView}
+                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanDelete")}
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canDelete}
-                            disabled={!subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canDelete')}
+                          <Switch
+                            checked={subMenu.rights.CanExport}
+                            disabled={!subMenu.rights.CanView}
+                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanExport")}
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canExport}
-                            disabled={!subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canExport')}
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Switch 
-                            checked={subMenu.rights.canPrint}
-                            disabled={!subMenu.rights.canView}
-                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, 'canPrint')}
+                          <Switch
+                            checked={subMenu.rights.CanPrint}
+                            disabled={!subMenu.rights.CanView}
+                            onCheckedChange={() => handleTogglePermission(menuIndex, subMenuIndex, "CanPrint")}
                           />
                         </TableCell>
                       </TableRow>
@@ -297,18 +276,10 @@ const RolePermissions = () => {
           </div>
         </CardContent>
         <CardFooter className="flex justify-between border-t p-4">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={() => navigate('/roles')}
-            disabled={saving}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate("/roles")} disabled={saving}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSavePermissions} 
-            disabled={saving}
-          >
+          <Button onClick={handleSavePermissions} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

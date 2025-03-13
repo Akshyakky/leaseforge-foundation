@@ -1,41 +1,19 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { 
-  Loader2,
-  MoreHorizontal, 
-  Search,
-  PlusCircle,
-  UsersRound,
-  ShieldCheck
-} from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { roleService, Role } from '@/services/roleService';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { debounce } from 'lodash';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, MoreHorizontal, Search, PlusCircle, UsersRound, ShieldCheck } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { roleService, Role } from "@/services/roleService";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { debounce } from "lodash";
+import { useTranslation } from "react-i18next";
 
 const RolesList = () => {
   const { t } = useTranslation();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -46,17 +24,15 @@ const RolesList = () => {
     try {
       setLoading(true);
       const rolesData = await roleService.getAllRoles();
-      
+
       if (search) {
-        const filtered = rolesData.filter(role => 
-          role.roleName.toLowerCase().includes(search.toLowerCase())
-        );
+        const filtered = rolesData.filter((role) => role.RoleName.toLowerCase().includes(search.toLowerCase()));
         setRoles(filtered);
       } else {
         setRoles(rolesData);
       }
     } catch (error) {
-      console.error('Error fetching roles:', error);
+      console.error("Error fetching roles:", error);
     } finally {
       setLoading(false);
     }
@@ -67,7 +43,7 @@ const RolesList = () => {
   }, []);
 
   const debouncedSearch = debounce((value: string) => {
-    if (value.length >= 2 || value === '') {
+    if (value.length >= 2 || value === "") {
       fetchRoles(value);
     }
   }, 500);
@@ -79,7 +55,7 @@ const RolesList = () => {
   };
 
   const handleAddRole = () => {
-    navigate('/roles/new');
+    navigate("/roles/new");
   };
 
   const handleEditRole = (roleId: number) => {
@@ -106,14 +82,14 @@ const RolesList = () => {
 
   const handleDeleteRole = async () => {
     if (!selectedRole) return;
-    
+
     try {
-      const success = await roleService.deleteRole(selectedRole.roleID);
+      const success = await roleService.deleteRole(selectedRole.RoleID);
       if (success) {
-        setRoles(roles.filter(role => role.roleID !== selectedRole.roleID));
+        setRoles(roles.filter((role) => role.RoleID !== selectedRole.RoleID));
       }
     } catch (error) {
-      console.error('Error deleting role:', error);
+      console.error("Error deleting role:", error);
     } finally {
       closeDeleteDialog();
     }
@@ -132,32 +108,22 @@ const RolesList = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>Role Management</CardTitle>
-          <CardDescription>
-            Manage user roles and their permissions
-          </CardDescription>
+          <CardDescription>Manage user roles and their permissions</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-6">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search roles..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={handleSearchChange}
-              />
+              <Input type="text" placeholder="Search roles..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
           </div>
-          
+
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : roles.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              {searchTerm ? "No roles found matching your search." : "No roles found."}
-            </div>
+            <div className="text-center py-10 text-muted-foreground">{searchTerm ? "No roles found matching your search." : "No roles found."}</div>
           ) : (
             <div className="border rounded-md">
               <Table>
@@ -173,12 +139,12 @@ const RolesList = () => {
                 </TableHeader>
                 <TableBody>
                   {roles.map((role) => (
-                    <TableRow key={role.roleID}>
-                      <TableCell className="font-medium">{role.roleName}</TableCell>
-                      <TableCell>{role.createdBy || 'N/A'}</TableCell>
-                      <TableCell>{role.createdOn ? new Date(role.createdOn).toLocaleDateString() : 'N/A'}</TableCell>
-                      <TableCell>{role.updatedBy || 'N/A'}</TableCell>
-                      <TableCell>{role.updatedOn ? new Date(role.updatedOn).toLocaleDateString() : 'N/A'}</TableCell>
+                    <TableRow key={role.RoleID}>
+                      <TableCell className="font-medium">{role.RoleName}</TableCell>
+                      <TableCell>{role.CreatedBy || "N/A"}</TableCell>
+                      <TableCell>{role.CreatedOn ? new Date(role.CreatedOn).toLocaleDateString() : "N/A"}</TableCell>
+                      <TableCell>{role.UpdatedBy || "N/A"}</TableCell>
+                      <TableCell>{role.UpdatedOn ? new Date(role.UpdatedOn).toLocaleDateString() : "N/A"}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -187,22 +153,17 @@ const RolesList = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditRole(role.roleID)}>
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleViewUsers(role.roleID)}>
+                            <DropdownMenuItem onClick={() => handleEditRole(role.RoleID)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewUsers(role.RoleID)}>
                               <UsersRound className="mr-2 h-4 w-4" />
                               View users
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleManagePermissions(role.roleID)}>
+                            <DropdownMenuItem onClick={() => handleManagePermissions(role.RoleID)}>
                               <ShieldCheck className="mr-2 h-4 w-4" />
                               Manage permissions
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-red-500"
-                              onClick={() => openDeleteDialog(role)}
-                            >
+                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(role)}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -222,7 +183,7 @@ const RolesList = () => {
         onClose={closeDeleteDialog}
         onConfirm={handleDeleteRole}
         title="Delete Role"
-        description={`Are you sure you want to delete the role "${selectedRole?.roleName}"? This action cannot be undone.`}
+        description={`Are you sure you want to delete the role "${selectedRole?.RoleName}"? This action cannot be undone.`}
         cancelText="Cancel"
         confirmText="Delete"
         type="danger"

@@ -1,4 +1,3 @@
-
 {
   "appName": "Lease ERP",
   "nav": {
@@ -13,7 +12,11 @@
     "addContract": "Add Contract",
     "invoices": "Invoices",
     "reports": "Reports",
+    "master": "Master",
     "users": "Users",
+    "customers": "Customers",
+    "departments": "Departments",
+    "roles": "Roles",
     "usersManagement": "Users Management",
     "userRoles": "User Roles",
     "userPermissions": "User Permissions",
