@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { roleService, Role } from "@/services/roleService";
+import { departmentService } from "@/services/departmentService";
 
 // Interface for department
 interface Department {
@@ -92,13 +93,13 @@ const UserForm = () => {
         const rolesData = await roleService.getAllRoles();
         setRoles(rolesData);
 
-        // TODO: Fetch departments
-        setDepartments([
-          { departmentID: 1, departmentName: "IT" },
-          { departmentID: 2, departmentName: "HR" },
-          { departmentID: 3, departmentName: "Finance" },
-          { departmentID: 4, departmentName: "Operations" },
-        ]);
+        const departmentsData = await departmentService.getAllDepartments();
+        setDepartments(
+          departmentsData.map((dept) => ({
+            departmentID: dept.DepartmentID,
+            departmentName: dept.DepartmentName,
+          }))
+        );
 
         // TODO: Fetch companies
         setCompanies([

@@ -1,6 +1,5 @@
-import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// src/services/MenuService.ts
+import { BaseService, BaseRequest } from "./BaseService";
 
 export interface MenuItem {
   MenuID: number;
@@ -20,92 +19,79 @@ export interface SubMenuItem {
   SequenceNo: number;
 }
 
-export interface BaseRequest {
-  mode: number;
-  actionBy?: string;
-  parameters?: Record<string, any>;
+/**
+ * Service for menu-related operations
+ */
+class MenuService extends BaseService {
+  constructor() {
+    // Pass the endpoint to the base service
+    super("/Master/menu");
+  }
+
+  /**
+   * Get menus and submenus authorized for a specific user
+   * @param userId - The user ID
+   * @returns Array of menu items with their submenus
+   */
+  async getUserMenus(userId: number): Promise<MenuItem[]> {
+    const request: BaseRequest = {
+      mode: 13, // Mode 13: Get Authorized Menu with SubMenus for a User
+      actionBy: "WebApp",
+      parameters: {
+        CurrentUserID: userId,
+      },
+    };
+
+    const response = await this.execute(request, false);
+
+    if (response.success) {
+      const menus: MenuItem[] = response.table1 || [];
+      const subMenus: SubMenuItem[] = response.table2 || [];
+
+      // Group submenus under their parent menus
+      return this.groupSubMenus(menus, subMenus);
+    }
+
+    return [];
+  }
+
+  /**
+   * Get all menus and submenus (for system administration purposes)
+   * @returns Array of menu items with their submenus
+   */
+  async getAllMenus(): Promise<MenuItem[]> {
+    const request: BaseRequest = {
+      mode: 12, // Mode 12: Get Menu with SubMenus
+      actionBy: "WebApp",
+      parameters: {},
+    };
+
+    const response = await this.execute(request, false);
+
+    if (response.success) {
+      const menus: MenuItem[] = response.table1 || [];
+      const subMenus: SubMenuItem[] = response.table2 || [];
+
+      // Group submenus under their parent menus
+      return this.groupSubMenus(menus, subMenus);
+    }
+
+    return [];
+  }
+
+  /**
+   * Helper method to group submenus under their parent menus
+   * @param menus - Array of menus
+   * @param subMenus - Array of submenus
+   * @returns Menus with nested submenus
+   */
+  private groupSubMenus(menus: MenuItem[], subMenus: SubMenuItem[]): MenuItem[] {
+    return menus.map((menu) => ({
+      ...menu,
+      subMenus: subMenus.filter((sub) => sub.MenuID === menu.MenuID),
+    }));
+  }
 }
 
-// Create axios instance for API calls
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Set up interceptor to include token in requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-export const menuService = {
-  async getUserMenus(userId: number): Promise<MenuItem[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 13, // Mode 13: Get Authorized Menu with SubMenus for a User
-        actionBy: "WebApp",
-        parameters: {
-          CurrentUserID: userId,
-        },
-      };
-
-      const response = await api.post("/Master/menu", request);
-
-      if (response.data.success) {
-        const menus: MenuItem[] = response.data.table1 || [];
-        const subMenus: SubMenuItem[] = response.data.table2 || [];
-
-        // Group submenus under their parent menus
-        return menus.map((menu) => ({
-          ...menu,
-          subMenus: subMenus.filter((sub) => sub.MenuID === menu.MenuID),
-        }));
-      } else {
-        console.error("Failed to get menus:", response.data.message);
-        return [];
-      }
-    } catch (error) {
-      console.error("Error fetching menus:", error);
-      return [];
-    }
-  },
-
-  async getAllMenus(): Promise<MenuItem[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 12, // Mode 12: Get Menu with SubMenus (for building navigation)
-        actionBy: "WebApp",
-        parameters: {},
-      };
-
-      const response = await api.post("/Master/menu", request);
-
-      if (response.data.success) {
-        const menus: MenuItem[] = response.data.table1 || [];
-        const subMenus: SubMenuItem[] = response.data.table2 || [];
-
-        // Group submenus under their parent menus
-        return menus.map((menu) => ({
-          ...menu,
-          subMenus: subMenus.filter((sub) => sub.MenuID === menu.MenuID),
-        }));
-      } else {
-        console.error("Failed to get menus:", response.data.message);
-        return [];
-      }
-    } catch (error) {
-      console.error("Error fetching menus:", error);
-      return [];
-    }
-  },
-};
+// Export a singleton instance
+export const menuService = new MenuService();

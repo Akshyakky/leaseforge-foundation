@@ -56,5 +56,31 @@
     "error": "Error",
     "warning": "Warning",
     "info": "Information"
+  },
+  "department": {
+    "title": "Departments",
+    "management": "Department Management",
+    "description": "Manage company departments and their users",
+    "add": "Add Department",
+    "edit": "Edit Department",
+    "create": "Create Department",
+    "name": "Department Name",
+    "users": "Users in Department",
+    "statistics": "Department Statistics",
+    "totalUsers": "Total Users",
+    "activeUsers": "Active Users",
+    "roles": "Role Distribution",
+    "deleteConfirm": "Are you sure you want to delete this department?",
+    "success": {
+      "create": "Department created successfully",
+      "update": "Department updated successfully",
+      "delete": "Department deleted successfully"
+    },
+    "error": {
+      "create": "Failed to create department",
+      "update": "Failed to update department",
+      "delete": "Failed to delete department",
+      "notFound": "Department not found"
+    }
   }
 }

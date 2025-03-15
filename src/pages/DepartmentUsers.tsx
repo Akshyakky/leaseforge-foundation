@@ -2,51 +2,51 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { roleService, Role } from "@/services/roleService";
+import { departmentService, Department } from "@/services/departmentService";
 import { ArrowLeft, Loader2, UserPlus } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
-interface RoleUser {
+interface DepartmentUser {
   UserID: number;
   UserName: string;
   UserFullName: string;
   EmailID: string;
   PhoneNo?: string;
-  DepartmentID?: number;
-  DepartmentName?: string;
+  RoleID?: number;
+  RoleName?: string;
   IsActive: boolean;
 }
 
-const RoleUsers = () => {
+const DepartmentUsers = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [role, setRole] = useState<Role | null>(null);
-  const [users, setUsers] = useState<RoleUser[]>([]);
+  const [department, setDepartment] = useState<Department | null>(null);
+  const [users, setUsers] = useState<DepartmentUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!id) {
-        navigate("/roles");
+        navigate("/departments");
         return;
       }
 
       try {
         setLoading(true);
 
-        // Fetch role details
-        const roleData = await roleService.getRoleById(parseInt(id));
-        if (!roleData) {
-          toast.error("Role not found");
-          navigate("/roles");
+        // Fetch department details
+        const departmentData = await departmentService.getDepartmentById(parseInt(id));
+        if (!departmentData) {
+          toast.error("Department not found");
+          navigate("/departments");
           return;
         }
-        setRole(roleData);
+        setDepartment(departmentData);
 
-        // Fetch users with this role
-        const userData = await roleService.getUsersByRole(parseInt(id));
+        // Fetch users with this department
+        const userData = await departmentService.getDepartmentUsers(parseInt(id));
         setUsers(userData);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -60,8 +60,8 @@ const RoleUsers = () => {
   }, [id, navigate]);
 
   const handleAddUser = () => {
-    // Navigate to user creation with pre-selected role
-    navigate(`/users/new?roleId=${id}`);
+    // Navigate to user creation with pre-selected department
+    navigate(`/users/new?departmentId=${id}`);
   };
 
   const handleEditUser = (userId: number) => {
@@ -79,17 +79,17 @@ const RoleUsers = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <Button variant="outline" size="icon" onClick={() => navigate("/roles")}>
+        <Button variant="outline" size="icon" onClick={() => navigate("/departments")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-semibold">Users with Role: {role?.RoleName}</h1>
+        <h1 className="text-2xl font-semibold">Users in Department: {department?.DepartmentName}</h1>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Users with {role?.RoleName} Role</CardTitle>
-            <CardDescription>View and manage users assigned to this role</CardDescription>
+            <CardTitle>Users in {department?.DepartmentName} Department</CardTitle>
+            <CardDescription>View and manage users assigned to this department</CardDescription>
           </div>
           <Button onClick={handleAddUser}>
             <UserPlus className="mr-2 h-4 w-4" />
@@ -98,7 +98,7 @@ const RoleUsers = () => {
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">No users found with this role.</div>
+            <div className="text-center py-10 text-muted-foreground">No users found in this department.</div>
           ) : (
             <div className="border rounded-md">
               <Table>
@@ -107,7 +107,7 @@ const RoleUsers = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Username</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Department</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
@@ -118,7 +118,7 @@ const RoleUsers = () => {
                       <TableCell className="font-medium">{user.UserFullName}</TableCell>
                       <TableCell>{user.UserName}</TableCell>
                       <TableCell>{user.EmailID}</TableCell>
-                      <TableCell>{user.DepartmentName || "N/A"}</TableCell>
+                      <TableCell>{user.RoleName || "N/A"}</TableCell>
                       <TableCell>
                         <Badge variant={user.IsActive ? "outline" : "secondary"} className={`${user.IsActive ? "text-emerald-500 bg-emerald-50" : "text-red-500 bg-red-50"}`}>
                           {user.IsActive ? "Active" : "Inactive"}
@@ -141,4 +141,4 @@ const RoleUsers = () => {
   );
 };
 
-export default RoleUsers;
+export default DepartmentUsers;
