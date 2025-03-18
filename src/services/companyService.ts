@@ -1,7 +1,5 @@
-import axios from "axios";
-import { toast } from "sonner";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// src/services/companyService.ts
+import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
 
 export interface Company {
   CompanyID: number;
@@ -59,292 +57,226 @@ export interface CompanyUser {
   IsActive: boolean;
 }
 
-export interface BaseRequest {
-  mode: number;
-  actionBy?: string;
-  parameters?: Record<string, any>;
-}
-
-// Create axios instance for API calls
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Set up interceptor to include token in requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+/**
+ * Service for company-related operations
+ */
+class CompanyService extends BaseService {
+  constructor() {
+    // Pass the endpoint to the base service
+    super("/Master/company");
   }
-);
 
-export const companyService = {
+  /**
+   * Get all companies
+   * @returns Array of companies
+   */
   async getAllCompanies(): Promise<Company[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 3, // Mode 3: Fetch All Active Companies
-        actionBy: "WebApp",
-        parameters: {},
-      };
+    const request: BaseRequest = {
+      mode: 3, // Mode 3: Fetch All Active Companies
+      actionBy: "WebApp",
+      parameters: {},
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute<Company[]>(request);
+    return response.success ? response.data || [] : [];
+  }
 
-      if (response.data.success) {
-        return response.data.data || [];
-      } else {
-        toast.error(response.data.message || "Failed to fetch companies");
-        return [];
-      }
-    } catch (error) {
-      toast.error("Error fetching companies");
-      console.error("Error fetching companies:", error);
-      return [];
-    }
-  },
-
+  /**
+   * Get a company by ID
+   * @param companyId - The ID of the company to fetch
+   * @returns The company object or null if not found
+   */
   async getCompanyById(companyId: number): Promise<Company | null> {
-    try {
-      const request: BaseRequest = {
-        mode: 4, // Mode 4: Fetch Company by ID
-        actionBy: "WebApp",
-        parameters: {
-          CompanyID: companyId,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 4, // Mode 4: Fetch Company by ID
+      actionBy: "WebApp",
+      parameters: {
+        CompanyID: companyId,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute<Company[]>(request);
+    return response.success && response.data && response.data.length > 0 ? response.data[0] : null;
+  }
 
-      if (response.data.success && response.data.data?.length > 0) {
-        return response.data.data[0];
-      } else {
-        toast.error(response.data.message || "Company not found");
-        return null;
-      }
-    } catch (error) {
-      toast.error("Error fetching company");
-      console.error("Error fetching company:", error);
-      return null;
-    }
-  },
-
+  /**
+   * Create a new company
+   * @param company - The company data to create
+   * @returns true if successful, false otherwise
+   */
   async createCompany(company: Partial<Company>): Promise<boolean> {
-    try {
-      const request: BaseRequest = {
-        mode: 1, // Mode 1: Insert New Company
-        actionBy: "WebApp",
-        parameters: {
-          ...company,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 1, // Mode 1: Insert New Company
+      actionBy: "WebApp",
+      parameters: {
+        ...company,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute(request);
 
-      if (response.data.success) {
-        toast.success("Company created successfully");
-        return true;
-      } else {
-        toast.error(response.data.message || "Failed to create company");
-        return false;
-      }
-    } catch (error) {
-      toast.error("Error creating company");
-      console.error("Error creating company:", error);
-      return false;
+    if (response.success) {
+      this.showSuccess("Company created successfully");
     }
-  },
 
+    return response.success;
+  }
+
+  /**
+   * Update an existing company
+   * @param company - The company data to update
+   * @returns true if successful, false otherwise
+   */
   async updateCompany(company: Partial<Company>): Promise<boolean> {
-    try {
-      const request: BaseRequest = {
-        mode: 2, // Mode 2: Update Existing Company
-        actionBy: "WebApp",
-        parameters: {
-          ...company,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 2, // Mode 2: Update Existing Company
+      actionBy: "WebApp",
+      parameters: {
+        ...company,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute(request);
 
-      if (response.data.success) {
-        toast.success("Company updated successfully");
-        return true;
-      } else {
-        toast.error(response.data.message || "Failed to update company");
-        return false;
-      }
-    } catch (error) {
-      toast.error("Error updating company");
-      console.error("Error updating company:", error);
-      return false;
+    if (response.success) {
+      this.showSuccess("Company updated successfully");
     }
-  },
 
+    return response.success;
+  }
+
+  /**
+   * Delete a company
+   * @param companyId - The ID of the company to delete
+   * @returns true if successful, false otherwise
+   */
   async deleteCompany(companyId: number): Promise<boolean> {
-    try {
-      const request: BaseRequest = {
-        mode: 5, // Mode 5: Soft Delete Company
-        actionBy: "WebApp",
-        parameters: {
-          CompanyID: companyId,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 5, // Mode 5: Soft Delete Company
+      actionBy: "WebApp",
+      parameters: {
+        CompanyID: companyId,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute(request);
 
-      if (response.data.success) {
-        toast.success("Company deleted successfully");
-        return true;
-      } else {
-        toast.error(response.data.message || "Failed to delete company");
-        return false;
-      }
-    } catch (error) {
-      toast.error("Error deleting company");
-      console.error("Error deleting company:", error);
-      return false;
+    if (response.success) {
+      this.showSuccess("Company deleted successfully");
     }
-  },
 
+    return response.success;
+  }
+
+  /**
+   * Search for companies
+   * @param searchText - Text to search for in company fields
+   * @returns Array of matching companies
+   */
   async searchCompanies(searchText: string): Promise<Company[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 6, // Mode 6: Search Companies
-        actionBy: "WebApp",
-        parameters: {
-          SearchText: searchText,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 6, // Mode 6: Search Companies
+      actionBy: "WebApp",
+      parameters: {
+        SearchText: searchText,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute<Company[]>(request);
+    return response.success ? response.data || [] : [];
+  }
 
-      if (response.data.success) {
-        return response.data.data || [];
-      } else {
-        toast.error(response.data.message || "Search failed");
-        return [];
-      }
-    } catch (error) {
-      toast.error("Error searching companies");
-      console.error("Error searching companies:", error);
-      return [];
-    }
-  },
-
+  /**
+   * Get users in a company
+   * @param companyId - The company ID
+   * @returns Array of users
+   */
   async getCompanyUsers(companyId: number): Promise<CompanyUser[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 7, // Mode 7: Get Users by Company
-        actionBy: "WebApp",
-        parameters: {
-          CompanyID: companyId,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 7, // Mode 7: Get Users by Company
+      actionBy: "WebApp",
+      parameters: {
+        CompanyID: companyId,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute<CompanyUser[]>(request);
+    return response.success ? response.data || [] : [];
+  }
 
-      if (response.data.success) {
-        return response.data.data || [];
-      } else {
-        toast.error(response.data.message || "Failed to fetch company users");
-        return [];
-      }
-    } catch (error) {
-      toast.error("Error fetching company users");
-      console.error("Error fetching company users:", error);
-      return [];
-    }
-  },
-
+  /**
+   * Get company statistics
+   * @param companyId - The company ID
+   * @returns Company statistics, department and role distribution
+   */
   async getCompanyStatistics(companyId?: number): Promise<{
     companyStats?: CompanyStatistics;
     departmentDistribution?: DepartmentDistribution[];
     roleDistribution?: RoleDistribution[];
   }> {
-    try {
-      const request: BaseRequest = {
-        mode: 8, // Mode 8: Get Company Statistics
-        actionBy: "WebApp",
-        parameters: {
-          CompanyID: companyId,
-        },
+    const request: BaseRequest = {
+      mode: 8, // Mode 8: Get Company Statistics
+      actionBy: "WebApp",
+      parameters: {
+        CompanyID: companyId,
+      },
+    };
+
+    const response = await this.execute(request, false);
+
+    if (response.success) {
+      return {
+        companyStats: response.table1?.[0],
+        departmentDistribution: response.table2 || [],
+        roleDistribution: response.table3 || [],
       };
-
-      const response = await api.post("/Master/company", request);
-
-      if (response.data.success) {
-        return {
-          companyStats: response.data.table1?.[0],
-          departmentDistribution: response.data.table2 || [],
-          roleDistribution: response.data.table3 || [],
-        };
-      } else {
-        toast.error(response.data.message || "Failed to fetch company statistics");
-        return {};
-      }
-    } catch (error) {
-      toast.error("Error fetching company statistics");
-      console.error("Error fetching company statistics:", error);
-      return {};
     }
-  },
 
+    return {};
+  }
+
+  /**
+   * Toggle company active status
+   * @param companyId - The ID of the company
+   * @returns true if successful, false otherwise
+   */
   async toggleCompanyStatus(companyId: number): Promise<boolean> {
-    try {
-      const request: BaseRequest = {
-        mode: 9, // Mode 9: Toggle Active Status
-        actionBy: "WebApp",
-        parameters: {
-          CompanyID: companyId,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 9, // Mode 9: Toggle Active Status
+      actionBy: "WebApp",
+      parameters: {
+        CompanyID: companyId,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute(request);
 
-      if (response.data.success) {
-        const isActive = response.data.IsActive;
-        toast.success(isActive ? "Company activated successfully" : "Company deactivated successfully");
-        return true;
-      } else {
-        toast.error(response.data.message || "Failed to toggle company status");
-        return false;
-      }
-    } catch (error) {
-      toast.error("Error toggling company status");
-      console.error("Error toggling company status:", error);
-      return false;
+    if (response.success) {
+      const isActive = response.IsActive;
+      this.showSuccess(isActive ? "Company activated successfully" : "Company deactivated successfully");
     }
-  },
 
+    return response.success;
+  }
+
+  /**
+   * Get companies for dropdown
+   * @param activeOnly - Whether to fetch only active companies
+   * @returns Array of companies for dropdown
+   */
   async getCompaniesForDropdown(activeOnly: boolean = false): Promise<Company[]> {
-    try {
-      const request: BaseRequest = {
-        mode: 10, // Mode 10: Get Companies for Dropdown
-        actionBy: "WebApp",
-        parameters: {
-          IsActive: activeOnly ? 1 : null,
-        },
-      };
+    const request: BaseRequest = {
+      mode: 10, // Mode 10: Get Companies for Dropdown
+      actionBy: "WebApp",
+      parameters: {
+        IsActive: activeOnly ? 1 : null,
+      },
+    };
 
-      const response = await api.post("/Master/company", request);
+    const response = await this.execute<Company[]>(request, false);
+    return response.success ? response.data || [] : [];
+  }
+}
 
-      if (response.data.success) {
-        return response.data.data || [];
-      } else {
-        console.error("Failed to fetch companies for dropdown:", response.data.message);
-        return [];
-      }
-    } catch (error) {
-      console.error("Error fetching companies for dropdown:", error);
-      return [];
-    }
-  },
-};
+// Export a singleton instance
+export const companyService = new CompanyService();

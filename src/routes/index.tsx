@@ -11,6 +11,7 @@ import departmentRoutes from "./departmentRoutes";
 import dashboardRoutes from "./dashboardRoutes";
 import settingsRoutes from "./settingsRoutes";
 import ProtectedRoute from "./ProtectedRoute";
+import companyRoutes from "./companyRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -42,6 +43,9 @@ const AppRoutes = () => {
 
           {/* Department routes */}
           {departmentRoutes}
+
+          {/* Company routes */}
+          {companyRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}

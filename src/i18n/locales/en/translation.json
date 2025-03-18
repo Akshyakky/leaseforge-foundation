@@ -82,5 +82,47 @@
       "delete": "Failed to delete department",
       "notFound": "Department not found"
     }
+  },
+  "company": {
+    "title": "Companies",
+    "management": "Company Management",
+    "description": "Manage your organization's companies",
+    "add": "Add Company",
+    "edit": "Edit Company",
+    "create": "Create Company",
+    "name": "Company Name",
+    "address": "Address",
+    "country": "Country",
+    "city": "City",
+    "email": "Email",
+    "website": "Website",
+    "contact": "Contact Number",
+    "taxId": "Tax ID",
+    "remarks": "Remarks",
+    "companyNo": "Company Registration Number",
+    "users": "Users in Company",
+    "statistics": "Company Statistics",
+    "totalUsers": "Total Users",
+    "activeUsers": "Active Users",
+    "departments": "Departments",
+    "roles": "Role Distribution",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "deleteConfirm": "Are you sure you want to delete this company?",
+    "success": {
+      "create": "Company created successfully",
+      "update": "Company updated successfully",
+      "delete": "Company deleted successfully",
+      "activate": "Company activated successfully",
+      "deactivate": "Company deactivated successfully"
+    },
+    "error": {
+      "create": "Failed to create company",
+      "update": "Failed to update company",
+      "delete": "Failed to delete company",
+      "notFound": "Company not found",
+      "hasUsers": "Cannot delete company that is assigned to users"
+    }
   }
 }
