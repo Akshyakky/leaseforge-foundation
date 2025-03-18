@@ -4,12 +4,12 @@ import ProtectedRoute from "./ProtectedRoute";
 import { lazyLoad } from "@/lib/performance";
 
 // Import actual components to avoid lazy-loading for frequently used pages
-import Companies from "@/pages/Companies";
+import Companies from "@/pages/company/Companies";
 
 // Lazy-loaded company pages
-const CompanyForm = lazyLoad(() => import("@/pages/CompanyForm"));
-const CompanyUsers = lazyLoad(() => import("@/pages/CompanyUsers"));
-const CompanyStatistics = lazyLoad(() => import("@/pages/CompanyStatistics"));
+const CompanyForm = lazyLoad(() => import("@/pages/company/CompanyForm"));
+const CompanyUsers = lazyLoad(() => import("@/pages/company/CompanyUsers"));
+const CompanyStatistics = lazyLoad(() => import("@/pages/company/CompanyStatistics"));
 
 const companyRoutes = (
   <>

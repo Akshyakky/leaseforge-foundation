@@ -4,10 +4,10 @@ import ProtectedRoute from "./ProtectedRoute";
 import { lazyLoad } from "@/lib/performance";
 
 // Import actual components to avoid lazy-loading for frequently used pages
-import UserForm from "@/pages/UserForm";
+import UserForm from "@/pages/user/UserForm";
 
 // Lazy-loaded user pages
-const Users = lazyLoad(() => import("@/pages/Users"));
+const Users = lazyLoad(() => import("@/pages/user/Users"));
 
 const userRoutes = (
   <>

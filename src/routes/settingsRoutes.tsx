@@ -3,11 +3,11 @@ import { Route } from "react-router-dom";
 import { lazyLoad } from "@/lib/performance";
 
 // Lazy-loaded settings pages
-const Settings = lazyLoad(() => import("@/pages/Settings"));
-const LanguageSettings = lazyLoad(() => import("@/pages/LanguageSettings"));
-const UIExamples = lazyLoad(() => import("@/pages/UIExamples"));
-const DataDisplayExamples = lazyLoad(() => import("@/pages/DataDisplayExamples"));
-const FormExamples = lazyLoad(() => import("@/pages/FormExamples"));
+const Settings = lazyLoad(() => import("@/pages/settings/Settings"));
+const LanguageSettings = lazyLoad(() => import("@/pages/settings/LanguageSettings"));
+const UIExamples = lazyLoad(() => import("@/pages/examples/UIExamples"));
+const DataDisplayExamples = lazyLoad(() => import("@/pages/examples/DataDisplayExamples"));
+const FormExamples = lazyLoad(() => import("@/pages/examples/FormExamples"));
 
 const settingsRoutes = (
   <>

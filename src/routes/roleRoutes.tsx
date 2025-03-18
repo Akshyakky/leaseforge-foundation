@@ -3,10 +3,10 @@ import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 
 // Import components
-import RolesList from "@/pages/RolesList";
-import RoleForm from "@/pages/RoleForm";
-import RolePermissions from "@/pages/RolePermissions";
-import RoleUsers from "@/pages/RoleUsers";
+import RolesList from "@/pages/role/RolesList";
+import RoleForm from "@/pages/role/RoleForm";
+import RolePermissions from "@/pages/role/RolePermissions";
+import RoleUsers from "@/pages/role/RoleUsers";
 
 const roleRoutes = (
   <>
