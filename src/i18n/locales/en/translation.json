@@ -1,6 +1,7 @@
 {
-  "appName": "Lease ERP",
+  "appName": "Master Project",
   "nav": {
+    "costCenters": "Cost Centers",
     "dashboard": "Dashboard",
     "calendar": "Calendar",
     "uiExamples": "UI Examples",
@@ -44,16 +45,21 @@
   "common": {
     "save": "Save",
     "cancel": "Cancel",
-    "delete": "Delete",
-    "edit": "Edit",
-    "view": "View",
     "add": "Add",
-    "search": "Search...",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "search": "Search",
+    "actions": "Actions",
     "loading": "Loading...",
+    "noResults": "No results found",
     "noData": "No data available",
+    "back": "Back",
     "confirm": "Confirm",
     "success": "Success",
     "error": "Error",
+    "view": "View",
+    "all": "All",
     "warning": "Warning",
     "info": "Information"
   },
@@ -123,6 +129,73 @@
       "delete": "Failed to delete company",
       "notFound": "Company not found",
       "hasUsers": "Cannot delete company that is assigned to users"
+    }
+  },
+  "costCenter": {
+    "module": "Cost Centers",
+    "management": "Cost Center Management",
+    "hierarchy": "Cost Center Hierarchy",
+    "structure": "Cost Center Structure",
+    "fullStructure": "Full Cost Center Structure",
+    "viewHierarchy": "View Hierarchy",
+    "levelsLabel": {
+      "1": "Level 1",
+      "2": "Level 2",
+      "3": "Level 3",
+      "4": "Level 4"
+    },
+    "parentCostCenter": {
+      "1": "Level 1 Cost Center",
+      "2": "Level 2 Cost Center",
+      "3": "Level 3 Cost Center",
+      "4": "Level 4 Cost Center"
+    },
+    "description": "Description",
+    "addCostCenter": "Add Cost Center",
+    "editCostCenter": "Edit Cost Center",
+    "createCostCenter": "Create Cost Center",
+    "createNewCostCenter": "Create New Cost Center",
+    "costCenterDetails": "Cost Center Details",
+    "updateCostCenterDetails": "Update the cost center details",
+    "enterCostCenterDetails": "Enter the details for the new cost center",
+    "selectCostCenter": "Select Cost Center",
+    "costCenterLevel": "Cost Center Level",
+    "viewSubLevels": "View sub-levels",
+    "requiredField": "This field is required",
+    "descriptionRequired": "Description is required",
+    "parentRequired": "Parent Cost Center is required",
+    "parentSelection": {
+      "selectLevel1First": "Please select a Level 1 cost center first",
+      "selectLevel2First": "Please select a Level 2 cost center first",
+      "selectLevel3First": "Please select a Level 3 cost center first"
+    },
+    "table": {
+      "description": "Description",
+      "parent": "Parent",
+      "level1": "Level 1",
+      "level2": "Level 2",
+      "level3": "Level 3",
+      "createdBy": "Created By",
+      "createdOn": "Created On",
+      "updatedBy": "Updated By",
+      "updatedOn": "Updated On"
+    },
+    "messages": {
+      "createSuccess": "Cost center created successfully",
+      "updateSuccess": "Cost center updated successfully",
+      "deleteSuccess": "Cost center deleted successfully",
+      "createError": "Failed to create cost center",
+      "updateError": "Failed to update cost center",
+      "deleteError": "Failed to delete cost center",
+      "loadError": "Failed to load cost centers",
+      "notFound": "Cost center not found",
+      "deleteConfirmation": "Are you sure you want to delete this cost center? This action cannot be undone and will remove all related data.",
+      "hierarchyDescription": "View the complete hierarchy of cost centers in your organization",
+      "noHierarchyData": "No cost centers found. Create some cost centers to see the hierarchy.",
+      "managementDescription": "Manage your organization's cost centers and hierarchy",
+      "searchPlaceholder": "Search cost centers...",
+      "searchNoMatch": "No cost centers found matching your search.",
+      "noCostCenters": "No cost centers found."
     }
   }
 }

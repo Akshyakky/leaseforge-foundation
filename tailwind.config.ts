@@ -1,14 +1,8 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
-  ],
+  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
     container: {
@@ -66,12 +60,12 @@ export default {
           "800": "#1f2937",
           "900": "#111827",
           "950": "#030712",
-          "accent": "#0070f3",
+          accent: "#0070f3",
           "accent-light": "#3291ff",
-          "success": "#10b981",
-          "warning": "#f59e0b",
-          "danger": "#ef4444",
-        }
+          success: "#10b981",
+          warning: "#f59e0b",
+          danger: "#ef4444",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -103,7 +97,7 @@ export default {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-100%)" },
         },
-        "spin": {
+        spin: {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
@@ -119,21 +113,21 @@ export default {
         "fade-out": "fade-out 0.3s ease-out",
         "slide-in": "slide-in 0.3s ease-out",
         "slide-out": "slide-out 0.3s ease-out",
-        "spin": "spin 1.5s linear infinite",
+        spin: "spin 1.5s linear infinite",
         "scale-in": "scale-in 0.2s ease-out",
       },
       transitionProperty: {
-        'height': 'height',
-        'spacing': 'margin, padding',
+        height: "height",
+        spacing: "margin, padding",
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'San Francisco', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'],
+        sans: ["-apple-system", "BlinkMacSystemFont", "San Francisco", "Segoe UI", "Roboto", "Helvetica Neue", "sans-serif"],
       },
       boxShadow: {
-        'soft': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        'medium': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        'card': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        'elevated': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        soft: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        medium: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        card: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        elevated: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
       },
     },
   },

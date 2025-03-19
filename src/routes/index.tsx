@@ -12,6 +12,7 @@ import dashboardRoutes from "./dashboardRoutes";
 import settingsRoutes from "./settingsRoutes";
 import ProtectedRoute from "./ProtectedRoute";
 import companyRoutes from "./companyRoutes";
+import costCenterRoutes from "./costCenterRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -46,6 +47,9 @@ const AppRoutes = () => {
 
           {/* Company routes */}
           {companyRoutes}
+
+          {/* Cost Center routes */}
+          {costCenterRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}
