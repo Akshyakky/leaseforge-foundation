@@ -19,7 +19,7 @@ const CostCenterHierarchyView = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hierarchyData, setHierarchyData] = useState<TreeNode[]>([]);
-  const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Fetch hierarchy data
   useEffect(() => {
@@ -27,15 +27,20 @@ const CostCenterHierarchyView = () => {
       try {
         setLoading(true);
         const data = await costCenterService.getCostCenterHierarchy();
+        console.log("Raw data from API:", data);
 
-        // Convert flat hierarchy to tree structure
-        const tree = buildTree(data);
-        setHierarchyData(tree);
+        if (data && data.length > 0) {
+          // Convert flat hierarchy to tree structure
+          const tree = buildTree(data);
+          setHierarchyData(tree);
 
-        // Auto-expand the first level
-        const level1Nodes = new Set<number>();
-        tree.forEach((node) => level1Nodes.add(node.id));
-        setExpandedNodes(level1Nodes);
+          // Auto-expand the first level
+          const level1NodeKeys = new Set<string>();
+          tree.forEach((node) => level1NodeKeys.add(`${node.level}-${node.id}`));
+          setExpandedNodes(level1NodeKeys);
+        } else {
+          console.error("No data returned from API or empty array");
+        }
       } catch (error) {
         console.error("Error fetching cost center hierarchy:", error);
         toast.error("Failed to load cost center hierarchy");
@@ -47,13 +52,17 @@ const CostCenterHierarchyView = () => {
     fetchHierarchy();
   }, []);
 
-  // Build tree from flat hierarchy data
+  // Build tree from flat hierarchy data, accounting for level-specific IDs
   const buildTree = (flatData: CostCenterHierarchy[]): TreeNode[] => {
-    const nodeMap = new Map<number, TreeNode>();
+    // Create a map to store nodes by level and ID for quick access
+    const nodeMap = new Map<string, TreeNode>();
     const rootNodes: TreeNode[] = [];
 
-    // First pass: create node objects
+    // First pass: create all node objects with composite keys
     flatData.forEach((item) => {
+      // Create a composite key using level and ID
+      const nodeKey = `${item.Level}-${item.ID}`;
+
       const node: TreeNode = {
         id: item.ID,
         level: item.Level,
@@ -62,37 +71,48 @@ const CostCenterHierarchyView = () => {
         children: [],
       };
 
-      nodeMap.set(item.ID, node);
+      nodeMap.set(nodeKey, node);
 
-      // Level 1 nodes have no parent
+      // Level 1 nodes have no parent, so they're root nodes
       if (item.Level === 1) {
         rootNodes.push(node);
       }
     });
 
-    // Second pass: build relationships
+    // Second pass: build parent-child relationships
     flatData.forEach((item) => {
-      if (item.Level !== 1 && item.ParentID !== null) {
-        const parentNode = nodeMap.get(item.ParentID);
-        const currentNode = nodeMap.get(item.ID);
+      if (item.Level > 1 && item.ParentID !== null) {
+        // Current node's key
+        const nodeKey = `${item.Level}-${item.ID}`;
+
+        // Parent's key (parent is in the previous level)
+        const parentKey = `${item.Level - 1}-${item.ParentID}`;
+
+        const parentNode = nodeMap.get(parentKey);
+        const currentNode = nodeMap.get(nodeKey);
 
         if (parentNode && currentNode) {
           parentNode.children.push(currentNode);
+        } else {
+          console.error(`Failed to link nodes: Child=${nodeKey}, Parent=${parentKey}`);
         }
       }
     });
 
+    console.log("Tree structure built:", rootNodes);
     return rootNodes;
   };
 
-  // Toggle node expansion
-  const toggleNode = (nodeId: number) => {
+  // Toggle node expansion using composite keys (level-id)
+  const toggleNode = (level: number, id: number) => {
+    const nodeKey = `${level}-${id}`;
+
     setExpandedNodes((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(nodeId)) {
-        newSet.delete(nodeId);
+      if (newSet.has(nodeKey)) {
+        newSet.delete(nodeKey);
       } else {
-        newSet.add(nodeId);
+        newSet.add(nodeKey);
       }
       return newSet;
     });
@@ -105,12 +125,13 @@ const CostCenterHierarchyView = () => {
 
   // Render a tree node and its children recursively
   const renderNode = (node: TreeNode, depth: number = 0) => {
-    const isExpanded = expandedNodes.has(node.id);
+    const nodeKey = `${node.level}-${node.id}`;
+    const isExpanded = expandedNodes.has(nodeKey);
     const hasChildren = node.children.length > 0;
 
     return (
-      <div key={`${node.level}-${node.id}`} className="pl-2">
-        <div className="flex items-center py-2 hover:bg-muted/30 rounded-md px-2 cursor-pointer" onClick={() => hasChildren && toggleNode(node.id)}>
+      <div key={nodeKey} className="pl-2">
+        <div className="flex items-center py-2 hover:bg-muted/30 rounded-md px-2 cursor-pointer" onClick={() => hasChildren && toggleNode(node.level, node.id)}>
           {/* Indentation */}
           <div style={{ width: `${depth * 20}px` }} />
 

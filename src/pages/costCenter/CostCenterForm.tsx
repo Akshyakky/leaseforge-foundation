@@ -12,6 +12,8 @@ import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 import { useAppSelector } from "@/lib/hooks";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormControl } from "@/components/ui/form";
 
 // Form schema for cost center
 const formSchema = z.object({
@@ -22,6 +24,19 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+// Type guard functions to narrow down cost center types
+function isCostCenter2(center: CostCenter1 | CostCenter2 | CostCenter3 | CostCenter4): center is CostCenter2 {
+  return "CostCenter2ID" in center;
+}
+
+function isCostCenter3(center: CostCenter1 | CostCenter2 | CostCenter3 | CostCenter4): center is CostCenter3 {
+  return "CostCenter3ID" in center;
+}
+
+function isCostCenter4(center: CostCenter1 | CostCenter2 | CostCenter3 | CostCenter4): center is CostCenter4 {
+  return "CostCenter4ID" in center;
+}
 
 const CostCenterForm = () => {
   const { level, id } = useParams<{ level?: string; id?: string }>();
@@ -40,7 +55,7 @@ const CostCenterForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
-  const [costCenter, setCostCenter] = useState<any>(null);
+  const [costCenter, setCostCenter] = useState<CostCenter1 | CostCenter2 | CostCenter3 | CostCenter4 | null>(null);
 
   // States for parent selections
   const [level1Options, setLevel1Options] = useState<CostCenter1[]>([]);
@@ -71,7 +86,7 @@ const CostCenterForm = () => {
             setCostCenter(centerData);
 
             // Set form values based on level
-            const formValues: any = {
+            const formValues: Partial<FormValues> = {
               Description: centerData.Description,
             };
 
@@ -79,12 +94,12 @@ const CostCenterForm = () => {
               formValues.CostCenter1ID = centerData.CostCenter1ID.toString();
             }
 
-            if (costCenterLevel >= 3) {
-              formValues.CostCenter2ID = centerData.CostCenter2ID?.toString();
+            if (costCenterLevel >= 3 && isCostCenter3(centerData)) {
+              formValues.CostCenter2ID = centerData.CostCenter2ID.toString();
             }
 
-            if (costCenterLevel >= 4) {
-              formValues.CostCenter3ID = centerData.CostCenter3ID?.toString();
+            if (costCenterLevel >= 4 && isCostCenter4(centerData)) {
+              formValues.CostCenter3ID = centerData.CostCenter3ID.toString();
             }
 
             form.reset(formValues);
@@ -103,7 +118,7 @@ const CostCenterForm = () => {
 
           // If we have a parent1Id set, load level 2 options
           if ((parent1Id || form.getValues().CostCenter1ID) && costCenterLevel >= 3) {
-            const selectedLevel1Id = parseInt(parent1Id || form.getValues().CostCenter1ID);
+            const selectedLevel1Id = parseInt(parent1Id || form.getValues().CostCenter1ID || "0");
             const level2Data = await costCenterService.getChildCostCenters(2, {
               CostCenter1ID: selectedLevel1Id,
             });
@@ -111,7 +126,7 @@ const CostCenterForm = () => {
 
             // If we have a parent2Id set, load level 3 options
             if ((parent2Id || form.getValues().CostCenter2ID) && costCenterLevel >= 4) {
-              const selectedLevel2Id = parseInt(parent2Id || form.getValues().CostCenter2ID);
+              const selectedLevel2Id = parseInt(parent2Id || form.getValues().CostCenter2ID || "0");
               const level3Data = await costCenterService.getChildCostCenters(3, {
                 CostCenter1ID: selectedLevel1Id,
                 CostCenter2ID: selectedLevel2Id,
@@ -161,7 +176,7 @@ const CostCenterForm = () => {
       setLevel3Options([]);
 
       if (value) {
-        const selectedLevel1Id = parseInt(form.getValues().CostCenter1ID);
+        const selectedLevel1Id = parseInt(form.getValues().CostCenter1ID || "0");
         const selectedLevel2Id = parseInt(value);
         const level3Data = await costCenterService.getChildCostCenters(3, {
           CostCenter1ID: selectedLevel1Id,
@@ -256,6 +271,58 @@ const CostCenterForm = () => {
     );
   }
 
+  // Custom render function for Level 1 dropdown
+  const renderLevel1Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select
+        disabled={isEdit}
+        onValueChange={(value) => {
+          field.onChange(value);
+          handleLevel1Change(value);
+        }}
+        defaultValue={field.value}
+        value={field.value}
+      >
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 1 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {level1Options.map((option) => (
+            <SelectItem key={option.CostCenter1ID} value={option.CostCenter1ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
+  // Custom render function for Level 2 dropdown
+  const renderLevel2Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select
+        disabled={isEdit || !form.getValues().CostCenter1ID}
+        onValueChange={(value) => {
+          field.onChange(value);
+          handleLevel2Change(value);
+        }}
+        defaultValue={field.value}
+        value={field.value}
+      >
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 2 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {level2Options.map((option) => (
+            <SelectItem key={option.CostCenter2ID} value={option.CostCenter2ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
@@ -286,8 +353,7 @@ const CostCenterForm = () => {
                   }))}
                   placeholder="Select Level 1 Cost Center"
                   required
-                  disabled={isEdit}
-                  onChange={handleLevel1Change}
+                  render={renderLevel1Select}
                 />
               )}
 
@@ -304,8 +370,7 @@ const CostCenterForm = () => {
                   }))}
                   placeholder="Select Level 2 Cost Center"
                   required
-                  disabled={isEdit || !form.getValues().CostCenter1ID}
-                  onChange={handleLevel2Change}
+                  render={renderLevel2Select}
                 />
               )}
 
