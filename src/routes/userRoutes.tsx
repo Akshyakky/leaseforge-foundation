@@ -22,7 +22,7 @@ const userRoutes = (
     <Route
       path="users/new"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <UserForm />
         </ProtectedRoute>
       }
@@ -30,7 +30,7 @@ const userRoutes = (
     <Route
       path="users/edit/:id"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <UserForm />
         </ProtectedRoute>
       }

@@ -21,7 +21,7 @@ const departmentRoutes = (
     <Route
       path="departments/new"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <DepartmentForm />
         </ProtectedRoute>
       }
@@ -29,7 +29,7 @@ const departmentRoutes = (
     <Route
       path="departments/edit/:id"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <DepartmentForm />
         </ProtectedRoute>
       }
