@@ -70,6 +70,10 @@ const CustomerDetails = () => {
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [selectedAttachmentId, setSelectedAttachmentId] = useState<number | null>(null);
 
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileUploadSuccess, setFileUploadSuccess] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState<string | null>(null);
+
   // Form initialization
   const contactForm = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -525,6 +529,32 @@ const CustomerDetails = () => {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const handleFileUpload = (file: File) => {
+    setFileUploading(true);
+    setFileUploadError(null);
+
+    // In a real application, you would upload to your backend here
+    // For demonstration, we'll simulate a file upload
+    setTimeout(() => {
+      if (file.size > 10 * 1024 * 1024) {
+        setFileUploadError("File size exceeds 10MB limit");
+        setFileUploading(false);
+        return;
+      }
+
+      setFileUploading(false);
+      setFileUploadSuccess(true);
+
+      // Reset success status after 3 seconds
+      setTimeout(() => setFileUploadSuccess(false), 3000);
+    }, 1500);
+  };
+
+  const handleFileRemove = () => {
+    setFileUploadSuccess(false);
+    setFileUploadError(null);
   };
 
   return (
@@ -1029,17 +1059,21 @@ const CustomerDetails = () => {
               />
               <FormField form={attachmentForm} name="DocumentName" label="Document Name" placeholder="Enter document name" required />
 
-              <FileUploadField
+              <FormField
                 form={attachmentForm}
                 name="file"
                 label="Upload File"
                 description={editingAttachment?.FileContent ? "Replace existing file" : undefined}
-                placeholder="Browse files"
-                helperText="Maximum file size: 10MB"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
-                maxSize={10 * 1024 * 1024} // 10MB
-                showPreview={true}
-                previewUrl={editingAttachment?.fileUrl}
+                type="file"
+                fileConfig={{
+                  maxSize: 10 * 1024 * 1024, // 10MB
+                  acceptedFileTypes: ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls",
+                  onUpload: handleFileUpload,
+                  onRemove: handleFileRemove,
+                  isUploading: fileUploading,
+                  uploadSuccess: fileUploadSuccess,
+                  uploadError: fileUploadError,
+                }}
               />
 
               <div className="grid grid-cols-2 gap-4">

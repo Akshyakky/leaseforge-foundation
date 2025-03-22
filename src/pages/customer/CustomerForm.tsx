@@ -89,6 +89,12 @@ const CustomerForm = () => {
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
   const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
 
+  // State for file upload
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   // Initialize forms
   const customerForm = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
@@ -423,6 +429,43 @@ const CustomerForm = () => {
   // Cancel button handler
   const handleCancel = () => {
     navigate("/customers");
+  };
+
+  const handleFileUpload = (file: File) => {
+    setIsUploading(true);
+    setUploadError(null);
+
+    // In a real app, you would upload to server here
+    // For demo, we'll simulate an upload process
+    setTimeout(() => {
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError("File size exceeds 10MB limit");
+        setIsUploading(false);
+        return;
+      }
+
+      // Create a preview URL
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+
+      setIsUploading(false);
+      setUploadSuccess(true);
+
+      // Reset success status after a moment
+      setTimeout(() => setUploadSuccess(false), 3000);
+    }, 1500);
+  };
+
+  // Handle file removal
+  const handleFileRemove = () => {
+    // Clean up any preview URL
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
+    setUploadSuccess(false);
+    setUploadError(null);
   };
 
   if (initialLoading) {
@@ -769,20 +812,37 @@ const CustomerForm = () => {
                 placeholder="Select document type"
                 required
               />
+
               <FormField form={attachmentForm} name="DocumentName" label="Document Name" placeholder="Enter document name" required />
 
-              <FileUploadField
+              <FormField
                 form={attachmentForm}
                 name="file"
                 label="Upload File"
-                description={editingAttachment?.FileContent ? "Replace existing file" : undefined}
-                placeholder="Browse files"
-                helperText="Maximum file size: 10MB"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
-                maxSize={10 * 1024 * 1024} // 10MB
-                showPreview={true}
-                previewUrl={editingAttachment?.fileUrl}
+                description={editingAttachment?.FileContent ? "Replace existing file" : "Upload a document file"}
+                type="file"
+                fileConfig={{
+                  maxSize: 10 * 1024 * 1024, // 10MB
+                  acceptedFileTypes: ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls",
+                  onUpload: handleFileUpload,
+                  onRemove: handleFileRemove,
+                  isUploading,
+                  uploadSuccess,
+                  uploadError,
+                }}
               />
+
+              {/* Show existing file preview if available */}
+              {!attachmentForm.watch("file") && editingAttachment?.fileUrl && (
+                <div className="mt-2 p-2 border rounded-md bg-muted/20">
+                  <p className="text-xs text-muted-foreground mb-1">Current file:</p>
+                  <div className="flex items-center">
+                    <a href={editingAttachment.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
+                      View current file
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField form={attachmentForm} name="DocIssueDate" label="Issue Date" type="date" placeholder="Select issue date" />
