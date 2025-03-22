@@ -3,47 +3,46 @@ import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import { lazyLoad } from "@/lib/performance";
 
-// Import actual components to avoid lazy-loading for frequently used pages
-import UserForm from "@/pages/user/UserForm";
+// Import customer module components
+import Customers from "@/pages/customer/Customers";
+import CustomerForm from "@/pages/customer/CustomerForm";
+import CustomerDetails from "@/pages/customer/CustomerDetails";
 
-// Lazy-loaded user pages
-const Users = lazyLoad(() => import("@/pages/user/Users"));
-
-const userRoutes = (
+const customerRoutes = (
   <>
     <Route
-      path="users"
+      path="customers"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <Users />
+          <Customers />
         </ProtectedRoute>
       }
     />
     <Route
-      path="users/new"
+      path="customers/new"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <UserForm />
+          <CustomerForm />
         </ProtectedRoute>
       }
     />
     <Route
-      path="users/edit/:id"
+      path="customers/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <UserForm />
+          <CustomerForm />
         </ProtectedRoute>
       }
     />
     <Route
-      path="users/view/:id"
+      path="customers/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <UserForm />
+          <CustomerDetails />
         </ProtectedRoute>
       }
     />
   </>
 );
 
-export default userRoutes;
+export default customerRoutes;

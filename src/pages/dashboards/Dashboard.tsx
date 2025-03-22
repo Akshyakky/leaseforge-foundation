@@ -1,44 +1,23 @@
+import React from "react";
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, Building, CreditCard, FileText, Users } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
+import CustomerDashboard from "./CustomerDashboard";
 
-import React from 'react';
-import { 
-  ArrowDownIcon, 
-  ArrowRightIcon, 
-  ArrowUpIcon,
-  Building,
-  CreditCard,
-  FileText,
-  Users
-} from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-
-const DashboardCard = ({ 
-  title, 
-  value, 
-  description, 
-  trend, 
+const DashboardCard = ({
+  title,
+  value,
+  description,
+  trend,
   trendValue,
   icon: Icon,
   iconColor,
-}: { 
-  title: string; 
-  value: string; 
-  description: string; 
-  trend: 'up' | 'down' | 'neutral';
+}: {
+  title: string;
+  value: string;
+  description: string;
+  trend: "up" | "down" | "neutral";
   trendValue: string;
   icon: React.ElementType;
   iconColor: string;
@@ -55,14 +34,16 @@ const DashboardCard = ({
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground">{description}</p>
         <div className="mt-2 flex items-center text-xs">
-          {trend === 'up' && <ArrowUpIcon className="mr-1 h-3 w-3 text-emerald-500" />}
-          {trend === 'down' && <ArrowDownIcon className="mr-1 h-3 w-3 text-red-500" />}
-          {trend === 'neutral' && <ArrowRightIcon className="mr-1 h-3 w-3 text-amber-500" />}
-          <span className={`
-            ${trend === 'up' && 'text-emerald-500'}
-            ${trend === 'down' && 'text-red-500'}
-            ${trend === 'neutral' && 'text-amber-500'}
-          `}>
+          {trend === "up" && <ArrowUpIcon className="mr-1 h-3 w-3 text-emerald-500" />}
+          {trend === "down" && <ArrowDownIcon className="mr-1 h-3 w-3 text-red-500" />}
+          {trend === "neutral" && <ArrowRightIcon className="mr-1 h-3 w-3 text-amber-500" />}
+          <span
+            className={`
+            ${trend === "up" && "text-emerald-500"}
+            ${trend === "down" && "text-red-500"}
+            ${trend === "neutral" && "text-amber-500"}
+          `}
+          >
             {trendValue}
           </span>
           <span className="text-muted-foreground ml-1">vs. last month</span>
@@ -74,33 +55,33 @@ const DashboardCard = ({
 
 // Sample data for charts
 const barChartData = [
-  { name: 'Jan', value: 23 },
-  { name: 'Feb', value: 45 },
-  { name: 'Mar', value: 32 },
-  { name: 'Apr', value: 56 },
-  { name: 'May', value: 42 },
-  { name: 'Jun', value: 65 },
-  { name: 'Jul', value: 54 },
+  { name: "Jan", value: 23 },
+  { name: "Feb", value: 45 },
+  { name: "Mar", value: 32 },
+  { name: "Apr", value: 56 },
+  { name: "May", value: 42 },
+  { name: "Jun", value: 65 },
+  { name: "Jul", value: 54 },
 ];
 
 const lineChartData = [
-  { name: 'Jan', value: 400 },
-  { name: 'Feb', value: 600 },
-  { name: 'Mar', value: 550 },
-  { name: 'Apr', value: 780 },
-  { name: 'May', value: 650 },
-  { name: 'Jun', value: 850 },
-  { name: 'Jul', value: 900 },
+  { name: "Jan", value: 400 },
+  { name: "Feb", value: 600 },
+  { name: "Mar", value: 550 },
+  { name: "Apr", value: 780 },
+  { name: "May", value: 650 },
+  { name: "Jun", value: 850 },
+  { name: "Jul", value: 900 },
 ];
 
 const pieChartData = [
-  { name: 'Office', value: 40 },
-  { name: 'Retail', value: 25 },
-  { name: 'Industry', value: 20 },
-  { name: 'Other', value: 15 },
+  { name: "Office", value: 40 },
+  { name: "Retail", value: 25 },
+  { name: "Industry", value: 20 },
+  { name: "Other", value: 15 },
 ];
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 const Dashboard = () => {
   return (
@@ -111,58 +92,22 @@ const Dashboard = () => {
           <Button variant="outline" size="sm">
             Download Report
           </Button>
-          <Button size="sm">
-            New Lease
-          </Button>
+          <Button size="sm">New Lease</Button>
         </div>
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <DashboardCard 
-          title="Active Leases" 
-          value="128" 
-          description="Total active lease contracts" 
-          trend="up" 
-          trendValue="12%"
-          icon={FileText}
-          iconColor="text-blue-500"
-        />
-        <DashboardCard 
-          title="Total Revenue" 
-          value="$285,248" 
-          description="Total revenue this month" 
-          trend="up" 
-          trendValue="8.2%"
-          icon={CreditCard}
-          iconColor="text-emerald-500"
-        />
-        <DashboardCard 
-          title="Companies" 
-          value="64" 
-          description="Total partner companies" 
-          trend="neutral" 
-          trendValue="0%"
-          icon={Building}
-          iconColor="text-violet-500"
-        />
-        <DashboardCard 
-          title="Clients" 
-          value="1,842" 
-          description="Total client accounts" 
-          trend="up" 
-          trendValue="3.4%"
-          icon={Users}
-          iconColor="text-amber-500"
-        />
+        <DashboardCard title="Active Leases" value="128" description="Total active lease contracts" trend="up" trendValue="12%" icon={FileText} iconColor="text-blue-500" />
+        <DashboardCard title="Total Revenue" value="$285,248" description="Total revenue this month" trend="up" trendValue="8.2%" icon={CreditCard} iconColor="text-emerald-500" />
+        <DashboardCard title="Companies" value="64" description="Total partner companies" trend="neutral" trendValue="0%" icon={Building} iconColor="text-violet-500" />
+        <DashboardCard title="Clients" value="1,842" description="Total client accounts" trend="up" trendValue="3.4%" icon={Users} iconColor="text-amber-500" />
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
             <CardTitle>Monthly Leases</CardTitle>
-            <CardDescription>
-              Number of new leases per month
-            </CardDescription>
+            <CardDescription>Number of new leases per month</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -182,9 +127,7 @@ const Dashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Lease Types</CardTitle>
-            <CardDescription>
-              Distribution by property type
-            </CardDescription>
+            <CardDescription>Distribution by property type</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -215,9 +158,7 @@ const Dashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Revenue Trend</CardTitle>
-          <CardDescription>
-            Monthly revenue from lease contracts
-          </CardDescription>
+          <CardDescription>Monthly revenue from lease contracts</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-80">
@@ -227,19 +168,13 @@ const Dashboard = () => {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
+                <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
+      <CustomerDashboard />
     </div>
   );
 };
