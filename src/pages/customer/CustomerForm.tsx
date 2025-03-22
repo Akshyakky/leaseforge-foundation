@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import FileUploadField from "@/components/forms/FileUploadField";
 
 // Create the schema for customer form validation
 const customerSchema = z.object({
@@ -53,7 +54,7 @@ const contactSchema = z.object({
 const attachmentSchema = z.object({
   DocTypeID: z.string().min(1, "Document type is required"),
   DocumentName: z.string().min(2, "Document name is required"),
-  FilePath: z.string().optional(),
+  file: z.instanceof(File).optional(),
   DocIssueDate: z.date().optional().nullable(),
   DocExpiryDate: z.date().optional().nullable(),
   Remark: z.string().optional(),
@@ -128,7 +129,7 @@ const CustomerForm = () => {
     defaultValues: {
       DocTypeID: "",
       DocumentName: "",
-      FilePath: "",
+      file: undefined,
       DocIssueDate: null,
       DocExpiryDate: null,
       Remark: "",
@@ -347,7 +348,7 @@ const CustomerForm = () => {
       attachmentForm.reset({
         DocTypeID: attachment.DocTypeID?.toString() || "",
         DocumentName: attachment.DocumentName || "",
-        FilePath: attachment.FilePath || "",
+        file: undefined, // Don't set the file input, but use the preview URL
         DocIssueDate: attachment.DocIssueDate ? new Date(attachment.DocIssueDate) : null,
         DocExpiryDate: attachment.DocExpiryDate ? new Date(attachment.DocExpiryDate) : null,
         Remark: attachment.Remark || "",
@@ -357,7 +358,7 @@ const CustomerForm = () => {
       attachmentForm.reset({
         DocTypeID: "",
         DocumentName: "",
-        FilePath: "",
+        file: undefined,
         DocIssueDate: null,
         DocExpiryDate: null,
         Remark: "",
@@ -378,12 +379,30 @@ const CustomerForm = () => {
       CustomerID: customer?.CustomerID || 0,
       DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
       DocumentName: data.DocumentName,
-      FilePath: data.FilePath || undefined,
       DocIssueDate: data.DocIssueDate || undefined,
       DocExpiryDate: data.DocExpiryDate || undefined,
       Remark: data.Remark || undefined,
       DocTypeName: documentTypes.find((t) => t.DocTypeID.toString() === data.DocTypeID)?.Description,
     };
+
+    // If there's a file, add file-related properties
+    if (data.file) {
+      newAttachment.file = data.file;
+
+      // Generate a preview URL for display
+      const fileUrl = URL.createObjectURL(data.file);
+      newAttachment.fileUrl = fileUrl;
+
+      // Store file information
+      newAttachment.FileContentType = data.file.type;
+      newAttachment.FileSize = data.file.size;
+    } else if (editingAttachment) {
+      // Preserve existing file content if updating and no new file is provided
+      newAttachment.FileContent = editingAttachment.FileContent;
+      newAttachment.FileContentType = editingAttachment.FileContentType;
+      newAttachment.FileSize = editingAttachment.FileSize;
+      newAttachment.fileUrl = editingAttachment.fileUrl;
+    }
 
     if (editingAttachment) {
       // Update existing attachment
@@ -751,12 +770,27 @@ const CustomerForm = () => {
                 required
               />
               <FormField form={attachmentForm} name="DocumentName" label="Document Name" placeholder="Enter document name" required />
-              <FormField form={attachmentForm} name="FilePath" label="File Path" placeholder="Enter file path" />
+
+              <FileUploadField
+                form={attachmentForm}
+                name="file"
+                label="Upload File"
+                description={editingAttachment?.FileContent ? "Replace existing file" : undefined}
+                placeholder="Browse files"
+                helperText="Maximum file size: 10MB"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                maxSize={10 * 1024 * 1024} // 10MB
+                showPreview={true}
+                previewUrl={editingAttachment?.fileUrl}
+              />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField form={attachmentForm} name="DocIssueDate" label="Issue Date" type="date" placeholder="Select issue date" />
                 <FormField form={attachmentForm} name="DocExpiryDate" label="Expiry Date" type="date" placeholder="Select expiry date" />
               </div>
+
               <FormField form={attachmentForm} name="Remark" label="Remarks" placeholder="Enter any additional information" type="textarea" />
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeAttachmentDialog}>
                   Cancel

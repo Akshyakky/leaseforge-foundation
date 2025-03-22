@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { customerService } from "@/services/customerService";
 import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus } from "lucide-react";
+import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus, Eye, Download } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import * as z from "zod";
 import { Form } from "@/components/ui/form";
 import { FormField } from "@/components/forms/FormField";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import FileUploadField from "@/components/forms/FileUploadField";
 
 // Contact form schema
 const contactSchema = z.object({
@@ -33,7 +34,7 @@ const contactSchema = z.object({
 const attachmentSchema = z.object({
   DocTypeID: z.string().min(1, "Document type is required"),
   DocumentName: z.string().min(2, "Document name is required"),
-  FilePath: z.string().optional(),
+  file: z.instanceof(File).optional(),
   DocIssueDate: z.date().optional().nullable(),
   DocExpiryDate: z.date().optional().nullable(),
   Remark: z.string().optional(),
@@ -88,7 +89,7 @@ const CustomerDetails = () => {
     defaultValues: {
       DocTypeID: "",
       DocumentName: "",
-      FilePath: "",
+      file: undefined,
       DocIssueDate: null,
       DocExpiryDate: null,
       Remark: "",
@@ -344,7 +345,7 @@ const CustomerDetails = () => {
       attachmentForm.reset({
         DocTypeID: attachment.DocTypeID?.toString() || "",
         DocumentName: attachment.DocumentName || "",
-        FilePath: attachment.FilePath || "",
+        file: undefined, // Don't set the file input, but use the preview URL
         DocIssueDate: attachment.DocIssueDate ? new Date(attachment.DocIssueDate) : null,
         DocExpiryDate: attachment.DocExpiryDate ? new Date(attachment.DocExpiryDate) : null,
         Remark: attachment.Remark || "",
@@ -354,7 +355,7 @@ const CustomerDetails = () => {
       attachmentForm.reset({
         DocTypeID: "",
         DocumentName: "",
-        FilePath: "",
+        file: undefined,
         DocIssueDate: null,
         DocExpiryDate: null,
         Remark: "",
@@ -373,68 +374,46 @@ const CustomerDetails = () => {
     if (!customer) return;
 
     try {
+      const attachmentData: Partial<CustomerAttachment> = {
+        CustomerID: customer.CustomerID,
+        DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
+        DocumentName: data.DocumentName,
+        DocIssueDate: data.DocIssueDate || undefined,
+        DocExpiryDate: data.DocExpiryDate || undefined,
+        Remark: data.Remark || undefined,
+      };
+
+      // Add file if selected
+      if (data.file) {
+        attachmentData.file = data.file;
+      }
+
       if (editingAttachment) {
         // Update existing attachment
         const result = await customerService.updateAttachment({
           CustomerAttachmentID: editingAttachment.CustomerAttachmentID,
-          CustomerID: customer.CustomerID,
-          DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
-          DocumentName: data.DocumentName,
-          FilePath: data.FilePath || undefined,
-          DocIssueDate: data.DocIssueDate || undefined,
-          DocExpiryDate: data.DocExpiryDate || undefined,
-          Remark: data.Remark || undefined,
+          ...attachmentData,
         });
 
         if (result.success) {
           toast.success(result.message);
 
-          // Update the attachments list
-          const updatedAttachment: CustomerAttachment = {
-            CustomerAttachmentID: editingAttachment.CustomerAttachmentID,
-            CustomerID: customer.CustomerID,
-            DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
-            DocumentName: data.DocumentName,
-            FilePath: data.FilePath || undefined,
-            DocIssueDate: data.DocIssueDate || undefined,
-            DocExpiryDate: data.DocExpiryDate || undefined,
-            Remark: data.Remark || undefined,
-            DocTypeName: docTypes.find((t) => t.DocTypeID.toString() === data.DocTypeID)?.Description,
-          };
-
-          setAttachments(attachments.map((a) => (a.CustomerAttachmentID === editingAttachment.CustomerAttachmentID ? updatedAttachment : a)));
+          // Refresh the customer data to get updated attachments
+          const refreshedData = await customerService.getCustomerById(customer.CustomerID);
+          setAttachments(refreshedData.attachments || []);
         } else {
           toast.error(result.message);
         }
       } else {
         // Add new attachment
-        const result = await customerService.addAttachment({
-          CustomerID: customer.CustomerID,
-          DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
-          DocumentName: data.DocumentName,
-          FilePath: data.FilePath || undefined,
-          DocIssueDate: data.DocIssueDate || undefined,
-          DocExpiryDate: data.DocExpiryDate || undefined,
-          Remark: data.Remark || undefined,
-        });
+        const result = await customerService.addAttachment(attachmentData as any);
 
         if (result.success && result.attachmentId) {
           toast.success(result.message);
 
-          // Add the new attachment to the list
-          const newAttachment: CustomerAttachment = {
-            CustomerAttachmentID: result.attachmentId,
-            CustomerID: customer.CustomerID,
-            DocTypeID: data.DocTypeID ? parseInt(data.DocTypeID) : undefined,
-            DocumentName: data.DocumentName,
-            FilePath: data.FilePath || undefined,
-            DocIssueDate: data.DocIssueDate || undefined,
-            DocExpiryDate: data.DocExpiryDate || undefined,
-            Remark: data.Remark || undefined,
-            DocTypeName: docTypes.find((t) => t.DocTypeID.toString() === data.DocTypeID)?.Description,
-          };
-
-          setAttachments([...attachments, newAttachment]);
+          // Refresh the customer data to get updated attachments
+          const refreshedData = await customerService.getCustomerById(customer.CustomerID);
+          setAttachments(refreshedData.attachments || []);
         } else {
           toast.error(result.message || "Failed to add attachment");
         }
@@ -444,6 +423,27 @@ const CustomerDetails = () => {
       toast.error("An error occurred while saving the attachment");
     } finally {
       closeAttachmentDialog();
+    }
+  };
+
+  const handleViewAttachment = (attachment: CustomerAttachment) => {
+    if (attachment.fileUrl) {
+      window.open(attachment.fileUrl, "_blank");
+    } else {
+      toast.error("File preview not available");
+    }
+  };
+
+  const handleDownloadAttachment = (attachment: CustomerAttachment) => {
+    if (attachment.fileUrl) {
+      const link = document.createElement("a");
+      link.href = attachment.fileUrl;
+      link.download = attachment.DocumentName || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      toast.error("File download not available");
     }
   };
 
@@ -517,6 +517,14 @@ const CustomerDetails = () => {
 
     if (diffDays < 0) return { days: Math.abs(diffDays), expired: true };
     return { days: diffDays, expired: false };
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   return (
@@ -826,6 +834,7 @@ const CustomerDetails = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {attachments.map((attachment) => {
                     const expiry = attachment.DocExpiryDate ? getTimeUntilExpiry(attachment.DocExpiryDate) : null;
+                    const hasFileContent = Boolean(attachment.FileContent);
 
                     return (
                       <Card key={attachment.CustomerAttachmentID}>
@@ -836,6 +845,14 @@ const CustomerDetails = () => {
                                 <span className="font-medium">{attachment.DocumentName}</span>
                                 {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
                               </div>
+
+                              {hasFileContent && attachment.FileSize && (
+                                <div className="text-sm text-muted-foreground flex items-center">
+                                  <FileText className="h-3.5 w-3.5 mr-1" />
+                                  {formatFileSize(attachment.FileSize)}
+                                </div>
+                              )}
+
                               <div className="text-sm space-y-1">
                                 {attachment.DocIssueDate && (
                                   <div className="text-muted-foreground flex items-center">
@@ -865,7 +882,17 @@ const CustomerDetails = () => {
                                 {attachment.Remark && <div className="text-muted-foreground">{attachment.Remark}</div>}
                               </div>
                             </div>
-                            <div className="flex space-x-2">
+                            <div className="flex space-x-1">
+                              {hasFileContent && (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewAttachment(attachment)} title="View">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDownloadAttachment(attachment)} title="Download">
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
                               <Button variant="ghost" size="icon" onClick={() => openAttachmentDialog(attachment)}>
                                 <Edit2 className="h-4 w-4" />
                               </Button>
@@ -1001,12 +1028,27 @@ const CustomerDetails = () => {
                 required
               />
               <FormField form={attachmentForm} name="DocumentName" label="Document Name" placeholder="Enter document name" required />
-              <FormField form={attachmentForm} name="FilePath" label="File Path" placeholder="Enter file path" />
+
+              <FileUploadField
+                form={attachmentForm}
+                name="file"
+                label="Upload File"
+                description={editingAttachment?.FileContent ? "Replace existing file" : undefined}
+                placeholder="Browse files"
+                helperText="Maximum file size: 10MB"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                maxSize={10 * 1024 * 1024} // 10MB
+                showPreview={true}
+                previewUrl={editingAttachment?.fileUrl}
+              />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField form={attachmentForm} name="DocIssueDate" label="Issue Date" type="date" placeholder="Select issue date" />
                 <FormField form={attachmentForm} name="DocExpiryDate" label="Expiry Date" type="date" placeholder="Select expiry date" />
               </div>
+
               <FormField form={attachmentForm} name="Remark" label="Remarks" placeholder="Enter any additional information" type="textarea" />
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeAttachmentDialog}>
                   Cancel

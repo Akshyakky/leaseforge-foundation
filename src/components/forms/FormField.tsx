@@ -4,11 +4,22 @@ import { FormItem, FormLabel, FormControl, FormDescription, FormMessage, FormFie
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FileUpload } from "@/components/ui/file-upload";
 import { UseFormReturn, FieldValues, Path, FieldPathValue } from "react-hook-form";
 
 export interface SelectOption {
   label: string;
   value: string;
+}
+
+export interface FileUploadConfig {
+  maxSize?: number;
+  acceptedFileTypes?: string;
+  onUpload?: (file: File) => void;
+  onRemove?: () => void;
+  isUploading?: boolean;
+  uploadSuccess?: boolean;
+  uploadError?: string | null;
 }
 
 export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TName extends Path<TFieldValues> = Path<TFieldValues>> {
@@ -23,6 +34,7 @@ export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TNam
   disabled?: boolean;
   required?: boolean;
   options?: SelectOption[];
+  fileConfig?: FileUploadConfig;
   render?: (props: { field: any; fieldState: any }) => React.ReactNode;
 }
 
@@ -38,6 +50,7 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
   disabled,
   required,
   options,
+  fileConfig,
   render,
   form,
 }: FieldProps<TFieldValues, TName> & { form: UseFormReturn<TFieldValues> }) {
@@ -75,6 +88,25 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
                     ))}
                   </SelectContent>
                 </Select>
+              ) : type === "file" ? (
+                <FileUpload
+                  uploadedFile={field.value}
+                  onUpload={(file) => {
+                    field.onChange(file);
+                    if (fileConfig?.onUpload) fileConfig.onUpload(file);
+                  }}
+                  onRemove={() => {
+                    field.onChange(null);
+                    if (fileConfig?.onRemove) fileConfig.onRemove();
+                  }}
+                  isUploading={fileConfig?.isUploading}
+                  uploadSuccess={fileConfig?.uploadSuccess}
+                  uploadError={fileConfig?.uploadError}
+                  maxSize={fileConfig?.maxSize}
+                  acceptedFileTypes={fileConfig?.acceptedFileTypes}
+                  disabled={disabled}
+                  className={fieldState.error ? "border-destructive" : ""}
+                />
               ) : (
                 <Input {...field} type={type} placeholder={placeholder} autoComplete={autoComplete} disabled={disabled} className={fieldState.error ? "border-destructive" : ""} />
               )}
