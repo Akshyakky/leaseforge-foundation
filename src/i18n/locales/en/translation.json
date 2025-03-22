@@ -108,9 +108,13 @@
       "phoneNo": "Phone Number",
       "docType": "Document Type",
       "docName": "Document Name",
-      "filePath": "File Path",
+      "fileUpload": "Upload File",
+      "filePreview": "File Preview",
+      "fileSize": "File Size",
+      "fileType": "File Type",
       "issueDate": "Issue Date",
-      "expiryDate": "Expiry Date"
+      "expiryDate": "Expiry Date",
+      "maxFileSize": "Maximum file size: {size}"
     },
     "types": {
       "individual": "Individual",
@@ -142,7 +146,20 @@
       "createdBy": "Created By",
       "updatedBy": "Last Updated By",
       "expiresIn": "Expires in {days} days",
-      "expired": "Expired {days} days ago"
+      "expired": "Expired {days} days ago",
+      "fileRequired": "Please select a file",
+      "fileSizeExceeded": "File size exceeds the maximum allowed size",
+      "fileTypeNotSupported": "File type not supported",
+      "fileUploadSuccess": "File uploaded successfully",
+      "fileUploadError": "Error uploading file"
+    },
+    "fileUpload": {
+      "dragDrop": "Drag and drop file here, or",
+      "browse": "Browse",
+      "uploading": "Uploading...",
+      "uploadComplete": "Upload complete",
+      "replace": "Replace",
+      "remove": "Remove"
     }
   },
   "department": {
