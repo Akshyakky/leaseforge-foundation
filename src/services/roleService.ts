@@ -26,7 +26,6 @@ class RoleService extends BaseService {
   async getAllRoles(): Promise<Role[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Roles
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -42,7 +41,6 @@ class RoleService extends BaseService {
   async getRoleById(roleId: number): Promise<Role | null> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Role by ID
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
       },
@@ -60,7 +58,6 @@ class RoleService extends BaseService {
   async createRole(role: Partial<Role>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Role
-      actionBy: "WebApp",
       parameters: {
         RoleName: role.RoleName,
       },
@@ -83,7 +80,6 @@ class RoleService extends BaseService {
   async updateRole(role: Partial<Role>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Role
-      actionBy: "WebApp",
       parameters: {
         RoleID: role.RoleID,
         RoleName: role.RoleName,
@@ -107,7 +103,6 @@ class RoleService extends BaseService {
   async deleteRole(roleId: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Role
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
       },
@@ -130,7 +125,6 @@ class RoleService extends BaseService {
   async getUsersByRole(roleId: number): Promise<any[]> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Get Users by Role
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
       },
@@ -148,7 +142,6 @@ class RoleService extends BaseService {
   async getRolePermissions(roleId: number): Promise<any[]> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Role Permissions
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
       },

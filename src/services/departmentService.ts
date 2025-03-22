@@ -27,7 +27,6 @@ class DepartmentService extends BaseService {
   async getAllDepartments(): Promise<Department[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Departments
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -43,7 +42,6 @@ class DepartmentService extends BaseService {
   async getDepartmentById(departmentId: number): Promise<Department | null> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Department by ID
-      actionBy: "WebApp",
       parameters: {
         DepartmentID: departmentId,
       },
@@ -61,7 +59,6 @@ class DepartmentService extends BaseService {
   async createDepartment(department: Partial<Department>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Department
-      actionBy: "WebApp",
       parameters: {
         DepartmentName: department.DepartmentName,
       },
@@ -84,7 +81,6 @@ class DepartmentService extends BaseService {
   async updateDepartment(department: Partial<Department>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Department
-      actionBy: "WebApp",
       parameters: {
         DepartmentID: department.DepartmentID,
         DepartmentName: department.DepartmentName,
@@ -108,7 +104,6 @@ class DepartmentService extends BaseService {
   async deleteDepartment(departmentId: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Department
-      actionBy: "WebApp",
       parameters: {
         DepartmentID: departmentId,
       },
@@ -131,7 +126,6 @@ class DepartmentService extends BaseService {
   async searchDepartments(searchText: string): Promise<Department[]> {
     const request: BaseRequest = {
       mode: 6, // Mode 6: Search Departments
-      actionBy: "WebApp",
       parameters: {
         SearchText: searchText,
       },
@@ -149,7 +143,6 @@ class DepartmentService extends BaseService {
   async getDepartmentUsers(departmentId: number): Promise<any[]> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Get Users by Department
-      actionBy: "WebApp",
       parameters: {
         DepartmentID: departmentId,
       },
@@ -170,7 +163,6 @@ class DepartmentService extends BaseService {
   }> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Get Department Statistics
-      actionBy: "WebApp",
       parameters: {
         DepartmentID: departmentId,
       },

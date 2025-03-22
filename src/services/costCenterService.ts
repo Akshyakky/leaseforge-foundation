@@ -19,7 +19,6 @@ class CostCenterService extends BaseService {
   async createCostCenter(data: CostCenterRequest): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Cost Center
-      actionBy: "WebApp",
       parameters: {
         CostCenter1ID: data.CostCenter1ID,
         CostCenter2ID: data.CostCenter2ID,
@@ -57,7 +56,6 @@ class CostCenterService extends BaseService {
   async updateCostCenter(data: CostCenterRequest): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Cost Center
-      actionBy: "WebApp",
       parameters: {
         CostCenter1ID: data.CostCenter1ID,
         CostCenter2ID: data.CostCenter2ID,
@@ -102,7 +100,6 @@ class CostCenterService extends BaseService {
   ): Promise<CostCenter1[] | CostCenter2[] | CostCenter3[] | CostCenter4[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Cost Centers by Level
-      actionBy: "WebApp",
       parameters: {
         Level: level,
         ...parentId,
@@ -122,7 +119,6 @@ class CostCenterService extends BaseService {
   async getCostCenterById(level: number, id: number): Promise<CostCenter1 | CostCenter2 | CostCenter3 | CostCenter4 | null> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Cost Center by ID
-      actionBy: "WebApp",
       parameters: {
         Level: level,
         [`CostCenter${level}ID`]: id,
@@ -148,7 +144,6 @@ class CostCenterService extends BaseService {
   async deleteCostCenter(level: number, id: number, currentUserName: string): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Cost Center
-      actionBy: "WebApp",
       parameters: {
         Level: level,
         [`CostCenter${level}ID`]: id,
@@ -190,7 +185,6 @@ class CostCenterService extends BaseService {
   ): Promise<CostCenter1[] | CostCenter2[] | CostCenter3[] | CostCenter4[]> {
     const request: BaseRequest = {
       mode: 6, // Mode 6: Search Cost Centers
-      actionBy: "WebApp",
       parameters: {
         Level: level,
         SearchText: searchText,
@@ -218,7 +212,6 @@ class CostCenterService extends BaseService {
   ): Promise<CostCenter2[] | CostCenter3[] | CostCenter4[]> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Get Child Cost Centers
-      actionBy: "WebApp",
       parameters: {
         Level: level,
         ...parentId,
@@ -236,7 +229,6 @@ class CostCenterService extends BaseService {
   async getCostCenterHierarchy(): Promise<CostCenterHierarchy[]> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Get Cost Center Hierarchy
-      actionBy: "WebApp",
       parameters: {},
     };
 

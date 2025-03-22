@@ -1,6 +1,7 @@
 // src/services/BaseService.ts
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { toast } from "sonner";
+import { store } from "@/lib/store";
 
 // Base request interface for all API calls
 export interface BaseRequest {
@@ -57,6 +58,30 @@ export class BaseService {
   }
 
   /**
+   * Get the current user's information for action attribution
+   * @returns The username or a default value
+   */
+  protected getCurrentUser(): string {
+    try {
+      // Get current user from Redux store
+      const state = store.getState();
+
+      // Check if auth state and user exist
+      if (state && state.auth && state.auth.user) {
+        const user = state.auth.user;
+
+        // Return username, name, or ID in that order of preference
+        return user.name || user.name || user.name || user.fullName || `User_${user.id || user.id || "unknown"}`;
+      }
+    } catch (error) {
+      console.warn("Error retrieving current user from store:", error);
+    }
+
+    // Return a default identifier if we can't get the user info
+    return "SystemUser";
+  }
+
+  /**
    * Execute an API request and handle common response/error patterns
    * @param request - The request object
    * @param showToast - Whether to show toast notifications for errors
@@ -65,7 +90,14 @@ export class BaseService {
    */
   protected async execute<T = any>(request: BaseRequest, showToast = true, config?: AxiosRequestConfig): Promise<BaseResponse<T>> {
     try {
-      const response = await this.api.post<BaseResponse<T>>(this.endpoint, request, config);
+      // Create a new request object with the current user as actionBy
+      // If actionBy is already provided, use that value; otherwise, get the current user
+      const requestWithUser = {
+        ...request,
+        actionBy: request.actionBy !== undefined ? request.actionBy : this.getCurrentUser(),
+      };
+
+      const response = await this.api.post<BaseResponse<T>>(this.endpoint, requestWithUser, config);
 
       if (!response.data.success && showToast) {
         toast.error(response.data.message || "An error occurred");

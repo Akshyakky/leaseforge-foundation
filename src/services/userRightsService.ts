@@ -44,7 +44,6 @@ class UserRightsService extends BaseService {
   async getUserRights(userId: number): Promise<UserRight[]> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Get User Rights
-      actionBy: "WebApp",
       parameters: {
         UserID: userId,
       },
@@ -62,7 +61,6 @@ class UserRightsService extends BaseService {
   async getRoleRights(roleId: number): Promise<UserRight[]> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Get User Rights by Role ID
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
       },
@@ -80,7 +78,6 @@ class UserRightsService extends BaseService {
   async saveUserRights(userRights: UserRight[]): Promise<boolean> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Save User Rights
-      actionBy: "WebApp",
       parameters: {
         UserRights: userRights,
       },
@@ -104,7 +101,6 @@ class UserRightsService extends BaseService {
   async saveRoleRights(roleId: number, userRights: UserRight[]): Promise<boolean> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Save Role Rights
-      actionBy: "WebApp",
       parameters: {
         RoleID: roleId,
         UserRights: userRights,
@@ -130,7 +126,6 @@ class UserRightsService extends BaseService {
   async checkAccess(userId: number, menuId: number, subMenuId?: number): Promise<AccessRights> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Check Access
-      actionBy: "WebApp",
       parameters: {
         UserID: userId,
         MenuID: menuId,
