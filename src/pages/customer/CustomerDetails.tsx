@@ -17,7 +17,6 @@ import * as z from "zod";
 import { Form } from "@/components/ui/form";
 import { FormField } from "@/components/forms/FormField";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import FileUploadField from "@/components/forms/FileUploadField";
 
 // Contact form schema
 const contactSchema = z.object({

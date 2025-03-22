@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
+import { DatePicker } from "@/components/ui/date-picker";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { UseFormReturn, FieldValues, Path, FieldPathValue } from "react-hook-form";
 
 export interface SelectOption {
@@ -22,6 +24,10 @@ export interface FileUploadConfig {
   uploadError?: string | null;
 }
 
+export interface DatePickerConfig {
+  dateFormat?: string;
+}
+
 export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TName extends Path<TFieldValues> = Path<TFieldValues>> {
   name: TName;
   label?: string;
@@ -35,6 +41,7 @@ export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TNam
   required?: boolean;
   options?: SelectOption[];
   fileConfig?: FileUploadConfig;
+  dateConfig?: DatePickerConfig;
   render?: (props: { field: any; fieldState: any }) => React.ReactNode;
 }
 
@@ -51,6 +58,7 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
   required,
   options,
   fileConfig,
+  dateConfig,
   render,
   form,
 }: FieldProps<TFieldValues, TName> & { form: UseFormReturn<TFieldValues> }) {
@@ -104,6 +112,23 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
                   uploadError={fileConfig?.uploadError}
                   maxSize={fileConfig?.maxSize}
                   acceptedFileTypes={fileConfig?.acceptedFileTypes}
+                  disabled={disabled}
+                  className={fieldState.error ? "border-destructive" : ""}
+                />
+              ) : type === "date" ? (
+                <DatePicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  className={fieldState.error ? "border-destructive" : ""}
+                  format={dateConfig?.dateFormat}
+                />
+              ) : type === "datetime" ? (
+                <DateTimePicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder={placeholder}
                   disabled={disabled}
                   className={fieldState.error ? "border-destructive" : ""}
                 />

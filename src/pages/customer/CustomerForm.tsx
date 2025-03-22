@@ -18,7 +18,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import FileUploadField from "@/components/forms/FileUploadField";
 
 // Create the schema for customer form validation
 const customerSchema = z.object({
@@ -794,7 +793,7 @@ const CustomerForm = () => {
 
       {/* Attachment Dialog */}
       <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingAttachment ? "Edit Attachment" : "Add Attachment"}</DialogTitle>
           </DialogHeader>
