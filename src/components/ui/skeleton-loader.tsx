@@ -1,20 +1,12 @@
-
-import React from 'react';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { cn } from "@/lib/utils";
 
 interface SkeletonProps {
   className?: string;
 }
 
 export const Skeleton = ({ className }: SkeletonProps) => {
-  return (
-    <div
-      className={cn(
-        "animate-pulse rounded-md bg-muted/60", 
-        className
-      )}
-    />
-  );
+  return <div className={cn("animate-pulse rounded-md bg-muted/60", className)} />;
 };
 
 export const CardSkeleton = () => {
@@ -71,7 +63,7 @@ export const DashboardSkeleton = () => {
           <Skeleton className="h-8 w-[100px]" />
         </div>
       </div>
-      
+
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="p-4 border rounded-md">
@@ -87,14 +79,14 @@ export const DashboardSkeleton = () => {
           </div>
         ))}
       </div>
-      
+
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         <div className="col-span-1 lg:col-span-2 border rounded-md p-4">
           <Skeleton className="h-6 w-[200px] mb-2" />
           <Skeleton className="h-4 w-[250px] mb-6" />
           <Skeleton className="h-[300px] w-full" />
         </div>
-        
+
         <div className="border rounded-md p-4">
           <Skeleton className="h-6 w-[150px] mb-2" />
           <Skeleton className="h-4 w-[200px] mb-6" />

@@ -1,15 +1,7 @@
-
-import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import React from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 export interface ModalProps {
   isOpen: boolean;
@@ -18,23 +10,15 @@ export interface ModalProps {
   description?: string;
   children?: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
-export const Modal = ({
-  isOpen,
-  onClose,
-  title,
-  description,
-  children,
-  footer,
-  size = 'md',
-}: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, description, children, footer, size = "md" }: ModalProps) => {
   const sizeClasses = {
-    sm: 'sm:max-w-sm',
-    md: 'sm:max-w-md',
-    lg: 'sm:max-w-lg',
-    xl: 'sm:max-w-xl',
+    sm: "sm:max-w-sm",
+    md: "sm:max-w-md",
+    lg: "sm:max-w-lg",
+    xl: "sm:max-w-xl",
   };
 
   return (
@@ -49,9 +33,9 @@ export const Modal = ({
             <X className="h-4 w-4" />
           </Button>
         </div>
-        
+
         <div className="px-4 py-3">{children}</div>
-        
+
         {footer && <DialogFooter className="p-4 border-t bg-muted/30">{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
