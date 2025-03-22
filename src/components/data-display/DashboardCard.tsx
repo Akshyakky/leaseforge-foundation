@@ -1,31 +1,27 @@
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
-import { cva, type VariantProps } from 'class-variance-authority';
-
-const cardVariants = cva(
-  "transition-all duration-200",
-  {
-    variants: {
-      variant: {
-        default: "border bg-card",
-        primary: "bg-primary text-primary-foreground",
-        secondary: "bg-secondary text-secondary-foreground",
-        accent: "bg-accent text-accent-foreground",
-        destructive: "bg-destructive text-destructive-foreground",
-        outline: "border bg-background",
-        ghost: "border-0 bg-transparent",
-      },
+const cardVariants = cva("transition-all duration-200", {
+  variants: {
+    variant: {
+      default: "border bg-card",
+      primary: "bg-primary text-primary-foreground",
+      secondary: "bg-secondary text-secondary-foreground",
+      accent: "bg-accent text-accent-foreground",
+      destructive: "bg-destructive text-destructive-foreground",
+      outline: "border bg-background",
+      ghost: "border-0 bg-transparent",
     },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-);
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
 
 // Remove HTMLAttributes extension to avoid title property conflict
-export interface DashboardCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'>, VariantProps<typeof cardVariants> {
+export interface DashboardCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title">, VariantProps<typeof cardVariants> {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   icon?: React.ReactNode;
@@ -39,19 +35,7 @@ export interface DashboardCardProps extends Omit<React.HTMLAttributes<HTMLDivEle
   loading?: boolean;
 }
 
-export function DashboardCard({
-  className,
-  variant,
-  title,
-  subtitle,
-  icon,
-  value,
-  trend,
-  footer,
-  loading = false,
-  children,
-  ...props
-}: DashboardCardProps) {
+export function DashboardCard({ className, variant, title, subtitle, icon, value, trend, footer, loading = false, children, ...props }: DashboardCardProps) {
   if (loading) {
     return (
       <Card className={cn(cardVariants({ variant }), "cursor-default", className)} {...props}>
@@ -92,15 +76,11 @@ export function DashboardCard({
         {value && <div className="text-2xl font-bold">{value}</div>}
         {trend && (
           <div className="flex items-center mt-1">
-            <span className={cn(
-              "text-sm font-medium",
-              trend.positive ? "text-emerald-500" : "text-rose-500"
-            )}>
-              {trend.positive ? '+' : ''}{trend.value}% 
+            <span className={cn("text-sm font-medium", trend.positive ? "text-emerald-500" : "text-rose-500")}>
+              {trend.positive ? "+" : ""}
+              {trend.value}%
             </span>
-            {trend.label && (
-              <span className="text-sm text-muted-foreground ml-1">{trend.label}</span>
-            )}
+            {trend.label && <span className="text-sm text-muted-foreground ml-1">{trend.label}</span>}
           </div>
         )}
         {children}

@@ -1,17 +1,11 @@
-
-import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Globe } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAppDispatch, useAppSelector } from '@/lib/hooks';
-import { setLanguage } from '@/features/ui/uiSlice';
+import React from "react";
+import { useTranslation } from "react-i18next";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Globe } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { setLanguage } from "@/features/ui/uiSlice";
 
 interface LanguageSelectorProps {
   className?: string;
@@ -20,13 +14,13 @@ interface LanguageSelectorProps {
 const LanguageSelector: React.FC<LanguageSelectorProps> = ({ className }) => {
   const { i18n } = useTranslation();
   const dispatch = useAppDispatch();
-  const currentLanguage = useAppSelector(state => state.ui.language);
+  const currentLanguage = useAppSelector((state) => state.ui.language);
 
   const languages = [
-    { code: 'en', label: 'English' },
-    { code: 'es', label: 'Español' },
-    { code: 'fr', label: 'Français' },
-    { code: 'de', label: 'Deutsch' }
+    { code: "en", label: "English" },
+    { code: "es", label: "Español" },
+    { code: "fr", label: "Français" },
+    { code: "de", label: "Deutsch" },
   ];
 
   const handleLanguageChange = (languageCode: string) => {
@@ -35,7 +29,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ className }) => {
   };
 
   // Find current language label
-  const currentLanguageLabel = languages.find(lang => lang.code === currentLanguage)?.label || 'English';
+  const currentLanguageLabel = languages.find((lang) => lang.code === currentLanguage)?.label || "English";
 
   return (
     <DropdownMenu>
@@ -50,10 +44,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ className }) => {
           <DropdownMenuItem
             key={language.code}
             onClick={() => handleLanguageChange(language.code)}
-            className={cn(
-              "flex items-center cursor-pointer",
-              language.code === currentLanguage && "font-medium bg-accent"
-            )}
+            className={cn("flex items-center cursor-pointer", language.code === currentLanguage && "font-medium bg-accent")}
           >
             {language.label}
           </DropdownMenuItem>

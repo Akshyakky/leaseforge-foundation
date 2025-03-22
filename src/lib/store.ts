@@ -1,32 +1,22 @@
-
-import { configureStore } from '@reduxjs/toolkit';
-import { setupListeners } from '@reduxjs/toolkit/query';
-import { combineReducers } from 'redux';
-import {
-  persistStore,
-  persistReducer,
-  FLUSH,
-  REHYDRATE,
-  PAUSE,
-  PERSIST,
-  PURGE,
-  REGISTER,
-} from 'redux-persist';
-import storage from 'redux-persist/lib/storage';
-import authReducer from '@/features/auth/authSlice';
-import uiReducer from '@/features/ui/uiSlice';
+import { configureStore } from "@reduxjs/toolkit";
+import { setupListeners } from "@reduxjs/toolkit/query";
+import { combineReducers } from "redux";
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from "redux-persist";
+import storage from "redux-persist/lib/storage";
+import authReducer from "@/features/auth/authSlice";
+import uiReducer from "@/features/ui/uiSlice";
 
 // Define which parts of the state should be persisted
 const authPersistConfig = {
-  key: 'auth',
+  key: "auth",
   storage,
-  whitelist: ['token', 'user'], // only persist token and user
+  whitelist: ["token", "user"], // only persist token and user
 };
 
 const uiPersistConfig = {
-  key: 'ui',
+  key: "ui",
   storage,
-  whitelist: ['theme', 'language'], // persist theme and language preferences
+  whitelist: ["theme", "language"], // persist theme and language preferences
 };
 
 // Create persisted reducers

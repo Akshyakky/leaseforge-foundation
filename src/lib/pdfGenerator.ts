@@ -1,4 +1,3 @@
-
 import { Column } from "@/components/data-display/DataTable";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
@@ -15,10 +14,10 @@ export const generatePdf = <T extends Record<string, any>>(data: T[], columns: C
   doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
 
   // Prepare table headers and data
-  const headers = columns.map(column => column.header);
-  
-  const tableData = data.map(item => 
-    columns.map(column => {
+  const headers = columns.map((column) => column.header);
+
+  const tableData = data.map((item) =>
+    columns.map((column) => {
       // Check if there's a custom cell renderer
       if (column.cell) {
         // This is a simplified approach as custom renderers might return JSX

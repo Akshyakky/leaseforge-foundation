@@ -1,8 +1,7 @@
-
-import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
-import { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import type { RootState, AppDispatch } from './store';
+import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import type { RootState, AppDispatch } from "./store";
 
 // Redux hooks
 export const useAppDispatch = () => useDispatch<AppDispatch>();
@@ -19,7 +18,7 @@ export const useRouteHistory = (maxSize = 5) => {
       if (prev[prev.length - 1] === location.pathname) {
         return prev;
       }
-      
+
       // Add current path and maintain max size
       const newHistory = [...prev, location.pathname];
       return newHistory.slice(-maxSize);
@@ -36,8 +35,8 @@ export const useEnv = () => {
     apiTimeout: Number(import.meta.env.VITE_API_TIMEOUT || 30000),
     appName: import.meta.env.VITE_APP_NAME as string,
     appVersion: import.meta.env.VITE_APP_VERSION as string,
-    enableAnalytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',
-    enableNotifications: import.meta.env.VITE_ENABLE_NOTIFICATIONS !== 'false',
+    enableAnalytics: import.meta.env.VITE_ENABLE_ANALYTICS === "true",
+    enableNotifications: import.meta.env.VITE_ENABLE_NOTIFICATIONS !== "false",
   };
 };
 
@@ -45,38 +44,41 @@ export const useEnv = () => {
 export const useHasPermission = (requiredPermission: string | string[]) => {
   const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
-  
+
   const checkPermission = useCallback(() => {
     // If no user, return false
     if (!user) return false;
-    
+
     // Admin role has all permissions
-    if (user.role === 'admin') return true;
-    
+    if (user.role === "admin") return true;
+
     // For now, simple role-based check
     // In the future, this could check a permissions array on the user object
     const permissionsMap: Record<string, string[]> = {
-      'admin': ['users.manage', 'settings.manage', 'reports.view', 'contracts.manage'],
-      'manager': ['users.view', 'reports.view', 'contracts.manage'],
-      'staff': ['contracts.view', 'reports.view'],
+      admin: ["users.manage", "settings.manage", "reports.view", "contracts.manage"],
+      manager: ["users.view", "reports.view", "contracts.manage"],
+      staff: ["contracts.view", "reports.view"],
     };
-    
+
     const userPermissions = permissionsMap[user.role] || [];
-    
+
     if (Array.isArray(requiredPermission)) {
-      return requiredPermission.some(perm => userPermissions.includes(perm));
+      return requiredPermission.some((perm) => userPermissions.includes(perm));
     }
-    
+
     return userPermissions.includes(requiredPermission);
   }, [user, requiredPermission]);
-  
-  const redirectIfNoPermission = useCallback((redirectPath = '/dashboard') => {
-    if (!checkPermission()) {
-      navigate(redirectPath);
-      return false;
-    }
-    return true;
-  }, [checkPermission, navigate]);
-  
+
+  const redirectIfNoPermission = useCallback(
+    (redirectPath = "/dashboard") => {
+      if (!checkPermission()) {
+        navigate(redirectPath);
+        return false;
+      }
+      return true;
+    },
+    [checkPermission, navigate]
+  );
+
   return { hasPermission: checkPermission(), checkPermission, redirectIfNoPermission };
 };

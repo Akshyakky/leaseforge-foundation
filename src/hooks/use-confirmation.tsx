@@ -1,9 +1,8 @@
+import React, { useState, useCallback } from "react";
+import { createRoot } from "react-dom/client";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
-import React, { useState, useCallback } from 'react';
-import { createRoot } from 'react-dom/client';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-
-type ConfirmationDialogType = 'info' | 'success' | 'warning' | 'danger';
+type ConfirmationDialogType = "info" | "success" | "warning" | "danger";
 
 interface ConfirmOptions {
   title: string;
@@ -19,15 +18,15 @@ interface ConfirmOptions {
 export const useConfirmation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [options, setOptions] = useState<ConfirmOptions>({
-    title: '',
-    description: '',
+    title: "",
+    description: "",
   });
   const [resolve, setResolve] = useState<(value: boolean) => void>(() => () => {});
 
   const confirm = useCallback((options: ConfirmOptions) => {
     setOptions(options);
     setIsOpen(true);
-    
+
     return new Promise<boolean>((res) => {
       setResolve(() => res);
     });
@@ -68,12 +67,12 @@ let containerElement: HTMLDivElement | null = null;
 export const showConfirmation = async (options: ConfirmOptions): Promise<boolean> => {
   return new Promise((resolve) => {
     if (!containerElement) {
-      containerElement = document.createElement('div');
+      containerElement = document.createElement("div");
       document.body.appendChild(containerElement);
     }
 
     const root = createRoot(containerElement);
-    
+
     const onClose = () => {
       root.unmount();
       resolve(false);

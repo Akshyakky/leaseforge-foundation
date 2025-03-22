@@ -1,8 +1,7 @@
-
-import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useAppSelector, useAppDispatch } from '@/lib/hooks';
-import { setLanguage } from '@/features/ui/uiSlice';
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { setLanguage } from "@/features/ui/uiSlice";
 
 /**
  * Hook to synchronize i18n language with Redux state
@@ -30,10 +29,10 @@ export const useLanguageSync = () => {
       }
     };
 
-    i18n.on('languageChanged', handleLanguageChanged);
+    i18n.on("languageChanged", handleLanguageChanged);
 
     return () => {
-      i18n.off('languageChanged', handleLanguageChanged);
+      i18n.off("languageChanged", handleLanguageChanged);
     };
   }, [i18n, dispatch, storedLanguage]);
 
