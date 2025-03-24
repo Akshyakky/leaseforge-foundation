@@ -506,10 +506,10 @@ class CustomerService extends BaseService {
     // This would need a corresponding endpoint in the backend
     // For now, returning mock data
     return [
-      { ContactTypeID: 1, ContactDesc: "Primary" },
-      { ContactTypeID: 2, ContactDesc: "Billing" },
-      { ContactTypeID: 3, ContactDesc: "Emergency" },
-      { ContactTypeID: 4, ContactDesc: "Other" },
+      { ContactTypeID: 1, ContactTypeDescription: "Primary" },
+      { ContactTypeID: 2, ContactTypeDescription: "Billing" },
+      { ContactTypeID: 3, ContactTypeDescription: "Emergency" },
+      { ContactTypeID: 4, ContactTypeDescription: "Other" },
     ];
   }
 

@@ -18,6 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Country, countryService } from "@/services/countryService";
+import { City, cityService } from "@/services/cityService";
 
 // Create the schema for customer form validation
 const customerSchema = z.object({
@@ -85,8 +87,9 @@ const CustomerForm = () => {
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [contactTypes, setContactTypes] = useState<ContactType[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocType[]>([]);
-  const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
-  const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
   // Initialize forms
   const customerForm = useForm<CustomerFormValues>({
@@ -140,30 +143,17 @@ const CustomerForm = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [typesData, contactTypesData, docTypesData] = await Promise.all([
+        const [typesData, contactTypesData, docTypesData, countriesData] = await Promise.all([
           customerService.getCustomerTypes(),
           customerService.getContactTypes(),
           customerService.getDocumentTypes(),
+          countryService.getCountriesForDropdown(),
         ]);
 
         setCustomerTypes(typesData);
         setContactTypes(contactTypesData);
         setDocumentTypes(docTypesData);
-
-        // Mock data for countries and cities - in a real app, fetch from API
-        setCountries([
-          { id: "1", name: "United States" },
-          { id: "2", name: "United Kingdom" },
-          { id: "3", name: "Canada" },
-          { id: "4", name: "Australia" },
-        ]);
-
-        setCities([
-          { id: "1", name: "New York" },
-          { id: "2", name: "London" },
-          { id: "3", name: "Toronto" },
-          { id: "4", name: "Sydney" },
-        ]);
+        setCountries(countriesData);
 
         // If editing, fetch the customer data
         if (isEdit && id) {
@@ -197,6 +187,11 @@ const CustomerForm = () => {
             navigate("/customers");
           }
         }
+        if (isEdit && customer?.CountryID) {
+          const citiesData = await cityService.getCitiesByCountry(customer.CountryID);
+          setCities(citiesData);
+          setSelectedCountryId(customer.CountryID.toString());
+        }
       } catch (error) {
         console.error("Error initializing form:", error);
         toast.error("Error loading form data");
@@ -207,6 +202,24 @@ const CustomerForm = () => {
 
     initializeForm();
   }, [id, isEdit, navigate, customerForm, contactForm, attachmentForm]);
+
+  useEffect(() => {
+    const fetchCitiesByCountry = async () => {
+      if (selectedCountryId) {
+        try {
+          const citiesData = await cityService.getCitiesByCountry(parseInt(selectedCountryId));
+          setCities(citiesData);
+        } catch (error) {
+          console.error("Error fetching cities:", error);
+          setCities([]);
+        }
+      } else {
+        setCities([]);
+      }
+    };
+
+    fetchCitiesByCountry();
+  }, [selectedCountryId]);
 
   // Submit handler for the customer form
   const onSubmitCustomer = async (data: CustomerFormValues) => {
@@ -319,9 +332,9 @@ const CustomerForm = () => {
       CityID: data.CityID ? parseInt(data.CityID) : undefined,
       ContactNo: data.ContactNo || undefined,
       Address: data.Address || undefined,
-      ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactDesc,
-      CountryName: countries.find((c) => c.id === data.CountryID)?.name,
-      CityName: cities.find((c) => c.id === data.CityID)?.name,
+      ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactTypeDescription,
+      CountryName: countries.find((c) => c.CountryID.toString() === data.CountryID)?.CountryName,
+      CityName: cities.find((c) => c.CityID.toString() === data.CityID)?.CityName,
     };
 
     if (editingContact) {
@@ -404,6 +417,12 @@ const CustomerForm = () => {
   // Cancel button handler
   const handleCancel = () => {
     navigate("/customers");
+  };
+
+  const handleCountryChange = (value: string) => {
+    customerForm.setValue("CountryID", value);
+    customerForm.setValue("CityID", "");
+    setSelectedCountryId(value);
   };
 
   if (initialLoading) {
@@ -491,21 +510,24 @@ const CustomerForm = () => {
                       label="Country"
                       type="select"
                       options={countries.map((country) => ({
-                        label: country.name,
-                        value: country.id,
+                        label: country.CountryName,
+                        value: country.CountryID.toString(),
                       }))}
                       placeholder="Select country"
+                      onChange={handleCountryChange}
                     />
+
                     <FormField
                       form={customerForm}
                       name="CityID"
                       label="City"
                       type="select"
                       options={cities.map((city) => ({
-                        label: city.name,
-                        value: city.id,
+                        label: city.CityName,
+                        value: city.CityID.toString(),
                       }))}
-                      placeholder="Select city"
+                      placeholder={selectedCountryId ? "Select city" : "Select country first"}
+                      disabled={!selectedCountryId}
                     />
                     <FormField form={customerForm} name="Address" label="Address" placeholder="Enter address" />
                   </div>
@@ -685,7 +707,7 @@ const CustomerForm = () => {
                 label="Contact Type"
                 type="select"
                 options={contactTypes.map((type) => ({
-                  label: type.ContactDesc,
+                  label: type.ContactTypeDescription,
                   value: type.ContactTypeID.toString(),
                 }))}
                 placeholder="Select contact type"
@@ -696,26 +718,29 @@ const CustomerForm = () => {
               <FormField form={contactForm} name="ContactNo" label="Phone Number" placeholder="Enter phone number" />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  form={contactForm}
+                  form={customerForm}
                   name="CountryID"
                   label="Country"
                   type="select"
                   options={countries.map((country) => ({
-                    label: country.name,
-                    value: country.id,
+                    label: country.CountryName,
+                    value: country.CountryID.toString(),
                   }))}
                   placeholder="Select country"
+                  onChange={handleCountryChange}
                 />
+
                 <FormField
-                  form={contactForm}
+                  form={customerForm}
                   name="CityID"
                   label="City"
                   type="select"
                   options={cities.map((city) => ({
-                    label: city.name,
-                    value: city.id,
+                    label: city.CityName,
+                    value: city.CityID.toString(),
                   }))}
-                  placeholder="Select city"
+                  placeholder={selectedCountryId ? "Select city" : "Select country first"}
+                  disabled={!selectedCountryId}
                 />
               </div>
               <FormField form={contactForm} name="Address" label="Address" placeholder="Enter address" type="textarea" />

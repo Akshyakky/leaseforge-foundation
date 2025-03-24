@@ -82,7 +82,7 @@ export interface CustomerType {
 
 export interface ContactType {
   ContactTypeID: number;
-  ContactDesc: string;
+  ContactTypeDescription: string;
 }
 
 export interface DocType {

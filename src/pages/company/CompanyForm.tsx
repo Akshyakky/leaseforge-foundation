@@ -12,18 +12,8 @@ import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-
-// Interface for country
-interface Country {
-  countryID: number;
-  countryName: string;
-}
-
-// Interface for city
-interface City {
-  cityID: number;
-  cityName: string;
-}
+import { Country, countryService } from "@/services/countryService";
+import { City, cityService } from "@/services/cityService";
 
 const formSchema = z.object({
   CompanyName: z.string().min(2, "Company name must be at least 2 characters").max(150, "Company name cannot exceed 150 characters"),
@@ -50,6 +40,7 @@ const CompanyForm = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -68,25 +59,46 @@ const CompanyForm = () => {
     },
   });
 
-  // For demo purposes, we'll use static countries and cities
-  // In a real app, you would fetch these from an API
   useEffect(() => {
-    setCountries([
-      { countryID: 1, countryName: "United States" },
-      { countryID: 2, countryName: "United Kingdom" },
-      { countryID: 3, countryName: "Canada" },
-      { countryID: 4, countryName: "Australia" },
-      { countryID: 5, countryName: "Germany" },
-    ]);
+    const fetchReferenceData = async () => {
+      try {
+        const countriesData = await countryService.getCountriesForDropdown();
+        setCountries(countriesData);
 
-    setCities([
-      { cityID: 1, cityName: "New York" },
-      { cityID: 2, cityName: "London" },
-      { cityID: 3, cityName: "Toronto" },
-      { cityID: 4, cityName: "Sydney" },
-      { cityID: 5, cityName: "Berlin" },
-    ]);
-  }, []);
+        // If editing and country is set, fetch cities for that country
+        if (isEdit && company?.CountryID) {
+          const citiesData = await cityService.getCitiesByCountry(company.CountryID);
+          setCities(citiesData);
+          setSelectedCountryId(company.CountryID.toString());
+        } else {
+          // Otherwise, fetch all cities or leave empty
+          setCities([]);
+        }
+      } catch (error) {
+        console.error("Error fetching reference data:", error);
+      }
+    };
+
+    fetchReferenceData();
+  }, [isEdit, company]);
+
+  useEffect(() => {
+    const fetchCitiesByCountry = async () => {
+      if (selectedCountryId) {
+        try {
+          const citiesData = await cityService.getCitiesByCountry(parseInt(selectedCountryId));
+          setCities(citiesData);
+        } catch (error) {
+          console.error("Error fetching cities:", error);
+          setCities([]);
+        }
+      } else {
+        setCities([]);
+      }
+    };
+
+    fetchCitiesByCountry();
+  }, [selectedCountryId]);
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -170,6 +182,17 @@ const CompanyForm = () => {
     navigate("/companies");
   };
 
+  const handleCountryChange = (value: string) => {
+    // Update the form field
+    form.setValue("CountryID", value);
+
+    // Clear city if country changes
+    form.setValue("CityID", "");
+
+    // Set selected country to trigger city fetching
+    setSelectedCountryId(value);
+  };
+
   if (initialLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -208,10 +231,11 @@ const CompanyForm = () => {
                   label="Country"
                   type="select"
                   options={countries.map((country) => ({
-                    label: country.countryName,
-                    value: country.countryID.toString(),
+                    label: country.CountryName,
+                    value: country.CountryID.toString(),
                   }))}
                   placeholder="Select country"
+                  onChange={handleCountryChange}
                 />
                 <FormField
                   form={form}
@@ -219,10 +243,11 @@ const CompanyForm = () => {
                   label="City"
                   type="select"
                   options={cities.map((city) => ({
-                    label: city.cityName,
-                    value: city.cityID.toString(),
+                    label: city.CityName,
+                    value: city.CityID.toString(),
                   }))}
-                  placeholder="Select city"
+                  placeholder={selectedCountryId ? "Select city" : "Select country first"}
+                  disabled={!selectedCountryId}
                 />
               </div>
 

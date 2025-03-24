@@ -52,7 +52,7 @@ const CustomerDetails = () => {
   const [contacts, setContacts] = useState<CustomerContact[]>([]);
   const [attachments, setAttachments] = useState<CustomerAttachment[]>([]);
   const [customerTypes, setCustomerTypes] = useState<{ TypeID: number; Description: string }[]>([]);
-  const [contactTypes, setContactTypes] = useState<{ ContactTypeID: number; ContactDesc: string }[]>([]);
+  const [contactTypes, setContactTypes] = useState<{ ContactTypeID: number; ContactTypeDescription: string }[]>([]);
   const [docTypes, setDocTypes] = useState<{ DocTypeID: number; Description: string }[]>([]);
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
   const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
@@ -252,7 +252,7 @@ const CustomerDetails = () => {
             CityID: data.CityID ? parseInt(data.CityID) : undefined,
             ContactNo: data.ContactNo || undefined,
             Address: data.Address || undefined,
-            ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactDesc,
+            ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactTypeDescription,
             CountryName: countries.find((c) => c.id === data.CountryID)?.name,
             CityName: cities.find((c) => c.id === data.CityID)?.name,
           };
@@ -288,7 +288,7 @@ const CustomerDetails = () => {
             CityID: data.CityID ? parseInt(data.CityID) : undefined,
             ContactNo: data.ContactNo || undefined,
             Address: data.Address || undefined,
-            ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactDesc,
+            ContactTypeName: contactTypes.find((t) => t.ContactTypeID.toString() === data.ContactTypeID)?.ContactTypeDescription,
             CountryName: countries.find((c) => c.id === data.CountryID)?.name,
             CityName: cities.find((c) => c.id === data.CityID)?.name,
           };
@@ -935,7 +935,7 @@ const CustomerDetails = () => {
                 label="Contact Type"
                 type="select"
                 options={contactTypes.map((type) => ({
-                  label: type.ContactDesc,
+                  label: type.ContactTypeDescription,
                   value: type.ContactTypeID.toString(),
                 }))}
                 placeholder="Select contact type"
