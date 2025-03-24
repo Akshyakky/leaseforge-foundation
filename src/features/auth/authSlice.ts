@@ -95,18 +95,26 @@ export const checkAuthStatus = createAsyncThunk("auth/checkStatus", async (_, { 
 
 const authSlice = createSlice({
   name: "auth",
-  initialState,
+  initialState: {
+    user: null,
+    token: localStorage.getItem("token") || null,
+    refreshToken: localStorage.getItem("refreshToken") || null,
+    isAuthenticated: !!localStorage.getItem("token"),
+    isLoading: false,
+    error: null,
+  },
   reducers: {
     // Legacy actions to maintain backwards compatibility
     loginStart: (state) => {
       state.isLoading = true;
       state.error = null;
     },
-    loginSuccess: (state, action: PayloadAction<{ user: User; token: string }>) => {
+    loginSuccess: (state, action: PayloadAction<{ user: User; token: string; refreshToken: string }>) => {
       state.isLoading = false;
       state.isAuthenticated = true;
       state.user = action.payload.user;
       state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
       state.error = null;
     },
     loginFailure: (state, action: PayloadAction<string>) => {
