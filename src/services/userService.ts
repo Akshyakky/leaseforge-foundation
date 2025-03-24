@@ -32,7 +32,6 @@ class UserService extends BaseService {
   async getAllUsers(): Promise<User[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Users
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -48,7 +47,6 @@ class UserService extends BaseService {
   async getUserById(userId: number): Promise<User | null> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch User by ID
-      actionBy: "WebApp",
       parameters: {
         UserID: userId,
       },
@@ -66,7 +64,6 @@ class UserService extends BaseService {
   async createUser(user: Partial<User>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New User
-      actionBy: "WebApp",
       parameters: {
         ...user,
       },
@@ -89,7 +86,6 @@ class UserService extends BaseService {
   async updateUser(user: Partial<User>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing User
-      actionBy: "WebApp",
       parameters: {
         ...user,
       },
@@ -112,7 +108,6 @@ class UserService extends BaseService {
   async deleteUser(userId: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete User
-      actionBy: "WebApp",
       parameters: {
         UserID: userId,
       },
@@ -135,7 +130,6 @@ class UserService extends BaseService {
   async searchUsers(searchText: string): Promise<User[]> {
     const request: BaseRequest = {
       mode: 6, // Mode 6: Search Users
-      actionBy: "WebApp",
       parameters: {
         SearchText: searchText,
       },

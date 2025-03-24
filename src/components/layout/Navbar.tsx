@@ -1,29 +1,17 @@
-
-import React from 'react';
-import { 
-  Menu, 
-  Search, 
-  UserCircle,
-} from 'lucide-react';
-import { useAppDispatch, useAppSelector } from '@/lib/hooks';
-import { toggleSidebar } from '@/features/ui/uiSlice';
-import { logoutUser } from '@/features/auth/authService';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import NotificationCenter from '@/components/notifications/NotificationCenter';
-import ThemeCustomizer from '@/components/theme/ThemeCustomizer';
+import React from "react";
+import { Menu, Search, UserCircle } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { toggleSidebar } from "@/features/ui/uiSlice";
+import { logoutUser } from "@/features/auth/authService";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import NotificationCenter from "@/components/notifications/NotificationCenter";
+import ThemeCustomizer from "@/components/theme/ThemeCustomizer";
 
 const Navbar = () => {
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector(state => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
 
   const handleToggleSidebar = () => {
     dispatch(toggleSidebar());
@@ -37,24 +25,14 @@ const Navbar = () => {
     <header className="h-16 bg-background border-b border-border z-10">
       <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggleSidebar}
-            className="mr-2"
-            aria-label="Toggle sidebar"
-          >
+          <Button variant="ghost" size="icon" onClick={handleToggleSidebar} className="mr-2" aria-label="Toggle sidebar">
             <Menu className="h-5 w-5" />
           </Button>
-          
+
           <div className="hidden md:flex items-center w-72">
             <div className="relative w-full">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search..."
-                className="w-full pl-9 bg-muted/40"
-              />
+              <Input type="text" placeholder="Search..." className="w-full pl-9 bg-muted/40" />
             </div>
           </div>
         </div>
@@ -62,7 +40,7 @@ const Navbar = () => {
         <div className="flex items-center space-x-3">
           {/* Theme Customizer */}
           <ThemeCustomizer />
-          
+
           {/* Notification Center */}
           <NotificationCenter />
 
@@ -75,9 +53,7 @@ const Navbar = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
-                {user?.name || 'User'}
-              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">{user?.name || "User"}</DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
               <DropdownMenuSeparator />

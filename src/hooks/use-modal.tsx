@@ -1,5 +1,4 @@
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 /**
  * Custom hook for managing modal state
@@ -16,7 +15,7 @@ export const useModal = (initialState = false) => {
   }, []);
 
   const toggle = useCallback(() => {
-    setIsOpen(prev => !prev);
+    setIsOpen((prev) => !prev);
   }, []);
 
   return {

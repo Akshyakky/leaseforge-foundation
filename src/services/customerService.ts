@@ -12,13 +12,55 @@ class CustomerService extends BaseService {
   }
 
   /**
+   * Convert File to base64 string
+   * @param file - The file to convert
+   * @returns Promise with base64 string
+   */
+  private async fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        // Extract the base64 string from the Data URL
+        const base64String = reader.result as string;
+        // Remove the Data URL prefix (e.g., "data:application/pdf;base64,")
+        const base64Content = base64String.split(",")[1];
+        resolve(base64Content);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  }
+
+  /**
+   * Process attachment file for upload
+   * @param attachment - The attachment with file data
+   * @returns Processed attachment ready for API
+   */
+  private async processAttachmentFile(attachment: Partial<CustomerAttachment>): Promise<Partial<CustomerAttachment>> {
+    // Clone the attachment to avoid modifying the original
+    const processedAttachment = { ...attachment };
+
+    // If there's a file object, convert it to base64
+    if (attachment.file) {
+      processedAttachment.FileContent = await this.fileToBase64(attachment.file);
+      processedAttachment.FileContentType = attachment.file.type;
+      processedAttachment.FileSize = attachment.file.size;
+
+      // Remove the file object as it's not needed for the API
+      delete processedAttachment.file;
+      delete processedAttachment.fileUrl;
+    }
+
+    return processedAttachment;
+  }
+
+  /**
    * Get all customers
    * @returns Array of customers
    */
   async getAllCustomers(): Promise<Customer[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Customers
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -38,7 +80,6 @@ class CustomerService extends BaseService {
   }> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Customer by ID with contacts and attachments
-      actionBy: "WebApp",
       parameters: {
         CustomerID: customerId,
       },
@@ -47,10 +88,19 @@ class CustomerService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
+      // Process attachments to create file URLs for display if needed
+      const attachments = (response.table3 || []).map((attachment: CustomerAttachment) => {
+        if (attachment.FileContent && attachment.FileContentType) {
+          // Create a data URL for display
+          attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;
+        }
+        return attachment;
+      });
+
       return {
         customer: response.table1 && response.table1.length > 0 ? response.table1[0] : null,
         contacts: response.table2 || [],
-        attachments: response.table3 || [],
+        attachments: attachments,
       };
     }
 
@@ -67,15 +117,20 @@ class CustomerService extends BaseService {
     contacts?: Partial<CustomerContact>[];
     attachments?: Partial<CustomerAttachment>[];
   }): Promise<{ success: boolean; message: string; customerId?: number }> {
+    // Process attachments if provided
+    let processedAttachments = data.attachments;
+    if (data.attachments && data.attachments.length > 0) {
+      processedAttachments = await Promise.all(data.attachments.map((attachment) => this.processAttachmentFile(attachment)));
+    }
+
     // Prepare contacts JSON if provided
     const contactsJSON = data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null;
 
     // Prepare attachments JSON if provided
-    const attachmentsJSON = data.attachments && data.attachments.length > 0 ? JSON.stringify(data.attachments) : null;
+    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null;
 
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Customer
-      actionBy: "WebApp",
       parameters: {
         ...data.customer,
         ContactsJSON: contactsJSON,
@@ -110,15 +165,20 @@ class CustomerService extends BaseService {
     contacts?: Partial<CustomerContact>[];
     attachments?: Partial<CustomerAttachment>[];
   }): Promise<{ success: boolean; message: string }> {
+    // Process attachments if provided
+    let processedAttachments = data.attachments;
+    if (data.attachments && data.attachments.length > 0) {
+      processedAttachments = await Promise.all(data.attachments.map((attachment) => this.processAttachmentFile(attachment)));
+    }
+
     // Prepare contacts JSON if provided
     const contactsJSON = data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null;
 
     // Prepare attachments JSON if provided
-    const attachmentsJSON = data.attachments && data.attachments.length > 0 ? JSON.stringify(data.attachments) : null;
+    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null;
 
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Customer
-      actionBy: "WebApp",
       parameters: {
         ...data.customer,
         ContactsJSON: contactsJSON,
@@ -150,7 +210,6 @@ class CustomerService extends BaseService {
   async deleteCustomer(customerId: number): Promise<{ success: boolean; message: string }> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Customer
-      actionBy: "WebApp",
       parameters: {
         CustomerID: customerId,
       },
@@ -188,7 +247,6 @@ class CustomerService extends BaseService {
   ): Promise<Customer[]> {
     const request: BaseRequest = {
       mode: 6, // Mode 6: Search Customers with Filters
-      actionBy: "WebApp",
       parameters: {
         SearchText: searchText,
         FilterTypeID: filters?.typeId,
@@ -210,7 +268,6 @@ class CustomerService extends BaseService {
   async checkIdentityNumberExists(identityNumber: string, customerId?: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Check if CustomerIdentityNo already exists
-      actionBy: "WebApp",
       parameters: {
         CustomerIdentityNo: identityNumber,
         CustomerID: customerId,
@@ -228,7 +285,6 @@ class CustomerService extends BaseService {
   async getCustomersWithCounts(): Promise<Customer[]> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Customers with Counts of Contacts and Attachments
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -248,7 +304,6 @@ class CustomerService extends BaseService {
   }> {
     const request: BaseRequest = {
       mode: 10, // Mode 10: Add Single Contact to Customer
-      actionBy: "WebApp",
       parameters: {
         ...contact,
       },
@@ -282,7 +337,6 @@ class CustomerService extends BaseService {
   }> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Update Single Contact
-      actionBy: "WebApp",
       parameters: {
         ...contact,
       },
@@ -312,7 +366,6 @@ class CustomerService extends BaseService {
   async deleteContact(contactId: number): Promise<{ success: boolean; message: string }> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Delete Single Contact
-      actionBy: "WebApp",
       parameters: {
         CustomerContactID: contactId,
       },
@@ -342,7 +395,6 @@ class CustomerService extends BaseService {
   async getContactsByCustomerId(customerId: number): Promise<CustomerContact[]> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Get Contacts by Customer ID
-      actionBy: "WebApp",
       parameters: {
         CustomerID: customerId,
       },
@@ -362,11 +414,13 @@ class CustomerService extends BaseService {
     message: string;
     attachmentId?: number;
   }> {
+    // Process the attachment file if present
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
     const request: BaseRequest = {
       mode: 14, // Mode 14: Add Single Attachment to Customer
-      actionBy: "WebApp",
       parameters: {
-        ...attachment,
+        ...processedAttachment,
       },
     };
 
@@ -396,11 +450,13 @@ class CustomerService extends BaseService {
     success: boolean;
     message: string;
   }> {
+    // Process the attachment file if present
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
     const request: BaseRequest = {
       mode: 15, // Mode 15: Update Single Attachment
-      actionBy: "WebApp",
       parameters: {
-        ...attachment,
+        ...processedAttachment,
       },
     };
 
@@ -428,7 +484,6 @@ class CustomerService extends BaseService {
   async deleteAttachment(attachmentId: number): Promise<{ success: boolean; message: string }> {
     const request: BaseRequest = {
       mode: 16, // Mode 16: Delete Single Attachment
-      actionBy: "WebApp",
       parameters: {
         CustomerAttachmentID: attachmentId,
       },
@@ -458,7 +513,6 @@ class CustomerService extends BaseService {
   async getAttachmentsByCustomerId(customerId: number): Promise<CustomerAttachment[]> {
     const request: BaseRequest = {
       mode: 17, // Mode 17: Get Attachments by Customer ID
-      actionBy: "WebApp",
       parameters: {
         CustomerID: customerId,
       },
@@ -475,7 +529,6 @@ class CustomerService extends BaseService {
   async getExpiringDocuments(): Promise<any[]> {
     const request: BaseRequest = {
       mode: 18, // Mode 18: Get Expiring Documents
-      actionBy: "WebApp",
       parameters: {},
     };
 

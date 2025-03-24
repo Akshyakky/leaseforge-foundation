@@ -36,7 +36,6 @@ class MenuService extends BaseService {
   async getUserMenus(userId: number): Promise<MenuItem[]> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Get Authorized Menu with SubMenus for a User
-      actionBy: "WebApp",
       parameters: {
         CurrentUserID: userId,
       },
@@ -62,7 +61,6 @@ class MenuService extends BaseService {
   async getAllMenus(): Promise<MenuItem[]> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get Menu with SubMenus
-      actionBy: "WebApp",
       parameters: {},
     };
 

@@ -66,13 +66,19 @@ export interface CustomerAttachment extends BaseCustomer {
   CustomerID: number;
   DocTypeID?: number;
   DocumentName?: string;
-  FilePath?: string;
+  FileContent?: string | ArrayBuffer | null; // Base64 encoded string or ArrayBuffer
+  FileContentType?: string; // MIME type of the file
+  FileSize?: number; // Size in bytes
   DocIssueDate?: string | Date;
   DocExpiryDate?: string | Date;
   Remark?: string;
 
   // Additional fields from joins
   DocTypeName?: string;
+
+  // For UI only - not sent to backend
+  file?: File;
+  fileUrl?: string; // For displaying preview
 }
 
 export interface CustomerType {

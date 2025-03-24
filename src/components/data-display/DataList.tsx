@@ -1,11 +1,10 @@
-
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton-loader';
-import { ChevronRight, MoreHorizontal } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton-loader";
+import { ChevronRight, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 export interface DataListItem {
   id: string | number;
@@ -28,16 +27,7 @@ export interface DataListProps extends React.HTMLAttributes<HTMLDivElement> {
   emptyState?: React.ReactNode;
 }
 
-export function DataList({
-  items,
-  title,
-  isLoading = false,
-  onItemClick,
-  itemActions,
-  emptyState,
-  className,
-  ...props
-}: DataListProps) {
+export function DataList({ items, title, isLoading = false, onItemClick, itemActions, emptyState, className, ...props }: DataListProps) {
   if (isLoading) {
     return (
       <Card className={cn("w-full", className)} {...props}>
@@ -89,30 +79,15 @@ export function DataList({
           {items.map((item) => (
             <div
               key={item.id}
-              className={cn(
-                "flex items-center gap-4 p-4",
-                onItemClick && "hover:bg-muted/50 cursor-pointer transition-colors"
-              )}
+              className={cn("flex items-center gap-4 p-4", onItemClick && "hover:bg-muted/50 cursor-pointer transition-colors")}
               onClick={() => onItemClick && onItemClick(item)}
             >
-              {item.icon && (
-                <div className="flex-shrink-0">
-                  {item.icon}
-                </div>
-              )}
+              {item.icon && <div className="flex-shrink-0">{item.icon}</div>}
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{item.title}</div>
-                {item.description && (
-                  <div className="text-sm text-muted-foreground truncate">
-                    {item.description}
-                  </div>
-                )}
+                {item.description && <div className="text-sm text-muted-foreground truncate">{item.description}</div>}
               </div>
-              {item.rightContent && (
-                <div className="flex-shrink-0">
-                  {item.rightContent}
-                </div>
-              )}
+              {item.rightContent && <div className="flex-shrink-0">{item.rightContent}</div>}
               {itemActions && (
                 <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
@@ -123,10 +98,7 @@ export function DataList({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {itemActions.map((action, i) => (
-                        <DropdownMenuItem
-                          key={i}
-                          onClick={() => action.onClick(item)}
-                        >
+                        <DropdownMenuItem key={i} onClick={() => action.onClick(item)}>
                           <div className="flex items-center gap-2">
                             {action.icon}
                             {action.label}
@@ -137,9 +109,7 @@ export function DataList({
                   </DropdownMenu>
                 </div>
               )}
-              {onItemClick && !itemActions && (
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              )}
+              {onItemClick && !itemActions && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             </div>
           ))}
         </div>

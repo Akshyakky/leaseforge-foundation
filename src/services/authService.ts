@@ -77,6 +77,7 @@ class AuthService extends BaseService {
       if (response.data.success && response.data.token) {
         // Store token and user info
         sessionStorage.setItem("token", response.data.token);
+        localStorage.setItem("token", response.data.token);
 
         if (response.data.refreshToken) {
           localStorage.setItem("refreshToken", response.data.refreshToken);
@@ -104,10 +105,11 @@ class AuthService extends BaseService {
    */
   async refreshToken(request: RefreshTokenRequest): Promise<LoginResponse> {
     try {
-      const response = await this.api.post<LoginResponse>("/refresh-token", request);
+      const response = await this.api.post<LoginResponse>("auth/refresh-token", request);
 
       if (response.data.success && response.data.token) {
         sessionStorage.setItem("token", response.data.token);
+        localStorage.setItem("token", response.data.token);
 
         if (response.data.refreshToken) {
           localStorage.setItem("refreshToken", response.data.refreshToken);

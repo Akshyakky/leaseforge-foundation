@@ -73,7 +73,6 @@ class CompanyService extends BaseService {
   async getAllCompanies(): Promise<Company[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Companies
-      actionBy: "WebApp",
       parameters: {},
     };
 
@@ -89,7 +88,6 @@ class CompanyService extends BaseService {
   async getCompanyById(companyId: number): Promise<Company | null> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Company by ID
-      actionBy: "WebApp",
       parameters: {
         CompanyID: companyId,
       },
@@ -107,7 +105,6 @@ class CompanyService extends BaseService {
   async createCompany(company: Partial<Company>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Company
-      actionBy: "WebApp",
       parameters: {
         ...company,
       },
@@ -130,7 +127,6 @@ class CompanyService extends BaseService {
   async updateCompany(company: Partial<Company>): Promise<boolean> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Company
-      actionBy: "WebApp",
       parameters: {
         ...company,
       },
@@ -153,7 +149,6 @@ class CompanyService extends BaseService {
   async deleteCompany(companyId: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Company
-      actionBy: "WebApp",
       parameters: {
         CompanyID: companyId,
       },
@@ -176,7 +171,6 @@ class CompanyService extends BaseService {
   async searchCompanies(searchText: string): Promise<Company[]> {
     const request: BaseRequest = {
       mode: 6, // Mode 6: Search Companies
-      actionBy: "WebApp",
       parameters: {
         SearchText: searchText,
       },
@@ -194,7 +188,6 @@ class CompanyService extends BaseService {
   async getCompanyUsers(companyId: number): Promise<CompanyUser[]> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Get Users by Company
-      actionBy: "WebApp",
       parameters: {
         CompanyID: companyId,
       },
@@ -216,7 +209,6 @@ class CompanyService extends BaseService {
   }> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Get Company Statistics
-      actionBy: "WebApp",
       parameters: {
         CompanyID: companyId,
       },
@@ -243,7 +235,6 @@ class CompanyService extends BaseService {
   async toggleCompanyStatus(companyId: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Toggle Active Status
-      actionBy: "WebApp",
       parameters: {
         CompanyID: companyId,
       },
@@ -267,7 +258,6 @@ class CompanyService extends BaseService {
   async getCompaniesForDropdown(activeOnly: boolean = false): Promise<Company[]> {
     const request: BaseRequest = {
       mode: 10, // Mode 10: Get Companies for Dropdown
-      actionBy: "WebApp",
       parameters: {
         IsActive: activeOnly ? 1 : null,
       },
