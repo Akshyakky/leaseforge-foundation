@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { roleService, Role } from "@/services/roleService";
 import { departmentService } from "@/services/departmentService";
+import { companyService } from "@/services/companyService";
 
 // Interface for department
 interface Department {
@@ -60,6 +61,7 @@ const UserForm = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const preselectedRoleId = searchParams.get("roleId");
+  const preselectedCompanyId = searchParams.get("companyId");
 
   const isEdit = id !== "new";
   const navigate = useNavigate();
@@ -79,7 +81,7 @@ const UserForm = () => {
       ConfirmPassword: "",
       EmailID: "",
       PhoneNo: "",
-      CompID: "",
+      CompID: preselectedCompanyId || "",
       DepartmentID: "",
       RoleID: preselectedRoleId || "",
       IsActive: true,
@@ -101,12 +103,14 @@ const UserForm = () => {
           }))
         );
 
-        // TODO: Fetch companies
-        setCompanies([
-          { companyID: 1, companyName: "Main Company" },
-          { companyID: 2, companyName: "Subsidiary A" },
-          { companyID: 3, companyName: "Subsidiary B" },
-        ]);
+        // Fetch companies from the API
+        const companiesData = await companyService.getCompaniesForDropdown(true);
+        setCompanies(
+          companiesData.map((company) => ({
+            companyID: company.CompanyID,
+            companyName: company.CompanyName,
+          }))
+        );
       } catch (error) {
         console.error("Error fetching initial data:", error);
         toast.error("Failed to load form data");

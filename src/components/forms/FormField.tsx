@@ -30,7 +30,7 @@ export interface DatePickerConfig {
 
 export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TName extends Path<TFieldValues> = Path<TFieldValues>> {
   name: TName;
-  label?: string;
+  label?: React.ReactNode;
   description?: string;
   placeholder?: string;
   defaultValue?: FieldPathValue<TFieldValues, TName>;
@@ -43,6 +43,7 @@ export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TNam
   fileConfig?: FileUploadConfig;
   dateConfig?: DatePickerConfig;
   render?: (props: { field: any; fieldState: any }) => React.ReactNode;
+  onChange?: (value: string) => void; // Added onChange prop
 }
 
 export function FormField<TFieldValues extends FieldValues = FieldValues, TName extends Path<TFieldValues> = Path<TFieldValues>>({
@@ -60,6 +61,7 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
   fileConfig,
   dateConfig,
   render,
+  onChange,
   form,
 }: FieldProps<TFieldValues, TName> & { form: UseFormReturn<TFieldValues> }) {
   const { t } = useTranslation();
@@ -84,7 +86,16 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
               {type === "textarea" ? (
                 <Textarea {...field} placeholder={placeholder} disabled={disabled} className={fieldState.error ? "border-destructive" : ""} />
               ) : type === "select" && options ? (
-                <Select disabled={disabled} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                <Select
+                  disabled={disabled}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // Call the onChange callback if provided
+                    if (onChange) onChange(value);
+                  }}
+                  defaultValue={field.value}
+                  value={field.value}
+                >
                   <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
                     <SelectValue placeholder={placeholder} />
                   </SelectTrigger>

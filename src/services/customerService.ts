@@ -552,37 +552,6 @@ class CustomerService extends BaseService {
   }
 
   /**
-   * Get contact types for dropdown
-   * @returns Array of contact types
-   */
-  async getContactTypes(): Promise<ContactType[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
-    return [
-      { ContactTypeID: 1, ContactTypeDescription: "Primary" },
-      { ContactTypeID: 2, ContactTypeDescription: "Billing" },
-      { ContactTypeID: 3, ContactTypeDescription: "Emergency" },
-      { ContactTypeID: 4, ContactTypeDescription: "Other" },
-    ];
-  }
-
-  /**
-   * Get document types for dropdown
-   * @returns Array of document types
-   */
-  async getDocumentTypes(): Promise<DocType[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
-    return [
-      { DocTypeID: 1, Description: "ID Card" },
-      { DocTypeID: 2, Description: "Passport" },
-      { DocTypeID: 3, Description: "Driving License" },
-      { DocTypeID: 4, Description: "Contract" },
-      { DocTypeID: 5, Description: "Other" },
-    ];
-  }
-
-  /**
    * Get customer statistics
    * @returns Customer statistics
    */

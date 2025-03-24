@@ -6,7 +6,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, Plus, Trash2, Edit2, X, Mail, Phone, Home } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, Edit2, X, Mail, Phone, Home, PlusCircle } from "lucide-react";
 import { customerService } from "@/services/customerService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
@@ -16,10 +16,156 @@ import { useAppSelector } from "@/lib/hooks";
 import { Customer, CustomerContact, CustomerAttachment, CustomerType, ContactType, DocType } from "@/types/customerTypes";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Country, countryService } from "@/services/countryService";
 import { City, cityService } from "@/services/cityService";
+import { contactTypeService, docTypeService } from "@/services";
+import { Input } from "@/components/ui/input";
+
+const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: DocType) => void }) => {
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!description.trim()) {
+        toast.error("Description is required");
+        return;
+      }
+
+      const newTypeId = await docTypeService.createDocType({
+        Description: description,
+      });
+
+      if (newTypeId) {
+        const newDocType: DocType = {
+          DocTypeID: newTypeId,
+          Description: description,
+        };
+        onSave(newDocType);
+        setDescription("");
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error creating document type:", error);
+      toast.error("Failed to create document type");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Document Type</DialogTitle>
+          <DialogDescription>Add a new document type to use in the system</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="docTypeDescription" className="text-sm font-medium">
+                Description
+              </label>
+              <Input id="docTypeDescription" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter document type description" required />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const CreateContactTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (contactType: ContactType) => void }) => {
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!description.trim()) {
+        toast.error("Description is required");
+        return;
+      }
+
+      const newTypeId = await contactTypeService.createContactType({
+        ContactTypeDescription: description,
+      });
+
+      if (newTypeId) {
+        const newContactType: ContactType = {
+          ContactTypeID: newTypeId,
+          ContactTypeDescription: description,
+        };
+        onSave(newContactType);
+        setDescription("");
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error creating contact type:", error);
+      toast.error("Failed to create contact type");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Contact Type</DialogTitle>
+          <DialogDescription>Add a new contact type to use in the system</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="contactTypeDescription" className="text-sm font-medium">
+                Description
+              </label>
+              <Input id="contactTypeDescription" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter contact type description" required />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // Create the schema for customer form validation
 const customerSchema = z.object({
@@ -97,6 +243,9 @@ const CustomerForm = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const [isContactTypeDialogOpen, setIsContactTypeDialogOpen] = useState(false);
+  const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
+
   // Initialize forms
   const customerForm = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
@@ -151,8 +300,8 @@ const CustomerForm = () => {
         // Fetch reference data in parallel
         const [typesData, contactTypesData, docTypesData, countriesData] = await Promise.all([
           customerService.getCustomerTypes(),
-          customerService.getContactTypes(),
-          customerService.getDocumentTypes(),
+          contactTypeService.getAllContactTypes(),
+          docTypeService.getAllDocTypes(),
           countryService.getCountriesForDropdown(),
         ]);
 
@@ -208,6 +357,16 @@ const CustomerForm = () => {
 
     initializeForm();
   }, [id, isEdit, navigate, customerForm, contactForm, attachmentForm]);
+
+  const handleSaveDocType = (newDocType: DocType) => {
+    setDocumentTypes([...documentTypes, newDocType]);
+    toast.success(`Document type "${newDocType.Description}" created successfully`);
+  };
+
+  const handleSaveContactType = (newContactType: ContactType) => {
+    setContactTypes([...contactTypes, newContactType]);
+    toast.success(`Contact type "${newContactType.ContactTypeDescription}" created successfully`);
+  };
 
   useEffect(() => {
     const fetchCitiesByCountry = async () => {
@@ -762,18 +921,37 @@ const CustomerForm = () => {
           </DialogHeader>
           <Form {...contactForm}>
             <form onSubmit={contactForm.handleSubmit(onSubmitContact)} className="space-y-4">
-              <FormField
-                form={contactForm}
-                name="ContactTypeID"
-                label="Contact Type"
-                type="select"
-                options={contactTypes.map((type) => ({
-                  label: type.ContactTypeDescription,
-                  value: type.ContactTypeID.toString(),
-                }))}
-                placeholder="Select contact type"
-                required
-              />
+              <div className="space-y-2">
+                <FormField
+                  form={contactForm}
+                  name="ContactTypeID"
+                  label={
+                    <div className="flex items-center justify-between">
+                      <span>Contact Type</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setIsContactTypeDialogOpen(true);
+                        }}
+                      >
+                        <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                        Create New
+                      </Button>
+                    </div>
+                  }
+                  type="select"
+                  options={contactTypes.map((type) => ({
+                    label: type.ContactTypeDescription,
+                    value: type.ContactTypeID.toString(),
+                  }))}
+                  placeholder="Select contact type"
+                  required
+                />
+              </div>
               <FormField form={contactForm} name="ContactName" label="Contact Name" placeholder="Enter contact name" required />
               <FormField form={contactForm} name="EmailID" label="Email" type="email" placeholder="Enter email address" />
               <FormField form={contactForm} name="ContactNo" label="Phone Number" placeholder="Enter phone number" />
@@ -824,18 +1002,37 @@ const CustomerForm = () => {
           </DialogHeader>
           <Form {...attachmentForm}>
             <form onSubmit={attachmentForm.handleSubmit(onSubmitAttachment)} className="space-y-4">
-              <FormField
-                form={attachmentForm}
-                name="DocTypeID"
-                label="Document Type"
-                type="select"
-                options={documentTypes.map((type) => ({
-                  label: type.Description,
-                  value: type.DocTypeID.toString(),
-                }))}
-                placeholder="Select document type"
-                required
-              />
+              <div className="space-y-2">
+                <FormField
+                  form={attachmentForm}
+                  name="DocTypeID"
+                  label={
+                    <div className="flex items-center justify-between">
+                      <span>Document Type</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setIsDocTypeDialogOpen(true);
+                        }}
+                      >
+                        <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                        Create New
+                      </Button>
+                    </div>
+                  }
+                  type="select"
+                  options={documentTypes.map((type) => ({
+                    label: type.Description,
+                    value: type.DocTypeID.toString(),
+                  }))}
+                  placeholder="Select document type"
+                  required
+                />
+              </div>
 
               <FormField form={attachmentForm} name="DocumentName" label="Document Name" placeholder="Enter document name" required />
 
@@ -885,6 +1082,8 @@ const CustomerForm = () => {
           </Form>
         </DialogContent>
       </Dialog>
+      <CreateDocTypeDialog isOpen={isDocTypeDialogOpen} onClose={() => setIsDocTypeDialogOpen(false)} onSave={handleSaveDocType} />
+      <CreateContactTypeDialog isOpen={isContactTypeDialogOpen} onClose={() => setIsContactTypeDialogOpen(false)} onSave={handleSaveContactType} />
     </div>
   );
 };
