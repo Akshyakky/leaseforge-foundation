@@ -1,4 +1,3 @@
-// src/pages/UnitMaster/Settings/BedRoomSettings.tsx
 import { BedRoom } from "../../../services/unitRelatedService";
 import { BaseSettingsComponent } from "./BaseSettingsComponent";
 import * as z from "zod";
@@ -36,6 +35,13 @@ export const BedRoomSettings = () => {
     </div>
   );
 
+  const formatEntityForSubmit = (data: any) => {
+    return {
+      BedRoomCount: data.BedRoomCount,
+      Description: data.Description,
+    };
+  };
+
   return (
     <BaseSettingsComponent<BedRoom>
       entityType="BedRoom"
@@ -44,7 +50,9 @@ export const BedRoomSettings = () => {
       tableColumns={tableColumns}
       defaultValues={defaultValues}
       idKey="BedRoomID"
+      nameKey="BedRoomCount"
       renderAdditionalFields={renderAdditionalFields}
+      formatEntityForSubmit={formatEntityForSubmit}
     />
   );
 };
