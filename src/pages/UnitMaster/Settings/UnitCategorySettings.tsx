@@ -26,9 +26,12 @@ const defaultValues = {
   Description: "",
 };
 
+// Create a type-specific component to avoid JSX generic syntax issues
+const UnitCategorySettingsComponent = BaseSettingsComponent<UnitCategory>;
+
 export const UnitCategorySettings = () => {
   return (
-    <BaseSettingsComponent<UnitCategory>
+    <UnitCategorySettingsComponent
       entityType="UnitCategory"
       entityName="Unit Category"
       schema={unitCategorySchema}

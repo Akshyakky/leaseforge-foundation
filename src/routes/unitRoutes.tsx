@@ -7,6 +7,7 @@ import { lazyLoad } from "@/lib/performance";
 import { UnitMasterPage } from "@/pages/UnitMaster";
 import { UnitDashboard } from "@/pages/UnitMaster/UnitDashboard";
 import { UnitStatistics } from "@/pages/UnitMaster/UnitStatistics";
+import { UnitMasterSettingsPage } from "@/pages/UnitMaster/UnitMasterSettingsPage";
 
 // Lazy-loaded unit pages
 // const UnitDashboard = lazyLoad(() => import("@/pages/UnitMaster/UnitDashboard"));
@@ -54,11 +55,28 @@ const unitRoutes = (
         </ProtectedRoute>
       }
     />
-    <Route
+    {/* <Route
       path="units/statistics"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <UnitStatistics />
+        </ProtectedRoute>
+      }
+    /> */}
+    {/* Unit Master Settings Routes */}
+    <Route
+      path="units/settings"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <UnitMasterSettingsPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="units/settings/:settingType"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <UnitMasterSettingsPage />
         </ProtectedRoute>
       }
     />

@@ -12,6 +12,7 @@ import { UnitSearchFilter } from "./UnitSearchFilter";
 import { UnitList } from "./UnitList";
 import { UnitDetails } from "./UnitDetails";
 import { UnitForm } from "./UnitForm";
+import { useAppSelector } from "@/lib/hooks";
 
 enum ViewMode {
   LIST,
@@ -25,6 +26,7 @@ interface LocationState {
 }
 
 export const UnitMasterPage = () => {
+  const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
   const location = useLocation();
   const { unitId } = useParams<{ unitId: string }>();
@@ -218,7 +220,7 @@ export const UnitMasterPage = () => {
             {viewMode === ViewMode.LIST && (
               <>
                 {/* Only show settings button for admin/manager roles */}
-                {(userRoles.includes("admin") || userRoles.includes("manager")) && (
+                {user && (user.role === "admin" || user.role === "manager" || user.roleName === "admin" || user.roleName === "manager") && (
                   <Button variant="outline" onClick={navigateToSettings}>
                     <Settings className="mr-2 h-4 w-4" /> Settings
                   </Button>

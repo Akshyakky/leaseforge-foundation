@@ -35,6 +35,9 @@ const defaultValues = {
   Description: "",
 };
 
+// Create a type-specific component to avoid JSX generic syntax issues
+const FloorSettingsComponent = BaseSettingsComponent<Floor>;
+
 export const FloorSettings = ({ properties, isLoadingProperties }: FloorSettingsProps) => {
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
 
@@ -95,7 +98,7 @@ export const FloorSettings = ({ properties, isLoadingProperties }: FloorSettings
         </div>
       </div>
 
-      <BaseSettingsComponent<Floor>
+      <FloorSettingsComponent
         entityType="Floor"
         entityName="Floor"
         schema={floorSchema}

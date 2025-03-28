@@ -22,6 +22,9 @@ const defaultValues = {
   Description: "",
 };
 
+// Create a type-specific component to avoid JSX generic syntax issues
+const BedRoomSettingsComponent = BaseSettingsComponent<BedRoom>;
+
 export const BedRoomSettings = () => {
   const renderAdditionalFields = (form: any) => (
     <div>
@@ -43,7 +46,7 @@ export const BedRoomSettings = () => {
   };
 
   return (
-    <BaseSettingsComponent<BedRoom>
+    <BedRoomSettingsComponent
       entityType="BedRoom"
       entityName="Bedroom Configuration"
       schema={bedRoomSchema}

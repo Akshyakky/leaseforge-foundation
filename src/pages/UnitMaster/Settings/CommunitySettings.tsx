@@ -26,9 +26,12 @@ const defaultValues = {
   Description: "",
 };
 
+// Create a type-specific component to avoid JSX generic syntax issues
+const CommunitySettingsComponent = BaseSettingsComponent<Community>;
+
 export const CommunitySettings = () => {
   return (
-    <BaseSettingsComponent<Community>
+    <CommunitySettingsComponent
       entityType="Community"
       entityName="Community"
       schema={communitySchema}
