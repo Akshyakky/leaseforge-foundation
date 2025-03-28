@@ -16,6 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
+import { unitDropdownService } from "../../services/unitDropdownService";
+import { cityService, countryService } from "@/services";
 
 // Define the form validation schema
 const unitFormSchema = z.object({
@@ -64,6 +67,8 @@ type UnitFormValues = z.infer<typeof unitFormSchema>;
 export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel }) => {
   const [activeTab, setActiveTab] = useState(UNIT_TABS.GENERAL);
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [cities, setCities] = useState<{ CityID: number; CityName: string }[]>([]);
   const [dropdownData, setDropdownData] = useState({
     properties: [],
     unitTypes: [],
@@ -94,41 +99,91 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
 
   // Track when country changes to reset city selection
   const watchCountry = form.watch("CountryID");
+  const watchProperty = form.watch("PropertyID");
 
+  // Load dropdown data
   useEffect(() => {
-    if (watchCountry) {
-      // In a real implementation, this would fetch cities for the selected country
-      form.setValue("CityID", 0);
+    const loadDropdownData = async () => {
+      try {
+        setIsLoading(true);
+        // Get dropdown data from unit dropdown service
+        const allDropdowns = await unitDropdownService.getAllDropdownData();
+
+        // Get countries from country service
+        const countries = await countryService.getCountriesForDropdown();
+
+        setDropdownData({
+          ...allDropdowns,
+          countries,
+          cities: [], // Initialize with empty array
+        });
+      } catch (error) {
+        console.error("Error loading dropdown data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load dropdown data. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDropdownData();
+  }, []);
+
+  // Load property-specific floors when property changes
+  useEffect(() => {
+    const loadFloors = async () => {
+      if (watchProperty) {
+        try {
+          const floors = await unitDropdownService.getFloors(watchProperty);
+          setDropdownData((prev) => ({
+            ...prev,
+            floors,
+          }));
+        } catch (error) {
+          console.error("Error loading floors for property:", error);
+        }
+      }
+    };
+
+    if (watchProperty && watchProperty > 0) {
+      loadFloors();
+    }
+  }, [watchProperty]);
+
+  // Load cities when country changes
+  useEffect(() => {
+    const loadCities = async () => {
+      if (watchCountry) {
+        try {
+          // Reset city selection when country changes
+          form.setValue("CityID", 0);
+
+          // Load cities for the selected country
+          const cityResponse = await cityService.getCitiesByCountry(watchCountry);
+          setCities(cityResponse);
+        } catch (error) {
+          console.error("Error loading cities for country:", error);
+        }
+      }
+    };
+
+    if (watchCountry && watchCountry > 0) {
+      loadCities();
+    } else {
+      setCities([]);
     }
   }, [watchCountry, form]);
 
   // Initialize contacts
   useEffect(() => {
     if (unit?.UnitID) {
-      // This would normally be fetched from the API in the parent component
-      // and passed down via props
+      // In a real implementation, we would fetch contacts from the API
       setContacts([]);
     }
   }, [unit]);
-
-  // Load dropdown data (would be API calls in a real implementation)
-  useEffect(() => {
-    // Mock data for demonstration
-    setDropdownData({
-      properties: [],
-      unitTypes: [],
-      unitCategories: [],
-      unitViews: [],
-      floors: [],
-      bedrooms: [],
-      bathrooms: [],
-      unitStyles: [],
-      communities: [],
-      countries: [],
-      cities: [],
-      unitClasses: [],
-    });
-  }, []);
 
   // Update total area when component area values change
   useEffect(() => {
@@ -152,6 +207,10 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   const handleSubmit = (data: UnitFormValues) => {
     onSave(data, contacts);
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64">Loading form data...</div>;
+  }
 
   return (
     <Form {...form}>
@@ -622,15 +681,15 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>City *</FormLabel>
-                            <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString() || ""} disabled={!form.watch("CountryID")}>
+                            <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString() || ""} disabled={!watchCountry}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder={form.watch("CountryID") ? "Select City" : "Select Country First"} />
+                                  <SelectValue placeholder={watchCountry ? "Select City" : "Select Country First"} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="0">Select City</SelectItem>
-                                {dropdownData.cities.map((city: any) => (
+                                {cities.map((city: any) => (
                                   <SelectItem key={city.CityID} value={city.CityID.toString()}>
                                     {city.CityName}
                                   </SelectItem>
