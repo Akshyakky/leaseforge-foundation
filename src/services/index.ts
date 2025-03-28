@@ -13,5 +13,6 @@ export * from "./contactTypeService";
 export * from "./docTypeService";
 export * from "./countryService";
 export * from "./cityService";
+export * from "./unitService";
 
 // Add any new services to this file for easy importing

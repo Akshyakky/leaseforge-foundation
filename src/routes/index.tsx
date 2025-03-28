@@ -14,6 +14,7 @@ import ProtectedRoute from "./ProtectedRoute";
 import companyRoutes from "./companyRoutes";
 import costCenterRoutes from "./costCenterRoutes";
 import customerRoutes from "./customerRoutes";
+import unitRoutes from "./unitRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -54,6 +55,9 @@ const AppRoutes = () => {
 
           {/* Cost Center routes */}
           {costCenterRoutes}
+
+          {/* Unit routes */}
+          {unitRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}
