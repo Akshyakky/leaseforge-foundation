@@ -5,7 +5,7 @@ import { Unit, UnitContact } from "../../services/unitService";
 import { UnitSearchFilters, FormMode } from "./types";
 import { toast } from "sonner";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Settings } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UnitSearchFilter } from "./UnitSearchFilter";
@@ -200,6 +200,10 @@ export const UnitMasterPage = () => {
     setViewMode(ViewMode.CREATE);
   };
 
+  const navigateToSettings = () => {
+    navigate("/units/settings");
+  };
+
   return (
     <div className="container mx-auto p-4">
       <Card>
@@ -212,9 +216,17 @@ export const UnitMasterPage = () => {
           </CardTitle>
           <div className="flex space-x-2">
             {viewMode === ViewMode.LIST && (
-              <Button onClick={navigateToCreate}>
-                <Plus className="mr-2 h-4 w-4" /> Add Unit
-              </Button>
+              <>
+                {/* Only show settings button for admin/manager roles */}
+                {(userRoles.includes("admin") || userRoles.includes("manager")) && (
+                  <Button variant="outline" onClick={navigateToSettings}>
+                    <Settings className="mr-2 h-4 w-4" /> Settings
+                  </Button>
+                )}
+                <Button onClick={navigateToCreate}>
+                  <Plus className="mr-2 h-4 w-4" /> Add Unit
+                </Button>
+              </>
             )}
             {viewMode === ViewMode.DETAILS && (
               <div className="flex space-x-2">
