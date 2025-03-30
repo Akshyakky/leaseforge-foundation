@@ -87,7 +87,7 @@ export const FloorSettings = ({ properties, isLoadingProperties }: FloorSettings
               <SelectValue placeholder="All Properties" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Properties</SelectItem>
+              <SelectItem value="0">All Properties</SelectItem>
               {properties.map((property) => (
                 <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
                   {property.PropertyName}
