@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, MoreHorizontal, Search, PlusCircle, Layers, LayoutList } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, PlusCircle, Layers, LayoutList, ArrowLeft, ArrowRight } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -13,6 +13,7 @@ import { debounce } from "lodash";
 import { toast } from "sonner";
 import { useAppSelector } from "@/lib/hooks";
 import { costCenterService } from "@/services/costCenterService";
+import { Badge } from "@/components/ui/badge";
 
 const CostCentersList = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -27,7 +28,6 @@ const CostCentersList = () => {
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Selected parent IDs for filtering
   const [selectedParents, setSelectedParents] = useState<{
     CostCenter1ID?: number;
     CostCenter2ID?: number;
@@ -36,12 +36,10 @@ const CostCentersList = () => {
 
   const navigate = useNavigate();
 
-  // Initialize and fetch data
   useEffect(() => {
     fetchCostCenters();
   }, []);
 
-  // Handle tab change
   useEffect(() => {
     const level = parseInt(activeTab.replace("level", ""));
     setSelectedLevel(level);
@@ -50,12 +48,10 @@ const CostCentersList = () => {
       setSelectedParents({});
     }
 
-    // Reset search when changing tabs
     setSearchTerm("");
     fetchCostCentersByLevel(level);
   }, [activeTab]);
 
-  // Fetch all cost centers based on level
   const fetchCostCenters = async () => {
     try {
       setLoading(true);
@@ -68,12 +64,10 @@ const CostCentersList = () => {
     }
   };
 
-  // Fetch cost centers by level with optional search and parent filter
   const fetchCostCentersByLevel = async (level: number, search?: string, parents?: any) => {
     try {
       setLoading(true);
 
-      // Use provided parents or fall back to current selected parents
       const parentFilter = parents || selectedParents;
 
       let data: any[] = [];
@@ -84,7 +78,6 @@ const CostCentersList = () => {
         data = await costCenterService.getCostCentersByLevel(level, parentFilter);
       }
 
-      // Update the appropriate state based on level
       switch (level) {
         case 1:
           setCostCenters1(data as CostCenter1[]);
@@ -106,26 +99,22 @@ const CostCentersList = () => {
     }
   };
 
-  // Create debounced search function
   const debouncedSearch = debounce((value: string) => {
     if (value.length >= 2 || value === "") {
       fetchCostCentersByLevel(selectedLevel, value);
     }
   }, 500);
 
-  // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
     debouncedSearch(value);
   };
 
-  // Navigate to add new cost center
   const handleAddCostCenter = () => {
     const queryParams = new URLSearchParams();
     queryParams.append("level", selectedLevel.toString());
 
-    // Add parent IDs to query params if applicable
     if (selectedParents.CostCenter1ID && selectedLevel > 1) {
       queryParams.append("parent1", selectedParents.CostCenter1ID.toString());
     }
@@ -139,16 +128,36 @@ const CostCentersList = () => {
     navigate(`/cost-centers/new?${queryParams.toString()}`);
   };
 
-  // Navigate to edit cost center
   const handleEditCostCenter = (level: number, id: number) => {
     navigate(`/cost-centers/edit/${level}/${id}`);
   };
 
-  // Navigate to view children of a cost center
-  const handleViewChildren = (level: number, costCenter: any) => {
-    if (level >= 4) return; // Level 4 has no children
+  const handleNavigateToLevel = (level: number, preserveParents = true) => {
+    if (!preserveParents) {
+      setSelectedParents({});
+    } else if (level === 1) {
+      setSelectedParents({});
+    } else if (level === 2) {
+      setSelectedParents({
+        CostCenter1ID: selectedParents.CostCenter1ID,
+        CostCenter2ID: undefined,
+        CostCenter3ID: undefined,
+      });
+    } else if (level === 3) {
+      setSelectedParents({
+        CostCenter1ID: selectedParents.CostCenter1ID,
+        CostCenter2ID: selectedParents.CostCenter2ID,
+        CostCenter3ID: undefined,
+      });
+    }
+    
+    setActiveTab(`level${level}`);
+    fetchCostCentersByLevel(level);
+  };
 
-    // Update selectedParents based on the level
+  const handleViewChildren = (level: number, costCenter: any) => {
+    if (level >= 4) return;
+
     const newParents = { ...selectedParents };
 
     switch (level) {
@@ -171,20 +180,17 @@ const CostCentersList = () => {
     fetchCostCentersByLevel(level + 1, undefined, newParents);
   };
 
-  // Open delete confirmation dialog
   const openDeleteDialog = (level: number, costCenter: any) => {
     setSelectedLevel(level);
     setSelectedCostCenter(costCenter);
     setIsDeleteDialogOpen(true);
   };
 
-  // Close delete confirmation dialog
   const closeDeleteDialog = () => {
     setIsDeleteDialogOpen(false);
     setSelectedCostCenter(null);
   };
 
-  // Delete the selected cost center
   const handleDeleteCostCenter = async () => {
     if (!selectedCostCenter || !user) return;
 
@@ -192,7 +198,6 @@ const CostCentersList = () => {
       const success = await costCenterService.deleteCostCenter(selectedLevel, selectedCostCenter[`CostCenter${selectedLevel}ID`], user.name || "System");
 
       if (success.Status === 1) {
-        // Refresh the list
         fetchCostCentersByLevel(selectedLevel);
         toast.success(success.Message);
       } else {
@@ -206,7 +211,14 @@ const CostCentersList = () => {
     }
   };
 
-  // Get breadcrumbs for navigation context
+  const isLevelAccessible = (level: number): boolean => {
+    if (level === 1) return true;
+    if (level === 2) return !!selectedParents.CostCenter1ID;
+    if (level === 3) return !!selectedParents.CostCenter2ID;
+    if (level === 4) return !!selectedParents.CostCenter3ID;
+    return false;
+  };
+
   const getBreadcrumbs = () => {
     const crumbs = [];
 
@@ -246,28 +258,47 @@ const CostCentersList = () => {
     return crumbs;
   };
 
-  // Navigate back to parent level
-  const handleNavigateToLevel = (level: number, id?: number) => {
-    if (level === 1) {
-      setSelectedParents({});
-    } else if (level === 2) {
-      setSelectedParents({
-        CostCenter1ID: selectedParents.CostCenter1ID,
-      });
-    } else if (level === 3) {
-      setSelectedParents({
-        CostCenter1ID: selectedParents.CostCenter1ID,
-        CostCenter2ID: selectedParents.CostCenter2ID,
-      });
-    }
-
-    setActiveTab(`level${level}`);
-    fetchCostCentersByLevel(level);
-  };
-
-  // View hierarchy of all cost centers
   const handleViewHierarchy = () => {
     navigate("/cost-centers/hierarchy");
+  };
+
+  const getParentInfo = (level: number) => {
+    if (level === 1 || !selectedParents.CostCenter1ID) return null;
+    
+    if (level === 2) {
+      const parent = costCenters1.find(cc => cc.CostCenter1ID === selectedParents.CostCenter1ID);
+      return parent ? `Level 1: ${parent.Description}` : null;
+    }
+    
+    if (level === 3) {
+      const parent = costCenters2.find(cc => cc.CostCenter2ID === selectedParents.CostCenter2ID);
+      return parent ? `Level 2: ${parent.Description}` : null;
+    }
+    
+    if (level === 4) {
+      const parent = costCenters3.find(cc => cc.CostCenter3ID === selectedParents.CostCenter3ID);
+      return parent ? `Level 3: ${parent.Description}` : null;
+    }
+    
+    return null;
+  };
+
+  const handleQuickNextLevel = (currentLevel: number) => {
+    if (currentLevel < 4) {
+      const nextLevel = currentLevel + 1;
+      if (isLevelAccessible(nextLevel)) {
+        setActiveTab(`level${nextLevel}`);
+      } else {
+        toast.error(`Please select a Level ${currentLevel} cost center first`);
+      }
+    }
+  };
+
+  const handleQuickPrevLevel = (currentLevel: number) => {
+    if (currentLevel > 1) {
+      const prevLevel = currentLevel - 1;
+      setActiveTab(`level${prevLevel}`);
+    }
   };
 
   return (
@@ -277,7 +308,7 @@ const CostCentersList = () => {
           <h1 className="text-2xl font-semibold">Cost Centers</h1>
           {selectedLevel > 1 && (
             <div className="flex items-center text-sm text-muted-foreground mt-1 space-x-1">
-              <button onClick={() => handleNavigateToLevel(1)} className="hover:underline">
+              <button onClick={() => handleNavigateToLevel(1, false)} className="hover:underline">
                 All
               </button>
               {getBreadcrumbs().map((crumb, index) => (
@@ -309,28 +340,66 @@ const CostCentersList = () => {
           <CardDescription>Manage your organization's cost centers and hierarchy</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
+          <div className="flex flex-wrap items-center gap-4 mb-6">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input type="text" placeholder="Search cost centers..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium">Quick Navigation:</span>
+              <div className="flex items-center border rounded-md bg-muted/40">
+                {selectedLevel > 1 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleQuickPrevLevel(selectedLevel)}
+                    className="px-2 py-1 h-8"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Level {selectedLevel - 1}
+                  </Button>
+                )}
+                <Badge variant="outline" className="mx-2">Level {selectedLevel}</Badge>
+                {selectedLevel < 4 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleQuickNextLevel(selectedLevel)}
+                    disabled={!isLevelAccessible(selectedLevel + 1)}
+                    className="px-2 py-1 h-8"
+                  >
+                    Level {selectedLevel + 1} <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            {getParentInfo(selectedLevel) && (
+              <Badge variant="outline" className="mb-3 text-muted-foreground">
+                {getParentInfo(selectedLevel)}
+              </Badge>
+            )}
           </div>
 
           <Tabs defaultValue="level1" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList>
+            <TabsList className="grid grid-cols-4">
               <TabsTrigger value="level1">Level 1</TabsTrigger>
-              <TabsTrigger value="level2" disabled={selectedLevel === 2 && !selectedParents.CostCenter1ID}>
+              <TabsTrigger value="level2" disabled={!isLevelAccessible(2)}>
                 Level 2
+                {selectedParents.CostCenter1ID && <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block"></span>}
               </TabsTrigger>
-              <TabsTrigger value="level3" disabled={selectedLevel === 3 && !selectedParents.CostCenter2ID}>
+              <TabsTrigger value="level3" disabled={!isLevelAccessible(3)}>
                 Level 3
+                {selectedParents.CostCenter2ID && <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block"></span>}
               </TabsTrigger>
-              <TabsTrigger value="level4" disabled={selectedLevel === 4 && !selectedParents.CostCenter3ID}>
+              <TabsTrigger value="level4" disabled={!isLevelAccessible(4)}>
                 Level 4
+                {selectedParents.CostCenter3ID && <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block"></span>}
               </TabsTrigger>
             </TabsList>
 
-            {/* Level 1 Cost Centers */}
             <TabsContent value="level1">
               {loading ? (
                 <div className="flex justify-center py-10">
@@ -348,7 +417,7 @@ const CostCentersList = () => {
                         <TableHead>Created On</TableHead>
                         <TableHead>Updated By</TableHead>
                         <TableHead>Updated On</TableHead>
-                        <TableHead className="w-[80px]"></TableHead>
+                        <TableHead className="w-[140px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -360,24 +429,36 @@ const CostCentersList = () => {
                           <TableCell>{costCenter.UpdatedBy || "N/A"}</TableCell>
                           <TableCell>{costCenter.UpdatedOn ? new Date(costCenter.UpdatedOn).toLocaleDateString() : "N/A"}</TableCell>
                           <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleEditCostCenter(1, costCenter.CostCenter1ID)}>Edit</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleViewChildren(1, costCenter)}>
-                                  <LayoutList className="mr-2 h-4 w-4" />
-                                  View sub-levels
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(1, costCenter)}>
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="flex items-center justify-end space-x-1">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleViewChildren(1, costCenter)}
+                                title="View Level 2 cost centers under this"
+                              >
+                                <ArrowRight className="h-4 w-4 text-primary" />
+                                <span className="sr-only">View Sub-levels</span>
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Actions</span>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEditCostCenter(1, costCenter.CostCenter1ID)}>Edit</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleViewChildren(1, costCenter)}>
+                                    <LayoutList className="mr-2 h-4 w-4" />
+                                    View Level 2
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(1, costCenter)}>
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -387,7 +468,6 @@ const CostCentersList = () => {
               )}
             </TabsContent>
 
-            {/* Level 2 Cost Centers */}
             <TabsContent value="level2">
               {selectedParents.CostCenter1ID ? (
                 loading ? (
@@ -406,7 +486,7 @@ const CostCentersList = () => {
                           <TableHead>Created By</TableHead>
                           <TableHead>Created On</TableHead>
                           <TableHead>Updated By</TableHead>
-                          <TableHead className="w-[80px]"></TableHead>
+                          <TableHead className="w-[140px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -418,24 +498,36 @@ const CostCentersList = () => {
                             <TableCell>{costCenter.CreatedOn ? new Date(costCenter.CreatedOn).toLocaleDateString() : "N/A"}</TableCell>
                             <TableCell>{costCenter.UpdatedBy || "N/A"}</TableCell>
                             <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditCostCenter(2, costCenter.CostCenter2ID)}>Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleViewChildren(2, costCenter)}>
-                                    <LayoutList className="mr-2 h-4 w-4" />
-                                    View sub-levels
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(2, costCenter)}>
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <div className="flex items-center justify-end space-x-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleViewChildren(2, costCenter)}
+                                  title="View Level 3 cost centers under this"
+                                >
+                                  <ArrowRight className="h-4 w-4 text-primary" />
+                                  <span className="sr-only">View Sub-levels</span>
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                      <span className="sr-only">Actions</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleEditCostCenter(2, costCenter.CostCenter2ID)}>Edit</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleViewChildren(2, costCenter)}>
+                                      <LayoutList className="mr-2 h-4 w-4" />
+                                      View Level 3
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(2, costCenter)}>
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -444,11 +536,17 @@ const CostCentersList = () => {
                   </div>
                 )
               ) : (
-                <div className="text-center py-10 text-muted-foreground">Please select a Level 1 cost center first</div>
+                <div className="text-center py-10 text-muted-foreground">
+                  Please select a Level 1 cost center first
+                  <div className="mt-4">
+                    <Button variant="outline" onClick={() => handleNavigateToLevel(1)}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Go to Level 1
+                    </Button>
+                  </div>
+                </div>
               )}
             </TabsContent>
 
-            {/* Level 3 Cost Centers */}
             <TabsContent value="level3">
               {selectedParents.CostCenter2ID ? (
                 loading ? (
@@ -467,7 +565,7 @@ const CostCentersList = () => {
                           <TableHead>Level 2</TableHead>
                           <TableHead>Created By</TableHead>
                           <TableHead>Created On</TableHead>
-                          <TableHead className="w-[80px]"></TableHead>
+                          <TableHead className="w-[140px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -479,24 +577,36 @@ const CostCentersList = () => {
                             <TableCell>{costCenter.CreatedBy || "N/A"}</TableCell>
                             <TableCell>{costCenter.CreatedOn ? new Date(costCenter.CreatedOn).toLocaleDateString() : "N/A"}</TableCell>
                             <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditCostCenter(3, costCenter.CostCenter3ID)}>Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleViewChildren(3, costCenter)}>
-                                    <LayoutList className="mr-2 h-4 w-4" />
-                                    View sub-levels
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(3, costCenter)}>
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <div className="flex items-center justify-end space-x-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleViewChildren(3, costCenter)}
+                                  title="View Level 4 cost centers under this"
+                                >
+                                  <ArrowRight className="h-4 w-4 text-primary" />
+                                  <span className="sr-only">View Sub-levels</span>
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                      <span className="sr-only">Actions</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleEditCostCenter(3, costCenter.CostCenter3ID)}>Edit</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleViewChildren(3, costCenter)}>
+                                      <LayoutList className="mr-2 h-4 w-4" />
+                                      View Level 4
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(3, costCenter)}>
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -505,11 +615,17 @@ const CostCentersList = () => {
                   </div>
                 )
               ) : (
-                <div className="text-center py-10 text-muted-foreground">Please select a Level 2 cost center first</div>
+                <div className="text-center py-10 text-muted-foreground">
+                  Please select a Level 2 cost center first
+                  <div className="mt-4">
+                    <Button variant="outline" onClick={() => handleNavigateToLevel(2)}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Go to Level 2
+                    </Button>
+                  </div>
+                </div>
               )}
             </TabsContent>
 
-            {/* Level 4 Cost Centers */}
             <TabsContent value="level4">
               {selectedParents.CostCenter3ID ? (
                 loading ? (
@@ -542,8 +658,9 @@ const CostCentersList = () => {
                             <TableCell>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
+                                  <Button variant="ghost" size="sm">
                                     <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Actions</span>
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -562,7 +679,14 @@ const CostCentersList = () => {
                   </div>
                 )
               ) : (
-                <div className="text-center py-10 text-muted-foreground">Please select a Level 3 cost center first</div>
+                <div className="text-center py-10 text-muted-foreground">
+                  Please select a Level 3 cost center first
+                  <div className="mt-4">
+                    <Button variant="outline" onClick={() => handleNavigateToLevel(3)}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Go to Level 3
+                    </Button>
+                  </div>
+                </div>
               )}
             </TabsContent>
           </Tabs>
