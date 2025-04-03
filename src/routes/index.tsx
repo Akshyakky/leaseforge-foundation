@@ -15,6 +15,7 @@ import companyRoutes from "./companyRoutes";
 import costCenterRoutes from "./costCenterRoutes";
 import customerRoutes from "./customerRoutes";
 import unitRoutes from "./unitRoutes";
+import propertyRoutes from "./propertyRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -58,6 +59,9 @@ const AppRoutes = () => {
 
           {/* Unit routes */}
           {unitRoutes}
+
+          {/* Property routes */}
+          {propertyRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}
