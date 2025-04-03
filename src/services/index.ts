@@ -14,5 +14,6 @@ export * from "./docTypeService";
 export * from "./countryService";
 export * from "./cityService";
 export * from "./unitService";
+export * from "./propertyService";
 
 // Add any new services to this file for easy importing
