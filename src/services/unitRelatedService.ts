@@ -151,13 +151,54 @@ class UnitRelatedService extends BaseService {
       case "UnitView":
       case "UnitStyle":
       case "UnitClass":
-      case "Community":
-      case "Country":
         if (hasProperty(entity, "Name") || hasProperty(entity, `${entityType}Name`)) {
           parameters.Name = entity.Name || entity[`${entityType}Name`];
         }
         if (hasProperty(entity, "Code") || hasProperty(entity, `${entityType}Code`)) {
           parameters.Code = entity.Code || entity[`${entityType}Code`];
+        }
+        if (hasProperty(entity, "Description")) {
+          parameters.Description = entity.Description;
+        }
+        break;
+      case "Community":
+        if (hasProperty(entity, "CommunityName")) {
+          parameters.Name = entity.CommunityName;
+        }
+        if (hasProperty(entity, "CommunityCode")) {
+          parameters.Code = entity.CommunityCode;
+        }
+        if (hasProperty(entity, "Description")) {
+          parameters.Description = entity.Description;
+        }
+        if (hasProperty(entity, "CountryID")) {
+          parameters.CountryID = entity.CountryID;
+        }
+        if (hasProperty(entity, "StateID")) {
+          parameters.StateID = entity.StateID;
+        }
+        if (hasProperty(entity, "CityID")) {
+          parameters.CityID = entity.CityID;
+        }
+        if (hasProperty(entity, "Location")) {
+          parameters.Location = entity.Location;
+        }
+        if (hasProperty(entity, "ZipCode")) {
+          parameters.ZipCode = entity.ZipCode;
+        }
+        if (hasProperty(entity, "IsActive")) {
+          parameters.IsActive = entity.IsActive;
+        }
+        if (hasProperty(entity, "Remarks")) {
+          parameters.Remarks = entity.Remarks;
+        }
+        break;
+      case "Country":
+        if (hasProperty(entity, "CountryName")) {
+          parameters.Name = entity.CountryName;
+        }
+        if (hasProperty(entity, "CountryCode")) {
+          parameters.Code = entity.CountryCode;
         }
         if (hasProperty(entity, "Description")) {
           parameters.Description = entity.Description;
