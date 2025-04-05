@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
 import { countryService } from "@/services/countryService";
 import { cityService } from "@/services/cityService";
+import { unitRelatedService } from "@/services/unitRelatedService";
 
 // Create the schema for property form validation
 const propertySchema = z.object({
@@ -92,8 +93,8 @@ const PropertyForm: React.FC = () => {
         // Fetch reference data in parallel
         const [countriesData, communitiesData] = await Promise.all([
           countryService.getCountriesForDropdown(),
-          // Fetch communities data (placeholder - replace with actual service)
-          Promise.resolve([]),
+          // Fetch communities data from the API
+          unitRelatedService.getCommunitiesForDropdown(),
         ]);
 
         setCountries(countriesData);
