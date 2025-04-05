@@ -1,10 +1,11 @@
+
 // src/pages/UnitMaster/UnitForm.tsx
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
 import { Unit, UnitContact } from "../../services/unitService";
 import { DEFAULT_FORM_VALUES, UNIT_STATUS_OPTIONS, UNIT_TABS } from "./constants";
 import { UnitContacts } from "./UnitContacts";
-import { Home, Users, Save, RotateCcw } from "lucide-react";
+import { Home, Users, Save, RotateCcw, DollarSign } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -193,7 +194,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
 
     const totalArea = livingArea + balconyArea + terraceArea;
     form.setValue("TotalAreaSqft", totalArea > 0 ? totalArea : undefined);
-  }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft")]);
+  }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft"), form]);
 
   const handleContactsChange = (updatedContacts: UnitContact[]) => {
     setContacts(updatedContacts as ContactRow[]);
@@ -216,10 +217,14 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-8">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value={UNIT_TABS.GENERAL}>
               <Home className="mr-2 h-4 w-4" />
               General Information
+            </TabsTrigger>
+            <TabsTrigger value={UNIT_TABS.PRICING}>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Pricing & Payment
             </TabsTrigger>
             <TabsTrigger value={UNIT_TABS.CONTACTS}>
               <Users className="mr-2 h-4 w-4" />
@@ -647,7 +652,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
 
                 <Card>
                   <CardContent className="pt-6">
-                    <h3 className="text-lg font-semibold mb-4">Location & Pricing</h3>
+                    <h3 className="text-lg font-semibold mb-4">Location Information</h3>
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
@@ -785,50 +790,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                           </FormItem>
                         )}
                       />
-
-                      <Separator className="my-4" />
-
-                      <FormField
-                        control={form.control}
-                        name="UnitRate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Unit Rate (per sqft)</FormLabel>
-                            <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="ListingPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Listing Price</FormLabel>
-                            <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="PerMonth"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Monthly Rent</FormLabel>
-                            <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                     </div>
                   </CardContent>
                 </Card>
@@ -850,6 +811,222 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Pricing Tab */}
+          <TabsContent value={UNIT_TABS.PRICING}>
+            <div className="space-y-8">
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Sale Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="UnitRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit Rate (per sqft)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="ListingPrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Listing Price</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="SalePrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sale Price</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="NoOfInstallmentSale"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Number of Installments (Sale)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Lease Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="PerMonth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monthly Rent</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="PerYear"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Yearly Rent</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="NoOfInstallmentLease"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Number of Installments (Lease)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Property Management Fees</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="PerMonthRentPm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monthly Management Fee</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="PerYearRentPm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Yearly Management Fee</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0.00"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="NoOfInstallmentPM"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Number of Installments (Management)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </div>
