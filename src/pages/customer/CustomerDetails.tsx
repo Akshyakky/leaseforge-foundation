@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { customerService, contactTypeService, docTypeService } from "@/services/customerService";
+import { customerService } from "@/services/customerService";
 import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus, Eye, Download } from "lucide-react";
@@ -17,6 +17,7 @@ import * as z from "zod";
 import { Form } from "@/components/ui/form";
 import { FormField } from "@/components/forms/FormField";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { contactTypeService, docTypeService } from "@/services";
 
 // Contact form schema
 const contactSchema = z.object({
@@ -114,8 +115,8 @@ const CustomerDetails = () => {
         const [customerData, typesData, contactTypesData, docTypesData] = await Promise.all([
           customerService.getCustomerById(parseInt(customerId)),
           customerService.getCustomerTypes(),
-          customerService.getContactTypes(),
-          customerService.getDocumentTypes(),
+          contactTypeService.getAllContactTypes(),
+          docTypeService.getAllDocTypes(),
         ]);
 
         // Mock data for countries and cities - in a real app, fetch from API
@@ -157,7 +158,7 @@ const CustomerDetails = () => {
       try {
         const contactTypesData = await contactTypeService.getAllContactTypes();
         const docTypesData = await docTypeService.getAllDocTypes();
-        
+
         setContactTypes(contactTypesData);
         setDocTypes(docTypesData);
       } catch (error) {
