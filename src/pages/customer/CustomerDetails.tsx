@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { customerService } from "@/services/customerService";
+import { contactTypeService } from "@/services/contactTypeService";
+import { docTypeService } from "@/services/docTypeService";
 import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus, Eye, Download } from "lucide-react";
@@ -114,8 +116,8 @@ const CustomerDetails = () => {
         const [customerData, typesData, contactTypesData, docTypesData] = await Promise.all([
           customerService.getCustomerById(parseInt(id)),
           customerService.getCustomerTypes(),
-          customerService.getContactTypes(),
-          customerService.getDocumentTypes(),
+          contactTypeService.getContactTypes(),
+          docTypeService.getDocumentTypes(),
         ]);
 
         // Mock data for countries and cities - in a real app, fetch from API
