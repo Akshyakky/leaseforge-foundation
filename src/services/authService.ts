@@ -1,6 +1,8 @@
+
 // src/services/AuthService.ts
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
 import { toast } from "sonner";
+import axios from "axios";
 
 export interface LoginRequest {
   username: string;
@@ -26,6 +28,7 @@ export interface LoginResponse {
   };
   token?: string;
   refreshToken?: string;
+  expiration?: string; // ISO date string from API
 }
 
 export interface RefreshTokenRequest {
@@ -75,12 +78,29 @@ class AuthService extends BaseService {
       const response = await this.api.post<LoginResponse>("auth/login", requestBody);
 
       if (response.data.success && response.data.token) {
-        // Store token and user info
+        // Store token, user info, and token expiration
         sessionStorage.setItem("token", response.data.token);
         localStorage.setItem("token", response.data.token);
 
+        // Store token expiration time
+        if (response.data.expiration) {
+          localStorage.setItem("tokenExpiration", response.data.expiration);
+        } else {
+          // If no expiration provided, set default based on env variable
+          const expiryHours = Number(import.meta.env.VITE_TOKEN_EXPIRY || 3600);
+          const expiryTime = new Date();
+          expiryTime.setSeconds(expiryTime.getSeconds() + expiryHours);
+          localStorage.setItem("tokenExpiration", expiryTime.toISOString());
+        }
+
         if (response.data.refreshToken) {
           localStorage.setItem("refreshToken", response.data.refreshToken);
+          
+          // Store refresh token expiration time
+          const refreshExpiryHours = Number(import.meta.env.VITE_REFRESH_TOKEN_EXPIRY || 604800);
+          const refreshExpiryTime = new Date();
+          refreshExpiryTime.setSeconds(refreshExpiryTime.getSeconds() + refreshExpiryHours);
+          localStorage.setItem("refreshTokenExpiration", refreshExpiryTime.toISOString());
         }
 
         return response.data;
@@ -111,8 +131,25 @@ class AuthService extends BaseService {
         sessionStorage.setItem("token", response.data.token);
         localStorage.setItem("token", response.data.token);
 
+        // Store token expiration time
+        if (response.data.expiration) {
+          localStorage.setItem("tokenExpiration", response.data.expiration);
+        } else {
+          // If no expiration provided, set default based on env variable
+          const expiryHours = Number(import.meta.env.VITE_TOKEN_EXPIRY || 3600);
+          const expiryTime = new Date();
+          expiryTime.setSeconds(expiryTime.getSeconds() + expiryHours);
+          localStorage.setItem("tokenExpiration", expiryTime.toISOString());
+        }
+
         if (response.data.refreshToken) {
           localStorage.setItem("refreshToken", response.data.refreshToken);
+          
+          // Store refresh token expiration time
+          const refreshExpiryHours = Number(import.meta.env.VITE_REFRESH_TOKEN_EXPIRY || 604800);
+          const refreshExpiryTime = new Date();
+          refreshExpiryTime.setSeconds(refreshExpiryTime.getSeconds() + refreshExpiryHours);
+          localStorage.setItem("refreshTokenExpiration", refreshExpiryTime.toISOString());
         }
 
         return response.data;
@@ -176,17 +213,54 @@ class AuthService extends BaseService {
   }
 
   /**
+   * Check if token is expired
+   * @returns true if token is expired or missing, false otherwise
+   */
+  isTokenExpired(): boolean {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    if (!token) {
+      return true;
+    }
+
+    const expirationStr = localStorage.getItem("tokenExpiration");
+    if (!expirationStr) {
+      return true;
+    }
+
+    const expiration = new Date(expirationStr);
+    return expiration <= new Date();
+  }
+
+  /**
+   * Check if refresh token is expired
+   * @returns true if refresh token is expired or missing, false otherwise
+   */
+  isRefreshTokenExpired(): boolean {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) {
+      return true;
+    }
+
+    const expirationStr = localStorage.getItem("refreshTokenExpiration");
+    if (!expirationStr) {
+      return true;
+    }
+
+    const expiration = new Date(expirationStr);
+    return expiration <= new Date();
+  }
+
+  /**
    * Log out the current user
    */
   logout(): void {
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("tokenExpiration");
+    localStorage.removeItem("refreshTokenExpiration");
     sessionStorage.removeItem("token");
     localStorage.removeItem("token");
   }
 }
-
-// Import axios for AuthService
-import axios from "axios";
 
 // Export a singleton instance
 export const authService = new AuthService();
