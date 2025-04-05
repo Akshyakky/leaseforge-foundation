@@ -1,4 +1,3 @@
-
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { authService, LoginRequest, LoginResponse } from "@/services/authService";
 import { toast } from "sonner";
@@ -79,21 +78,13 @@ export const checkAuthStatus = createAsyncThunk("auth/checkStatus", async (_, { 
     return false;
   }
 
-  // Check if the main token is expired
-  if (authService.isTokenExpired()) {
-    // Token is expired, check if we can refresh it
-    if (refreshTokenStr && !authService.isRefreshTokenExpired()) {
-      try {
-        // Try to refresh the token
-        await dispatch(refreshToken()).unwrap();
-        return true;
-      } catch (error) {
-        // If refresh token fails, clear everything
-        authService.logout();
-        return false;
-      }
-    } else {
-      // No valid refresh token, logout
+  if (refreshTokenStr) {
+    try {
+      // Try to refresh the token - call the refreshToken thunk with proper dispatch
+      await dispatch(refreshToken()).unwrap();
+      return true;
+    } catch (error) {
+      // If refresh token fails, clear everything
       authService.logout();
       return false;
     }
@@ -108,7 +99,7 @@ const authSlice = createSlice({
     user: null,
     token: localStorage.getItem("token") || null,
     refreshToken: localStorage.getItem("refreshToken") || null,
-    isAuthenticated: !authService.isTokenExpired(),
+    isAuthenticated: !!localStorage.getItem("token"),
     isLoading: false,
     error: null,
   },
@@ -210,24 +201,13 @@ const authSlice = createSlice({
       })
 
       // Check auth status
-      .addCase(checkAuthStatus.pending, (state) => {
-        state.isLoading = true;
-      })
       .addCase(checkAuthStatus.fulfilled, (state, action) => {
-        state.isLoading = false;
         if (!action.payload) {
           state.isAuthenticated = false;
           state.user = null;
           state.token = null;
           state.refreshToken = null;
         }
-      })
-      .addCase(checkAuthStatus.rejected, (state) => {
-        state.isLoading = false;
-        state.isAuthenticated = false;
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
       });
   },
 });

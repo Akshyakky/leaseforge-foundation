@@ -1,6 +1,5 @@
-
 import React, { useEffect } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { setSidebarState } from "@/features/ui/uiSlice";
 import { checkAuth } from "@/features/auth/authService";
@@ -9,32 +8,28 @@ import Navbar from "./Navbar";
 import Breadcrumbs from "@/components/navigation/Breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import useLanguageSync from "@/hooks/use-language-sync";
-import { authService } from "@/services/authService";
+import Sidebar from "./Sidebar";
 
 const MainLayout = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const location = useLocation();
   const isMobile = useIsMobile();
-  const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const { sidebarOpen } = useAppSelector((state) => state.ui);
 
   // Sync language between i18n and Redux
   useLanguageSync();
 
-  // Check auth status whenever location changes
   useEffect(() => {
     dispatch(checkAuth());
-  }, [dispatch, location]);
+  }, [dispatch]);
 
-  // Redirect if not authenticated
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isAuthenticated) {
       navigate("/login");
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, navigate]);
 
-  // Toggle sidebar on mobile
   useEffect(() => {
     if (isMobile) {
       dispatch(setSidebarState(false));
@@ -42,10 +37,6 @@ const MainLayout = () => {
       dispatch(setSidebarState(true));
     }
   }, [isMobile, dispatch]);
-
-  if (isLoading) {
-    return null; // Can replace with a loading spinner if needed
-  }
 
   if (!isAuthenticated) {
     return null;

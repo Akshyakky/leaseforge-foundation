@@ -1,4 +1,3 @@
-
 import { authService as apiAuthService, LoginRequest } from "@/services/authService";
 import { toast } from "sonner";
 import { login as loginAction, logout as logoutAction, checkAuthStatus as checkAuthStatusAction } from "./authSlice";
@@ -31,20 +30,4 @@ export const logoutUser = () => (dispatch: AppDispatch) => {
 
 export const checkAuth = () => (dispatch: AppDispatch) => {
   dispatch(checkAuthStatusAction());
-};
-
-// Add automatic token refresh
-export const setupTokenRefresh = () => (dispatch: AppDispatch) => {
-  const checkTokenExpiry = () => {
-    if (apiAuthService.isTokenExpired() && !apiAuthService.isRefreshTokenExpired()) {
-      // Token is expired but refresh token is valid, attempt to refresh
-      dispatch(checkAuthStatusAction());
-    }
-  };
-
-  // Check every minute
-  const intervalId = setInterval(checkTokenExpiry, 60000);
-  
-  // Return cleanup function
-  return () => clearInterval(intervalId);
 };

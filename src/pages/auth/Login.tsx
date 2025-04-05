@@ -1,30 +1,17 @@
-
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { useAppSelector } from "@/lib/hooks";
 import LoginForm from "@/components/auth/LoginForm";
-import { checkAuth } from "@/features/auth/authService";
 
 const Login = () => {
-  const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
-  const dispatch = useAppDispatch();
 
-  // Check authentication on page load
   useEffect(() => {
-    dispatch(checkAuth());
-  }, [dispatch]);
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (isAuthenticated) {
       navigate("/dashboard");
     }
-  }, [isAuthenticated, isLoading, navigate]);
-
-  if (isLoading) {
-    return null; // Can replace with a loading spinner if needed
-  }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col justify-center bg-muted/30">
