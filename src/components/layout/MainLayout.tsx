@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
@@ -51,7 +52,7 @@ const MainLayout = () => {
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${sidebarOpen ? "ml-64" : "ml-16"}`}>
         <Navbar />
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl px-4 md:px-6">
+          <div className="w-full px-4 md:px-6">
             <Breadcrumbs />
             <div className="animate-fade-in py-4">
               <Outlet />

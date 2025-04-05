@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { customerService } from "@/services/customerService";
+import { customerService, contactTypeService, docTypeService } from "@/services/customerService";
 import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus, Eye, Download } from "lucide-react";
@@ -43,7 +43,7 @@ type ContactFormValues = z.infer<typeof contactSchema>;
 type AttachmentFormValues = z.infer<typeof attachmentSchema>;
 
 const CustomerDetails = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: customerId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   // State variables
@@ -102,7 +102,7 @@ const CustomerDetails = () => {
   // Fetch customer data
   useEffect(() => {
     const fetchData = async () => {
-      if (!id) {
+      if (!customerId) {
         navigate("/customers");
         return;
       }
@@ -112,7 +112,7 @@ const CustomerDetails = () => {
 
         // Fetch reference data in parallel
         const [customerData, typesData, contactTypesData, docTypesData] = await Promise.all([
-          customerService.getCustomerById(parseInt(id)),
+          customerService.getCustomerById(parseInt(customerId)),
           customerService.getCustomerTypes(),
           customerService.getContactTypes(),
           customerService.getDocumentTypes(),
@@ -153,8 +153,21 @@ const CustomerDetails = () => {
       }
     };
 
+    const fetchContactAndDocTypes = async () => {
+      try {
+        const contactTypesData = await contactTypeService.getAllContactTypes();
+        const docTypesData = await docTypeService.getAllDocTypes();
+        
+        setContactTypes(contactTypesData);
+        setDocTypes(docTypesData);
+      } catch (error) {
+        console.error("Error fetching dropdown data:", error);
+      }
+    };
+
     fetchData();
-  }, [id, navigate]);
+    fetchContactAndDocTypes();
+  }, [customerId, navigate]);
 
   // Helper to get type name
   const getCustomerTypeName = (typeId?: number) => {

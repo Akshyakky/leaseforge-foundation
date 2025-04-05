@@ -1,3 +1,4 @@
+
 import { Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -33,11 +34,13 @@ const App = () => (
     <Provider store={store}>
       <PersistGate loading={<LoadingPage />} persistor={persistor}>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <div className="h-screen flex flex-col overflow-hidden">
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </div>
         </TooltipProvider>
       </PersistGate>
     </Provider>
