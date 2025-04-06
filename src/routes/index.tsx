@@ -17,6 +17,7 @@ import customerRoutes from "./customerRoutes";
 import unitRoutes from "./unitRoutes";
 import propertyRoutes from "./propertyRoutes";
 import taxRoutes from "./taxRoutes";
+import additionalChargesRoutes from "./additionalChargesRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -66,6 +67,9 @@ const AppRoutes = () => {
 
           {/* Tax routes */}
           {taxRoutes}
+
+          {/* Additional Charges routes */}
+          {additionalChargesRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}
