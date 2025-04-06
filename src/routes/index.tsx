@@ -1,3 +1,4 @@
+
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoadingPage from "@/components/common/LoadingPage";
@@ -18,6 +19,7 @@ import unitRoutes from "./unitRoutes";
 import propertyRoutes from "./propertyRoutes";
 import taxRoutes from "./taxRoutes";
 import additionalChargesRoutes from "./additionalChargesRoutes";
+import currencyRoutes from "./currencyRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -70,6 +72,9 @@ const AppRoutes = () => {
 
           {/* Additional Charges routes */}
           {additionalChargesRoutes}
+
+          {/* Currency routes */}
+          {currencyRoutes}
 
           {/* Settings routes */}
           {settingsRoutes}
