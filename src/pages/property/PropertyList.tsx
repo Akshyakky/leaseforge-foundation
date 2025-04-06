@@ -247,7 +247,7 @@ const PropertyList: React.FC = () => {
                   <SelectValue placeholder="All Communities" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Communities</SelectItem>
+                  <SelectItem value="0">All Communities</SelectItem>
                   {communities.map((community) => (
                     <SelectItem key={community.CommunityID} value={community.CommunityID.toString()}>
                       {community.CommunityName}

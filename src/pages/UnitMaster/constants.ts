@@ -1,11 +1,10 @@
-
 // src/pages/UnitMaster/constants.ts
 import { Unit } from "../../services/unitService";
 
 export const UNIT_TABS = {
   GENERAL: "general",
   CONTACTS: "contacts",
-  PRICING: "pricing"
+  PRICING: "pricing",
 };
 
 export const UNIT_STATUS_OPTIONS = [
@@ -13,8 +12,8 @@ export const UNIT_STATUS_OPTIONS = [
   { value: "Leased", label: "Leased" },
   { value: "Sold", label: "Sold" },
   { value: "Reserved", label: "Reserved" },
-  { value: "Under Maintenance", label: "Under Maintenance" },
-  { value: "Not Available", label: "Not Available" }
+  { value: "UnderMaintenance", label: "Under Maintenance" },
+  { value: "NotAvailable", label: "Not Available" },
 ];
 
 export const DEFAULT_FORM_VALUES: Partial<Unit> = {
@@ -36,5 +35,19 @@ export const DEFAULT_FORM_VALUES: Partial<Unit> = {
   SalePrice: undefined,
   NoOfInstallmentPM: undefined,
   PerMonthRentPm: undefined,
-  PerYearRentPm: undefined
+  PerYearRentPm: undefined,
+};
+
+export const AREA_UNITS = [
+  { value: "sqft", label: "Square Feet" },
+  { value: "sqm", label: "Square Meters" },
+];
+
+export const EMPTY_CONTACT = {
+  UnitContactID: 0,
+  UnitID: 0,
+  ContactTypeID: 0,
+  ContactName: "",
+  Remarks: "",
+  isNew: true,
 };

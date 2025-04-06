@@ -1,4 +1,3 @@
-
 // src/pages/UnitMaster/UnitForm.tsx
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
@@ -830,12 +829,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Unit Rate (per sqft)</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -849,12 +843,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Listing Price</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -868,12 +857,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Sale Price</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -887,12 +871,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Number of Installments (Sale)</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -913,12 +892,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Monthly Rent</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -932,12 +906,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Yearly Rent</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -951,12 +920,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Number of Installments (Lease)</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -977,12 +941,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Monthly Management Fee</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -996,12 +955,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Yearly Management Fee</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1015,12 +969,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         <FormItem>
                           <FormLabel>Number of Installments (Management)</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              {...field}
-                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                            />
+                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
