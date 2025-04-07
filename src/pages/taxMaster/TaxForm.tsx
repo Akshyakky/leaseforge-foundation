@@ -359,7 +359,7 @@ const TaxForm: React.FC = () => {
                       label="Country"
                       type="select"
                       options={[
-                        { label: "Global (All Countries)", value: "" },
+                        { label: "Global (All Countries)", value: "0" },
                         ...countries.map((country) => ({
                           label: country.CountryName,
                           value: country.CountryID.toString(),

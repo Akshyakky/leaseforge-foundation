@@ -181,7 +181,7 @@ const TaxList: React.FC = () => {
                 <SelectValue placeholder="All Countries" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Countries</SelectItem>
+                <SelectItem value="0">All Countries</SelectItem>
                 {countries.map((country) => (
                   <SelectItem key={country.CountryID} value={country.CountryID.toString()}>
                     {country.CountryName}
@@ -195,7 +195,7 @@ const TaxList: React.FC = () => {
                 <SelectValue placeholder="All Tax Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Tax Types</SelectItem>
+                <SelectItem value="0">All Tax Types</SelectItem>
                 <SelectItem value="sales">Sales Tax</SelectItem>
                 <SelectItem value="service">Service Tax</SelectItem>
                 <SelectItem value="exempt">Exempt/Zero Rate</SelectItem>
