@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { customerService, Customer } from "@/services/customerService";
+import { customerService } from "@/services/customerService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,7 @@ export const CustomerDetails = () => {
   useEffect(() => {
     const fetchCustomer = async () => {
       if (!id) return;
-      
+
       setLoading(true);
       try {
         const data = await customerService.getCustomerById(parseInt(id));
@@ -42,7 +41,7 @@ export const CustomerDetails = () => {
 
   const handleDelete = async () => {
     if (!customer) return;
-    
+
     try {
       const success = await customerService.deleteCustomer(customer.CustomerID);
       if (success) {
@@ -121,11 +120,7 @@ export const CustomerDetails = () => {
                   <AvatarImage src={customer.CustomerImage} />
                 ) : (
                   <AvatarFallback className="text-xl">
-                    {customer.CustomerType === "Individual" ? (
-                      <UserRound className="h-12 w-12" />
-                    ) : (
-                      <Building className="h-12 w-12" />
-                    )}
+                    {customer.CustomerType === "Individual" ? <UserRound className="h-12 w-12" /> : <Building className="h-12 w-12" />}
                   </AvatarFallback>
                 )}
               </Avatar>
@@ -133,9 +128,7 @@ export const CustomerDetails = () => {
             <div className="flex-1">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
                 <h2 className="text-2xl font-bold">{customer.CustomerName}</h2>
-                <Badge variant={customer.CustomerType === "Individual" ? "default" : "secondary"}>
-                  {customer.CustomerType}
-                </Badge>
+                <Badge variant={customer.CustomerType === "Individual" ? "default" : "secondary"}>{customer.CustomerType}</Badge>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -246,17 +239,13 @@ export const CustomerDetails = () => {
             </TabsContent>
             <TabsContent value="contracts" className="mt-6">
               <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
-                <p className="text-muted-foreground mb-4">
-                  This section will display contracts associated with this customer.
-                </p>
+                <p className="text-muted-foreground mb-4">This section will display contracts associated with this customer.</p>
                 <p className="text-sm text-muted-foreground">Coming soon...</p>
               </div>
             </TabsContent>
             <TabsContent value="documents" className="mt-6">
               <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
-                <p className="text-muted-foreground mb-4">
-                  This section will display documents associated with this customer.
-                </p>
+                <p className="text-muted-foreground mb-4">This section will display documents associated with this customer.</p>
                 <p className="text-sm text-muted-foreground">Coming soon...</p>
               </div>
             </TabsContent>

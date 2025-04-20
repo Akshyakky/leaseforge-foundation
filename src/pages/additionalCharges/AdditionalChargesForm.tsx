@@ -11,6 +11,7 @@ import { ArrowLeft, Loader2, Save, RotateCcw } from "lucide-react";
 import { additionalChargesService, Charge } from "@/services/additionalChargesService";
 import { additionalChargesCategoryService, ChargesCategory } from "@/services/additionalChargesCategoryService";
 import { taxService } from "@/services/taxService";
+import { currencyService } from "@/services/currencyService"; // Import the currency service
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
@@ -104,12 +105,8 @@ const AdditionalChargesForm: React.FC = () => {
         const [categoriesData, taxesData, currenciesData] = await Promise.all([
           additionalChargesCategoryService.getAllCategories(),
           taxService.getAllTaxes(),
-          // Placeholder - replace with actual currency service
-          Promise.resolve([
-            { CurrencyID: 1, CurrencyName: "INR" },
-            { CurrencyID: 2, CurrencyName: "EUR" },
-            { CurrencyID: 3, CurrencyName: "USD" },
-          ]),
+          // Use the currency service to fetch currencies from the API
+          currencyService.getCurrenciesForDropdown(),
         ]);
 
         setCategories(categoriesData);
@@ -388,31 +385,6 @@ const AdditionalChargesForm: React.FC = () => {
                         </FormItem>
                       )}
                     />
-
-                    <FormField
-                      control={form.control}
-                      name="CurrencyID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {currencies.map((currency) => (
-                                <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
-                                  {currency.CurrencyName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                 )}
 
@@ -432,6 +404,31 @@ const AdditionalChargesForm: React.FC = () => {
                     )}
                   />
                 )}
+
+                <FormField
+                  control={form.control}
+                  name="CurrencyID"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Currency</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
+                              {currency.CurrencyName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
