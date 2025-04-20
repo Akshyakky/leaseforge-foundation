@@ -4,29 +4,47 @@ import { customerService } from "@/services/customerService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, UserRound, Building, Home, Phone, Mail, CalendarDays } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, UserRound, Building, Home, Phone, Mail, CalendarDays, FileText, Link, Calendar, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
+import { Customer, CustomerContact, CustomerAttachment, CustomerType } from "@/types/customerTypes";
+import { format } from "date-fns";
 
 export const CustomerDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [contacts, setContacts] = useState<CustomerContact[]>([]);
+  const [attachments, setAttachments] = useState<CustomerAttachment[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
-    const fetchCustomer = async () => {
+    const fetchCustomerData = async () => {
       if (!id) return;
 
       setLoading(true);
       try {
+        // Fetch customer data including contacts and attachments
         const data = await customerService.getCustomerById(parseInt(id));
-        setCustomer(data);
+
+        if (data.customer) {
+          setCustomer(data.customer);
+          setContacts(data.contacts || []);
+          setAttachments(data.attachments || []);
+
+          // Fetch customer types for mapping TypeID to description
+          const typesData = await customerService.getCustomerTypes();
+          setCustomerTypes(typesData);
+        } else {
+          setError("Customer not found");
+          toast.error("Customer not found");
+        }
       } catch (err) {
         console.error("Error fetching customer:", err);
         setError("Failed to load customer details");
@@ -36,17 +54,19 @@ export const CustomerDetails = () => {
       }
     };
 
-    fetchCustomer();
+    fetchCustomerData();
   }, [id]);
 
   const handleDelete = async () => {
     if (!customer) return;
 
     try {
-      const success = await customerService.deleteCustomer(customer.CustomerID);
-      if (success) {
-        toast.success("Customer deleted successfully");
+      const result = await customerService.deleteCustomer(customer.CustomerID);
+      if (result.success) {
+        toast.success(result.message || "Customer deleted successfully");
         navigate("/customers");
+      } else {
+        toast.error(result.message || "Failed to delete customer");
       }
     } catch (err) {
       console.error("Error deleting customer:", err);
@@ -84,9 +104,16 @@ export const CustomerDetails = () => {
   }
 
   // Format date for display
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | Date) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString();
+    return format(new Date(dateString), "PPP");
+  };
+
+  // Get customer type name based on TypeID
+  const getCustomerTypeName = (typeId?: number) => {
+    if (!typeId) return "N/A";
+    const type = customerTypes.find((t) => t.TypeID === typeId);
+    return type ? type.Description : "Unknown";
   };
 
   return (
@@ -116,33 +143,33 @@ export const CustomerDetails = () => {
           <div className="flex flex-col md:flex-row gap-6 mb-6">
             <div className="flex items-center justify-center md:justify-start">
               <Avatar className="h-24 w-24">
-                {customer.CustomerImage ? (
-                  <AvatarImage src={customer.CustomerImage} />
-                ) : (
-                  <AvatarFallback className="text-xl">
-                    {customer.CustomerType === "Individual" ? <UserRound className="h-12 w-12" /> : <Building className="h-12 w-12" />}
-                  </AvatarFallback>
-                )}
+                <AvatarFallback className="text-xl">{customer.TypeID === 1 ? <UserRound className="h-12 w-12" /> : <Building className="h-12 w-12" />}</AvatarFallback>
               </Avatar>
             </div>
             <div className="flex-1">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
-                <h2 className="text-2xl font-bold">{customer.CustomerName}</h2>
-                <Badge variant={customer.CustomerType === "Individual" ? "default" : "secondary"}>{customer.CustomerType}</Badge>
+                <h2 className="text-2xl font-bold">{customer.CustomerFullName}</h2>
+                <Badge variant={customer.TypeID === 1 ? "default" : "secondary"}>{getCustomerTypeName(customer.TypeID)}</Badge>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{customer.Email || "No email provided"}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{customer.ContactNo || "No phone number provided"}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>{customer.Address || "No address provided"}</span>
-                </div>
+                {contacts.length > 0 && contacts[0].EmailID && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span>{contacts[0].EmailID}</span>
+                  </div>
+                )}
+                {contacts.length > 0 && contacts[0].ContactNo && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{contacts[0].ContactNo}</span>
+                  </div>
+                )}
+                {customer.Address && (
+                  <div className="flex items-center gap-2">
+                    <Home className="h-4 w-4 text-muted-foreground" />
+                    <span>{customer.Address}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-muted-foreground" />
                   <span>Customer since: {formatDate(customer.CreatedOn)}</span>
@@ -156,8 +183,8 @@ export const CustomerDetails = () => {
           <Tabs defaultValue="details">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="details">Basic Details</TabsTrigger>
-              <TabsTrigger value="contracts">Contracts</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="contacts">Contacts ({contacts.length})</TabsTrigger>
+              <TabsTrigger value="documents">Documents ({attachments.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -169,30 +196,54 @@ export const CustomerDetails = () => {
                       <span>{customer.CustomerID}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Customer Name:</span>
-                      <span>{customer.CustomerName}</span>
+                      <span className="text-sm font-medium text-muted-foreground">Customer Number:</span>
+                      <span>{customer.CustomerNo || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Full Name:</span>
+                      <span>{customer.CustomerFullName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">First Name:</span>
+                      <span>{customer.FirstName || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Last Name:</span>
+                      <span>{customer.LastName || "—"}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <span className="text-sm font-medium text-muted-foreground">Customer Type:</span>
-                      <span>{customer.CustomerType}</span>
+                      <span>{getCustomerTypeName(customer.TypeID)}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Email:</span>
-                      <span>{customer.Email || "—"}</span>
+                      <span className="text-sm font-medium text-muted-foreground">Gender:</span>
+                      <span>{customer.Gender || "—"}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Contact No:</span>
-                      <span>{customer.ContactNo || "—"}</span>
+                      <span className="text-sm font-medium text-muted-foreground">Birth Date:</span>
+                      <span>{customer.BirthDate ? formatDate(customer.BirthDate) : "—"}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Company:</span>
-                      <span>{customer.CompanyName || "—"}</span>
+                      <span className="text-sm font-medium text-muted-foreground">Identity Number:</span>
+                      <span>{customer.CustomerIdentityNo || "—"}</span>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Audit Information</h3>
+                  <h3 className="text-lg font-semibold">Account Information</h3>
                   <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Account Code:</span>
+                      <span>{customer.AccountCode || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Account Name:</span>
+                      <span>{customer.AccountName || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Tax Registration No:</span>
+                      <span>{customer.TaxRegNo || "—"}</span>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <span className="text-sm font-medium text-muted-foreground">Created By:</span>
                       <span>{customer.CreatedBy || "—"}</span>
@@ -213,10 +264,10 @@ export const CustomerDetails = () => {
                 </div>
               </div>
 
-              {customer.Remarks && (
+              {customer.Remark && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-2">Remarks</h3>
-                  <p className="p-4 bg-gray-50 rounded-md">{customer.Remarks}</p>
+                  <p className="p-4 bg-gray-50 rounded-md">{customer.Remark}</p>
                 </div>
               )}
 
@@ -224,30 +275,126 @@ export const CustomerDetails = () => {
                 <h3 className="text-lg font-semibold mb-2">Address Information</h3>
                 <div className="p-4 bg-gray-50 rounded-md">
                   <p>{customer.Address || "No address information provided"}</p>
-                  {customer.City && (
+                  {customer.CityName && (
                     <div className="mt-2">
-                      <span className="font-medium">City:</span> {customer.City}
+                      <span className="font-medium">City:</span> {customer.CityName}
                     </div>
                   )}
-                  {customer.Country && (
+                  {customer.CountryName && (
                     <div>
-                      <span className="font-medium">Country:</span> {customer.Country}
+                      <span className="font-medium">Country:</span> {customer.CountryName}
                     </div>
                   )}
                 </div>
               </div>
             </TabsContent>
-            <TabsContent value="contracts" className="mt-6">
-              <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
-                <p className="text-muted-foreground mb-4">This section will display contracts associated with this customer.</p>
-                <p className="text-sm text-muted-foreground">Coming soon...</p>
-              </div>
+            <TabsContent value="contacts" className="mt-6">
+              {contacts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <p className="text-muted-foreground mb-4">No contacts associated with this customer.</p>
+                  <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Contact
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {contacts.map((contact) => (
+                    <Card key={contact.CustomerContactID}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <span className="font-medium">{contact.ContactName}</span>
+                              {contact.ContactTypeName && <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-100">{contact.ContactTypeName}</Badge>}
+                            </div>
+                            <div className="text-sm space-y-1">
+                              {contact.EmailID && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Mail className="h-3.5 w-3.5 mr-1.5" />
+                                  {contact.EmailID}
+                                </div>
+                              )}
+                              {contact.ContactNo && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Phone className="h-3.5 w-3.5 mr-1.5" />
+                                  {contact.ContactNo}
+                                </div>
+                              )}
+                              {(contact.Address || contact.CityName || contact.CountryName) && (
+                                <div className="flex items-start text-muted-foreground">
+                                  <Home className="h-3.5 w-3.5 mr-1.5 mt-0.5" />
+                                  <div>
+                                    {contact.Address && <div>{contact.Address}</div>}
+                                    {(contact.CityName || contact.CountryName) && (
+                                      <div>
+                                        {contact.CityName && contact.CityName}
+                                        {contact.CityName && contact.CountryName && ", "}
+                                        {contact.CountryName && contact.CountryName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
             <TabsContent value="documents" className="mt-6">
-              <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
-                <p className="text-muted-foreground mb-4">This section will display documents associated with this customer.</p>
-                <p className="text-sm text-muted-foreground">Coming soon...</p>
-              </div>
+              {attachments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <p className="text-muted-foreground mb-4">No documents associated with this customer.</p>
+                  <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Document
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {attachments.map((attachment) => (
+                    <Card key={attachment.CustomerAttachmentID}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <span className="font-medium">{attachment.DocumentName}</span>
+                              {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                            </div>
+                            <div className="text-sm space-y-1">
+                              {attachment.DocIssueDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Issue date: {formatDate(attachment.DocIssueDate)}
+                                </div>
+                              )}
+                              {attachment.DocExpiryDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Expiry date: {formatDate(attachment.DocExpiryDate)}
+                                </div>
+                              )}
+                              {attachment.Remark && <div className="text-muted-foreground mt-1">{attachment.Remark}</div>}
+                              {attachment.fileUrl && (
+                                <div className="flex items-center mt-2">
+                                  <Link className="h-3.5 w-3.5 mr-1.5" />
+                                  <a href={attachment.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                    View Document
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -258,7 +405,7 @@ export const CustomerDetails = () => {
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDelete}
         title="Delete Customer"
-        description={`Are you sure you want to delete ${customer.CustomerName}? This action cannot be undone and will remove all data associated with this customer.`}
+        description={`Are you sure you want to delete ${customer.CustomerFullName}? This action cannot be undone and will remove all data associated with this customer.`}
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
