@@ -10,22 +10,26 @@ export interface DatePickerProps {
   value?: Date;
   onChange?: (date?: Date) => void;
   placeholder?: string;
-  disabled?: boolean;
+  disabled?: boolean | ((date: Date) => boolean);
   className?: string;
   format?: string;
 }
 
 export function DatePicker({ value, onChange, placeholder = "Select date", disabled = false, className, format: dateFormat = "PPP" }: DatePickerProps) {
+  // Handle the different types of disabled
+  const buttonDisabled = typeof disabled === "boolean" ? disabled : false;
+  const dateDisabled = typeof disabled === "function" ? disabled : undefined;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !value && "text-muted-foreground", className)} disabled={disabled}>
+        <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !value && "text-muted-foreground", className)} disabled={buttonDisabled}>
           <CalendarIcon className="mr-2 h-4 w-4" />
           {value ? format(value, dateFormat) : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar mode="single" selected={value} onSelect={onChange} initialFocus className={cn("p-3 pointer-events-auto")} />
+        <Calendar mode="single" selected={value} onSelect={onChange} disabled={dateDisabled} initialFocus className="p-3" />
       </PopoverContent>
     </Popover>
   );
