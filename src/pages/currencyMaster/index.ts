@@ -1,9 +1,4 @@
-
-import CurrencyList from "./CurrencyList";
-import CurrencyForm from "./CurrencyForm";
-import CurrencyDetails from "./CurrencyDetails";
-
-export { CurrencyList, CurrencyForm, CurrencyDetails };
-
-// Default export for lazy loading
-export default CurrencyList;
+// src/pages/currencyMaster/index.ts
+export { default as CurrencyList } from "./CurrencyList";
+export { default as CurrencyForm } from "./CurrencyForm";
+export { default as CurrencyDetails } from "./CurrencyDetails";

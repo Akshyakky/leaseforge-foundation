@@ -43,7 +43,12 @@ export interface FieldProps<TFieldValues extends FieldValues = FieldValues, TNam
   fileConfig?: FileUploadConfig;
   dateConfig?: DatePickerConfig;
   render?: (props: { field: any; fieldState: any }) => React.ReactNode;
-  onChange?: (value: string) => void; // Added onChange prop
+  onChange?: (value: string) => void;
+  // Add HTML input attributes for validation and constraints
+  step?: string;
+  min?: string | number;
+  max?: string | number;
+  maxLength?: number;
 }
 
 export function FormField<TFieldValues extends FieldValues = FieldValues, TName extends Path<TFieldValues> = Path<TFieldValues>>({
@@ -62,6 +67,10 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
   dateConfig,
   render,
   onChange,
+  step,
+  min,
+  max,
+  maxLength,
   form,
 }: FieldProps<TFieldValues, TName> & { form: UseFormReturn<TFieldValues> }) {
   const { t } = useTranslation();
@@ -84,7 +93,7 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
           ) : (
             <FormControl>
               {type === "textarea" ? (
-                <Textarea {...field} placeholder={placeholder} disabled={disabled} className={fieldState.error ? "border-destructive" : ""} />
+                <Textarea {...field} placeholder={placeholder} disabled={disabled} className={fieldState.error ? "border-destructive" : ""} maxLength={maxLength} />
               ) : type === "select" && options ? (
                 <Select
                   disabled={disabled}
@@ -144,7 +153,18 @@ export function FormField<TFieldValues extends FieldValues = FieldValues, TName 
                   className={fieldState.error ? "border-destructive" : ""}
                 />
               ) : (
-                <Input {...field} type={type} placeholder={placeholder} autoComplete={autoComplete} disabled={disabled} className={fieldState.error ? "border-destructive" : ""} />
+                <Input
+                  {...field}
+                  type={type}
+                  placeholder={placeholder}
+                  autoComplete={autoComplete}
+                  disabled={disabled}
+                  className={fieldState.error ? "border-destructive" : ""}
+                  step={step}
+                  min={min}
+                  max={max}
+                  maxLength={maxLength}
+                />
               )}
             </FormControl>
           )}

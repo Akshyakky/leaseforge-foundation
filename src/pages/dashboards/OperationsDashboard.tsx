@@ -1,68 +1,44 @@
-
-import React from 'react';
-import { 
-  Truck,
-  Package,
-  FileText,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  UserCheck,
-  FileWarning
-} from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line
-} from 'recharts';
-import { DashboardCard } from '@/components/data-display/DashboardCard';
+import React from "react";
+import { Truck, Package, FileText, AlertCircle, CheckCircle, Clock, UserCheck, FileWarning } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import { DashboardCard } from "@/components/data-display/DashboardCard";
 
 // Sample data for operations
 const deliveryStatusData = [
-  { name: 'Delivered', value: 65 },
-  { name: 'In Transit', value: 25 },
-  { name: 'Processing', value: 8 },
-  { name: 'Delayed', value: 2 },
+  { name: "Delivered", value: 65 },
+  { name: "In Transit", value: 25 },
+  { name: "Processing", value: 8 },
+  { name: "Delayed", value: 2 },
 ];
 
 const inventoryData = [
-  { category: 'Electronics', stock: 240, capacity: 300 },
-  { category: 'Clothing', stock: 180, capacity: 250 },
-  { category: 'Home Goods', stock: 120, capacity: 200 },
-  { category: 'Books', stock: 90, capacity: 150 },
-  { category: 'Sports', stock: 60, capacity: 100 },
+  { category: "Electronics", stock: 240, capacity: 300 },
+  { category: "Clothing", stock: 180, capacity: 250 },
+  { category: "Home Goods", stock: 120, capacity: 200 },
+  { category: "Books", stock: 90, capacity: 150 },
+  { category: "Sports", stock: 60, capacity: 100 },
 ];
 
 const issuesByDepartment = [
-  { name: 'Warehouse', critical: 3, medium: 7, minor: 12 },
-  { name: 'Logistics', critical: 2, medium: 5, minor: 10 },
-  { name: 'Support', critical: 5, medium: 11, minor: 8 },
-  { name: 'Procurement', critical: 1, medium: 4, minor: 9 },
+  { name: "Warehouse", critical: 3, medium: 7, minor: 12 },
+  { name: "Logistics", critical: 2, medium: 5, minor: 10 },
+  { name: "Support", critical: 5, medium: 11, minor: 8 },
+  { name: "Procurement", critical: 1, medium: 4, minor: 9 },
 ];
 
 const deliveryTimeData = [
-  { day: 'Mon', time: 28 },
-  { day: 'Tue', time: 24 },
-  { day: 'Wed', time: 32 },
-  { day: 'Thu', time: 26 },
-  { day: 'Fri', time: 22 },
-  { day: 'Sat', time: 30 },
-  { day: 'Sun', time: 34 },
+  { day: "Mon", time: 28 },
+  { day: "Tue", time: 24 },
+  { day: "Wed", time: 32 },
+  { day: "Thu", time: 26 },
+  { day: "Fri", time: 22 },
+  { day: "Sat", time: 30 },
+  { day: "Sun", time: 34 },
 ];
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
 const OperationsDashboard = () => {
   return (
@@ -73,35 +49,33 @@ const OperationsDashboard = () => {
           <Button variant="outline" size="sm">
             Last Week
           </Button>
-          <Button size="sm">
-            Refresh Data
-          </Button>
+          <Button size="sm">Refresh Data</Button>
         </div>
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <DashboardCard 
+        <DashboardCard
           title="Orders Processing"
           value="142"
           subtitle="In queue"
           trend={{ value: 5, positive: false, label: "more than yesterday" }}
           icon={<FileText className="h-4 w-4 text-blue-500" />}
         />
-        <DashboardCard 
+        <DashboardCard
           title="On-Time Delivery"
           value="94.7%"
           subtitle="Current rate"
           trend={{ value: 1.2, positive: true, label: "vs target" }}
           icon={<Truck className="h-4 w-4 text-emerald-500" />}
         />
-        <DashboardCard 
+        <DashboardCard
           title="Inventory Alerts"
           value="7"
           subtitle="Low stock items"
           trend={{ value: 3, positive: false, label: "new alerts" }}
           icon={<AlertCircle className="h-4 w-4 text-amber-500" />}
         />
-        <DashboardCard 
+        <DashboardCard
           title="Active Issues"
           value="23"
           subtitle="Requiring attention"
@@ -114,17 +88,12 @@ const OperationsDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Inventory Capacity</CardTitle>
-            <CardDescription>
-              Current stock levels by category
-            </CardDescription>
+            <CardDescription>Current stock levels by category</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={inventoryData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
+                <BarChart data={inventoryData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" />
                   <YAxis />
@@ -141,9 +110,7 @@ const OperationsDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Order Status</CardTitle>
-            <CardDescription>
-              Current delivery status breakdown
-            </CardDescription>
+            <CardDescription>Current delivery status breakdown</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
@@ -175,17 +142,12 @@ const OperationsDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Issues by Department</CardTitle>
-            <CardDescription>
-              Open issues categorized by severity
-            </CardDescription>
+            <CardDescription>Open issues categorized by severity</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={issuesByDepartment}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
+                <BarChart data={issuesByDepartment} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
@@ -203,21 +165,16 @@ const OperationsDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Average Delivery Time</CardTitle>
-            <CardDescription>
-              Hours from order to delivery by day
-            </CardDescription>
+            <CardDescription>Hours from order to delivery by day</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={deliveryTimeData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
+                <LineChart data={deliveryTimeData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`${value} hours`, 'Avg. Delivery Time']} />
+                  <Tooltip formatter={(value) => [`${value} hours`, "Avg. Delivery Time"]} />
                   <Line type="monotone" dataKey="time" stroke="#8884d8" activeDot={{ r: 8 }} />
                 </LineChart>
               </ResponsiveContainer>

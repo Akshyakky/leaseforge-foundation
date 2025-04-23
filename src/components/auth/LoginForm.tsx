@@ -59,7 +59,7 @@ const LoginForm = () => {
   return (
     <div className="w-full max-w-md mx-auto p-6 space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-semibold">Welcome to LeaseERP</h1>
+        <h1 className="text-2xl font-semibold">Welcome to MasterERP</h1>
         <p className="text-muted-foreground">Enter your credentials to access your account</p>
       </div>
 

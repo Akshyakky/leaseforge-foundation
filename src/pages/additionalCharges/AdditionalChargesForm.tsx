@@ -11,6 +11,7 @@ import { ArrowLeft, Loader2, Save, RotateCcw } from "lucide-react";
 import { additionalChargesService, Charge } from "@/services/additionalChargesService";
 import { additionalChargesCategoryService, ChargesCategory } from "@/services/additionalChargesCategoryService";
 import { taxService } from "@/services/taxService";
+import { currencyService } from "@/services/currencyService"; // Import the currency service
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
@@ -19,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { DatePicker } from "@/components/ui/date-picker";
+import { FormField as CustomFormField } from "@/components/forms/FormField";
 
 // Create the schema for charge form validation
 const chargeSchema = z.object({
@@ -102,12 +105,8 @@ const AdditionalChargesForm: React.FC = () => {
         const [categoriesData, taxesData, currenciesData] = await Promise.all([
           additionalChargesCategoryService.getAllCategories(),
           taxService.getAllTaxes(),
-          // Placeholder - replace with actual currency service
-          Promise.resolve([
-            { CurrencyID: 1, CurrencyName: "USD" },
-            { CurrencyID: 2, CurrencyName: "EUR" },
-            { CurrencyID: 3, CurrencyName: "GBP" },
-          ]),
+          // Use the currency service to fetch currencies from the API
+          currencyService.getCurrenciesForDropdown(),
         ]);
 
         setCategories(categoriesData);
@@ -386,31 +385,6 @@ const AdditionalChargesForm: React.FC = () => {
                         </FormItem>
                       )}
                     />
-
-                    <FormField
-                      control={form.control}
-                      name="CurrencyID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {currencies.map((currency) => (
-                                <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
-                                  {currency.CurrencyName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                 )}
 
@@ -430,6 +404,31 @@ const AdditionalChargesForm: React.FC = () => {
                     )}
                   />
                 )}
+
+                <FormField
+                  control={form.control}
+                  name="CurrencyID"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Currency</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
+                              {currency.CurrencyName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
@@ -461,45 +460,18 @@ const AdditionalChargesForm: React.FC = () => {
                 <Separator />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
+                  {/* Date picker using CustomFormField - UPDATED */}
+                  <CustomFormField
+                    form={form}
                     name="EffectiveFromDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Effective From Date</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                            value={field.value ? field.value.toISOString().split("T")[0] : ""}
-                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          />
-                        </FormControl>
-                        <FormDescription>When this charge becomes effective</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Effective From Date"
+                    type="date"
+                    placeholder="Select start date"
+                    description="When this charge becomes effective"
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="ExpiryDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Expiry Date</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            {...field}
-                            value={field.value ? field.value.toISOString().split("T")[0] : ""}
-                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          />
-                        </FormControl>
-                        <FormDescription>When this charge expires (optional)</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Date picker using CustomFormField - UPDATED */}
+                  <CustomFormField form={form} name="ExpiryDate" label="Expiry Date" type="date" placeholder="Select end date" description="When this charge expires (optional)" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

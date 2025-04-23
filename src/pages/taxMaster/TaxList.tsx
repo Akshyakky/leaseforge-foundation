@@ -3,20 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, MoreHorizontal, Search, PlusCircle, Edit, Trash2, Eye } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, MoreHorizontal, Search, Plus, Percent, Calendar, MapPin } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { taxService, Tax } from "@/services/taxService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
 import { toast } from "sonner";
-import { useTranslation } from "react-i18next";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDate } from "@/lib/utils";
+import { countryService } from "@/services/countryService";
 
-const TaxList = () => {
-  const { t } = useTranslation();
+const TaxList: React.FC = () => {
   const navigate = useNavigate();
 
   // State variables
@@ -25,34 +24,38 @@ const TaxList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTax, setSelectedTax] = useState<Tax | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [countries, setCountries] = useState<{ CountryID: number; CountryName: string }[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
 
-  // Derived values
-  const uniqueCategories = Array.from(new Set(taxes.map((tax) => tax.TaxCategory).filter(Boolean) as string[]));
+  // Filter states
+  const [countries, setCountries] = useState<any[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState<string>("");
+  const [selectedTaxType, setSelectedTaxType] = useState<string>("");
 
-  // Fetch taxes on component mount
+  // Fetch taxes and countries on component mount
   useEffect(() => {
     fetchTaxes();
     fetchCountries();
   }, []);
 
   // Fetch all taxes
-  const fetchTaxes = async (search?: string, params?: any) => {
+  const fetchTaxes = async (search?: string, countryId?: number, taxType?: string) => {
     try {
       setLoading(true);
-      let taxData: Tax[];
+      let taxesData: Tax[];
 
-      if (search || (params && Object.keys(params).length > 0)) {
-        // If search term or filter is provided, use search endpoint
-        taxData = await taxService.searchTaxes(search || "", params?.countryId);
-      } else {
-        // Otherwise fetch all taxes
-        taxData = await taxService.getAllTaxes();
+      // Apply all filters
+      taxesData = await taxService.searchTaxes(search || "", countryId);
+
+      // Additional client-side filtering for tax type if specified
+      if (taxType) {
+        taxesData = taxesData.filter((tax) => {
+          if (taxType === "sales") return tax.IsSalesTax;
+          if (taxType === "service") return tax.IsServiceTax;
+          if (taxType === "exempt") return tax.IsExemptOrZero;
+          return true;
+        });
       }
 
-      setTaxes(taxData);
+      setTaxes(taxesData);
     } catch (error) {
       console.error("Error fetching taxes:", error);
       toast.error("Failed to load taxes");
@@ -61,12 +64,11 @@ const TaxList = () => {
     }
   };
 
-  // Fetch countries for filtering
+  // Fetch countries for filter
   const fetchCountries = async () => {
     try {
-      // This is a placeholder. You'll need to implement a countryService or get this data from another service
-      // For now, we'll use an empty array
-      setCountries([]);
+      const countriesData = await countryService.getCountriesForDropdown();
+      setCountries(countriesData);
     } catch (error) {
       console.error("Error fetching countries:", error);
     }
@@ -75,9 +77,7 @@ const TaxList = () => {
   // Debounced search function
   const debouncedSearch = debounce((value: string) => {
     if (value.length >= 2 || value === "") {
-      fetchTaxes(value, {
-        countryId: selectedCountry ? parseInt(selectedCountry) : undefined,
-      });
+      fetchTaxes(value, selectedCountryId ? parseInt(selectedCountryId) : undefined, selectedTaxType);
     }
   }, 500);
 
@@ -88,26 +88,16 @@ const TaxList = () => {
     debouncedSearch(value);
   };
 
-  // Handle category filter change
-  const handleCategoryChange = (value: string) => {
-    setSelectedCategory(value);
-    // Filter taxes client-side by category
-    if (value) {
-      setTaxes(taxes.filter((tax) => tax.TaxCategory === value));
-    } else {
-      // If no category selected, fetch all taxes again
-      fetchTaxes(searchTerm, {
-        countryId: selectedCountry ? parseInt(selectedCountry) : undefined,
-      });
-    }
-  };
-
   // Handle country filter change
   const handleCountryChange = (value: string) => {
-    setSelectedCountry(value);
-    fetchTaxes(searchTerm, {
-      countryId: value ? parseInt(value) : undefined,
-    });
+    setSelectedCountryId(value);
+    fetchTaxes(searchTerm, value ? parseInt(value) : undefined, selectedTaxType);
+  };
+
+  // Handle tax type filter change
+  const handleTaxTypeChange = (value: string) => {
+    setSelectedTaxType(value);
+    fetchTaxes(searchTerm, selectedCountryId ? parseInt(selectedCountryId) : undefined, value);
   };
 
   // Navigation handlers
@@ -154,90 +144,63 @@ const TaxList = () => {
     }
   };
 
-  // Render tax type badge
-  const renderTaxBadge = (tax: Tax) => {
-    // Different badge styles based on tax type
-    if (tax.IsExemptOrZero) {
-      return (
-        <Badge variant="outline" className="bg-gray-50 text-gray-700">
-          Exempt
-        </Badge>
-      );
-    } else if (tax.IsSalesTax) {
-      return (
-        <Badge variant="outline" className="bg-blue-50 text-blue-700">
-          Sales
-        </Badge>
-      );
-    } else if (tax.IsServiceTax) {
-      return (
-        <Badge variant="outline" className="bg-purple-50 text-purple-700">
-          Service
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-          Other
-        </Badge>
-      );
+  // Format date for display
+  const formatDate = (date?: string | Date) => {
+    if (!date) return "N/A";
+    try {
+      return format(new Date(date), "dd MMM yyyy");
+    } catch (error) {
+      return "Invalid date";
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Tax Management</h1>
+        <h1 className="text-2xl font-semibold">Taxes</h1>
         <Button onClick={handleAddTax}>
-          <PlusCircle className="mr-2 h-4 w-4" />
+          <Plus className="mr-2 h-4 w-4" />
           Add Tax
         </Button>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Taxes</CardTitle>
-          <CardDescription>Manage tax rates, categories, and rules</CardDescription>
+          <CardTitle>Tax Management</CardTitle>
+          <CardDescription>Manage tax rates, categories, and configurations</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-between items-center mb-6 gap-4">
+          <div className="flex flex-wrap items-center gap-4 mb-6">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input type="text" placeholder="Search taxes..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
-            <div className="flex items-center space-x-2">
-              {uniqueCategories.length > 0 && (
-                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">All Categories</SelectItem>
-                    {uniqueCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
 
-              {countries.length > 0 && (
-                <Select value={selectedCountry} onValueChange={handleCountryChange}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">All Countries</SelectItem>
-                    {countries.map((country) => (
-                      <SelectItem key={country.CountryID} value={country.CountryID.toString()}>
-                        {country.CountryName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+            <Select value={selectedCountryId} onValueChange={handleCountryChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Countries" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">All Countries</SelectItem>
+                {countries.map((country) => (
+                  <SelectItem key={country.CountryID} value={country.CountryID.toString()}>
+                    {country.CountryName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedTaxType} onValueChange={handleTaxTypeChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Tax Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">All Tax Types</SelectItem>
+                <SelectItem value="sales">Sales Tax</SelectItem>
+                <SelectItem value="service">Service Tax</SelectItem>
+                <SelectItem value="exempt">Exempt/Zero Rate</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {loading ? (
@@ -246,68 +209,85 @@ const TaxList = () => {
             </div>
           ) : taxes.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
-              {searchTerm || selectedCategory || selectedCountry ? "No taxes found matching your criteria." : "No taxes found. Click 'Add Tax' to create your first tax record."}
+              {searchTerm || selectedCountryId || selectedTaxType ? "No taxes found matching your criteria." : "No taxes found."}
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Tax Code</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Rate (%)</TableHead>
+                    <TableHead className="w-[120px]">Tax Code</TableHead>
+                    <TableHead>Tax Name</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Effective Period</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Effective From</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {taxes.map((tax) => (
-                    <TableRow key={tax.TaxID} className="cursor-pointer hover:bg-muted/50" onClick={() => handleViewTax(tax.TaxID)}>
+                    <TableRow key={tax.TaxID}>
                       <TableCell className="font-medium">{tax.TaxCode}</TableCell>
-                      <TableCell>{tax.TaxName}</TableCell>
-                      <TableCell>{tax.TaxRate}%</TableCell>
-                      <TableCell>{tax.TaxCategory || "-"}</TableCell>
-                      <TableCell>{renderTaxBadge(tax)}</TableCell>
-                      <TableCell>{tax.EffectiveFromDate ? formatDate(new Date(tax.EffectiveFromDate)) : "-"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Percent className="h-4 w-4 mr-2 text-muted-foreground" />
+                          {tax.TaxName}
+                        </div>
+                      </TableCell>
+                      <TableCell>{tax.TaxCategory || "General"}</TableCell>
+                      <TableCell className="text-right font-medium">{tax.IsExemptOrZero ? <Badge variant="outline">Exempt</Badge> : `${tax.TaxRate.toFixed(2)}%`}</TableCell>
+                      <TableCell>
+                        {tax.CountryName ? (
+                          <div className="flex items-center">
+                            <MapPin className="h-3 w-3 mr-1 text-muted-foreground" />
+                            {tax.CountryName}
+                          </div>
+                        ) : (
+                          "Global"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col space-y-1">
+                          <div className="text-xs flex items-center">
+                            <Calendar className="h-3 w-3 mr-1 text-muted-foreground" />
+                            From: {formatDate(tax.EffectiveFromDate)}
+                          </div>
+                          {tax.ExpiryDate && (
+                            <div className="text-xs flex items-center">
+                              <Calendar className="h-3 w-3 mr-1 text-muted-foreground" />
+                              To: {formatDate(tax.ExpiryDate)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {tax.IsSalesTax && (
+                            <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">
+                              Sales
+                            </Badge>
+                          )}
+                          {tax.IsServiceTax && (
+                            <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                              Service
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewTax(tax.TaxID);
-                              }}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditTax(tax.TaxID);
-                              }}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewTax(tax.TaxID)}>View details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditTax(tax.TaxID)}>Edit</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDeleteDialog(tax);
-                              }}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
+                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(tax)}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -322,13 +302,17 @@ const TaxList = () => {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={closeDeleteDialog}
         onConfirm={handleDeleteTax}
         title="Delete Tax"
-        description={`Are you sure you want to delete '${selectedTax?.TaxName}'? This action cannot be undone.`}
+        description={
+          selectedTax
+            ? `Are you sure you want to delete "${selectedTax.TaxName} (${selectedTax.TaxCode})"? This will also delete all associated data and cannot be undone.`
+            : "Are you sure you want to delete this tax?"
+        }
+        cancelText="Cancel"
         confirmText="Delete"
         type="danger"
       />

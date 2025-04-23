@@ -1,50 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { customerService } from "@/services/customerService";
-import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Edit2, Trash2, UserCog, FileText, Phone, Mail, MapPin, Calendar, CreditCard, ClipboardList, AlertTriangle, Plus, Eye, Download } from "lucide-react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Edit, Trash2, UserRound, Building, Home, Phone, Mail, CalendarDays, FileText, Link, Calendar, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Form } from "@/components/ui/form";
-import { FormField } from "@/components/forms/FormField";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { contactTypeService, docTypeService } from "@/services";
+import { toast } from "sonner";
+import { Customer, CustomerContact, CustomerAttachment, CustomerType } from "@/types/customerTypes";
+import { format } from "date-fns";
 
-// Contact form schema
-const contactSchema = z.object({
-  ContactTypeID: z.string().min(1, "Contact type is required"),
-  ContactName: z.string().min(2, "Contact name is required"),
-  EmailID: z.string().email("Invalid email address").optional().or(z.literal("")),
-  CountryID: z.string().optional(),
-  CityID: z.string().optional(),
-  ContactNo: z.string().optional(),
-  Address: z.string().optional(),
-});
-
-// Attachment form schema
-const attachmentSchema = z.object({
-  DocTypeID: z.string().min(1, "Document type is required"),
-  DocumentName: z.string().min(2, "Document name is required"),
-  file: z.instanceof(File).optional(),
-  DocIssueDate: z.date().optional().nullable(),
-  DocExpiryDate: z.date().optional().nullable(),
-  Remark: z.string().optional(),
-});
-
-type ContactFormValues = z.infer<typeof contactSchema>;
-type AttachmentFormValues = z.infer<typeof attachmentSchema>;
-
-const CustomerDetails = () => {
-  const { id: customerId } = useParams<{ id: string }>();
+export const CustomerDetails = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   // State variables
@@ -52,14 +23,9 @@ const CustomerDetails = () => {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [contacts, setContacts] = useState<CustomerContact[]>([]);
   const [attachments, setAttachments] = useState<CustomerAttachment[]>([]);
-  const [customerTypes, setCustomerTypes] = useState<{ TypeID: number; Description: string }[]>([]);
-  const [contactTypes, setContactTypes] = useState<{ ContactTypeID: number; ContactTypeDescription: string }[]>([]);
-  const [docTypes, setDocTypes] = useState<{ DocTypeID: number; Description: string }[]>([]);
-  const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
-  const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
-
-  // Dialog states
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
@@ -102,93 +68,48 @@ const CustomerDetails = () => {
 
   // Fetch customer data
   useEffect(() => {
-    const fetchData = async () => {
-      if (!customerId) {
-        navigate("/customers");
-        return;
-      }
+    const fetchCustomerData = async () => {
+      if (!id) return;
 
+      setLoading(true);
       try {
-        setLoading(true);
+        // Fetch customer data including contacts and attachments
+        const data = await customerService.getCustomerById(parseInt(id));
 
-        // Fetch reference data in parallel
-        const [customerData, typesData, contactTypesData, docTypesData] = await Promise.all([
-          customerService.getCustomerById(parseInt(customerId)),
-          customerService.getCustomerTypes(),
-          contactTypeService.getAllContactTypes(),
-          docTypeService.getAllDocTypes(),
-        ]);
+        if (data.customer) {
+          setCustomer(data.customer);
+          setContacts(data.contacts || []);
+          setAttachments(data.attachments || []);
 
-        // Mock data for countries and cities - in a real app, fetch from API
-        setCountries([
-          { id: "1", name: "United States" },
-          { id: "2", name: "United Kingdom" },
-          { id: "3", name: "Canada" },
-          { id: "4", name: "Australia" },
-        ]);
-
-        setCities([
-          { id: "1", name: "New York" },
-          { id: "2", name: "London" },
-          { id: "3", name: "Toronto" },
-          { id: "4", name: "Sydney" },
-        ]);
-
-        if (customerData.customer) {
-          setCustomer(customerData.customer);
-          setContacts(customerData.contacts || []);
-          setAttachments(customerData.attachments || []);
+          // Fetch customer types for mapping TypeID to description
+          const typesData = await customerService.getCustomerTypes();
           setCustomerTypes(typesData);
-          setContactTypes(contactTypesData);
-          setDocTypes(docTypesData);
         } else {
+          setError("Customer not found");
           toast.error("Customer not found");
-          navigate("/customers");
         }
-      } catch (error) {
-        console.error("Error fetching customer:", error);
-        toast.error("Failed to load customer data");
-        navigate("/customers");
+      } catch (err) {
+        console.error("Error fetching customer:", err);
+        setError("Failed to load customer details");
+        toast.error("Failed to load customer details");
       } finally {
         setLoading(false);
       }
     };
 
-    const fetchContactAndDocTypes = async () => {
-      try {
-        const contactTypesData = await contactTypeService.getAllContactTypes();
-        const docTypesData = await docTypeService.getAllDocTypes();
+    fetchCustomerData();
+  }, [id]);
 
-        setContactTypes(contactTypesData);
-        setDocTypes(docTypesData);
-      } catch (error) {
-        console.error("Error fetching dropdown data:", error);
-      }
-    };
-
-    fetchData();
-    fetchContactAndDocTypes();
-  }, [customerId, navigate]);
-
-  // Helper to get type name
-  const getCustomerTypeName = (typeId?: number) => {
-    if (!typeId) return "Not specified";
-    const type = customerTypes.find((t) => t.TypeID === typeId);
-    return type ? type.Description : "Unknown";
-  };
-
-  // Delete customer handler
-  const handleDeleteCustomer = async () => {
+  const handleDelete = async () => {
     if (!customer) return;
 
     try {
       const result = await customerService.deleteCustomer(customer.CustomerID);
-
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || "Customer deleted successfully");
         navigate("/customers");
       } else {
-        toast.error(result.message);
+        toast.error(result.message || "Failed to delete customer");
       }
     } catch (error) {
       console.error("Error deleting customer:", error);
@@ -514,154 +435,76 @@ const CustomerDetails = () => {
     );
   }
 
-  const getBadgeColorForType = (typeId?: number) => {
-    if (!typeId) return "";
-
-    const typeName = getCustomerTypeName(typeId);
-    if (typeName === "Individual") return "bg-blue-100 text-blue-800";
-    if (typeName === "Corporate") return "bg-purple-100 text-purple-800";
-    if (typeName === "Government") return "bg-amber-100 text-amber-800";
-    return "bg-emerald-100 text-emerald-800";
+  // Format date for display
+  const formatDate = (dateString?: string | Date) => {
+    if (!dateString) return "N/A";
+    return format(new Date(dateString), "PPP");
   };
 
-  const getTimeUntilExpiry = (expiryDate?: Date | string) => {
-    if (!expiryDate) return null;
-
-    const expiry = new Date(expiryDate);
-    const today = new Date();
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return { days: Math.abs(diffDays), expired: true };
-    return { days: diffDays, expired: false };
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const handleFileUpload = (file: File) => {
-    setFileUploading(true);
-    setFileUploadError(null);
-
-    // In a real application, you would upload to your backend here
-    // For demonstration, we'll simulate a file upload
-    setTimeout(() => {
-      if (file.size > 10 * 1024 * 1024) {
-        setFileUploadError("File size exceeds 10MB limit");
-        setFileUploading(false);
-        return;
-      }
-
-      setFileUploading(false);
-      setFileUploadSuccess(true);
-
-      // Reset success status after 3 seconds
-      setTimeout(() => setFileUploadSuccess(false), 3000);
-    }, 1500);
-  };
-
-  const handleFileRemove = () => {
-    setFileUploadSuccess(false);
-    setFileUploadError(null);
+  // Get customer type name based on TypeID
+  const getCustomerTypeName = (typeId?: number) => {
+    if (!typeId) return "N/A";
+    const type = customerTypes.find((t) => t.TypeID === typeId);
+    return type ? type.Description : "Unknown";
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="icon" onClick={() => navigate("/customers")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-2xl font-semibold">{customer.CustomerFullName}</h1>
-          {customer.TypeID && <Badge className={getBadgeColorForType(customer.TypeID)}>{getCustomerTypeName(customer.TypeID)}</Badge>}
-        </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleEditCustomer}>
-            <Edit2 className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
-        </div>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="contacts">Contacts ({contacts.length})</TabsTrigger>
-          <TabsTrigger value="attachments">Attachments ({attachments.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <UserCog className="mr-2 h-5 w-5 text-muted-foreground" />
-                  Basic Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Customer Number</div>
-                    <div>{customer.CustomerNo || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Identity Number</div>
-                    <div>{customer.CustomerIdentityNo || "N/A"}</div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-muted-foreground">Full Name</div>
-                  <div>{customer.CustomerFullName}</div>
-                </div>
-
-                {(customer.FirstName || customer.LastName) && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">First Name</div>
-                      <div>{customer.FirstName || "N/A"}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">Last Name</div>
-                      <div>{customer.LastName || "N/A"}</div>
-                    </div>
+    <div className="container mx-auto p-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl">Customer Details</CardTitle>
+            <CardDescription>View and manage customer information</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate("/customers")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-6 mb-6">
+            <div className="flex items-center justify-center md:justify-start">
+              <Avatar className="h-24 w-24">
+                <AvatarFallback className="text-xl">{customer.TypeID === 1 ? <UserRound className="h-12 w-12" /> : <Building className="h-12 w-12" />}</AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="flex-1">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+                <h2 className="text-2xl font-bold">{customer.CustomerFullName}</h2>
+                <Badge variant={customer.TypeID === 1 ? "default" : "secondary"}>{getCustomerTypeName(customer.TypeID)}</Badge>
+              </div>
+              <div className="space-y-2">
+                {contacts.length > 0 && contacts[0].EmailID && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span>{contacts[0].EmailID}</span>
                   </div>
                 )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Gender</div>
-                    <div>{customer.Gender || "N/A"}</div>
+                {contacts.length > 0 && contacts[0].ContactNo && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{contacts[0].ContactNo}</span>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Birth Date</div>
-                    <div>{customer.BirthDate ? format(new Date(customer.BirthDate), "PPP") : "N/A"}</div>
+                )}
+                {customer.Address && (
+                  <div className="flex items-center gap-2">
+                    <Home className="h-4 w-4 text-muted-foreground" />
+                    <span>{customer.Address}</span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <MapPin className="mr-2 h-5 w-5 text-muted-foreground" />
-                  Location & Contact
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-muted-foreground">Address</div>
-                  <div>{customer.Address || "N/A"}</div>
+                )}
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <span>Customer since: {formatDate(customer.CreatedOn)}</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -675,64 +518,75 @@ const CustomerDetails = () => {
                   </div>
                 </div>
 
-                {/* Primary contact info if available from contacts */}
-                {contacts.length > 0 && (
-                  <>
-                    <div className="border-t pt-3">
-                      <div className="text-sm font-medium mb-2">Primary Contact Details</div>
-                      {contacts.some((c) => c.EmailID) && (
-                        <div className="flex items-center text-sm mb-2">
-                          <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                          {contacts.find((c) => c.EmailID)?.EmailID}
-                        </div>
-                      )}
-                      {contacts.some((c) => c.ContactNo) && (
-                        <div className="flex items-center text-sm">
-                          <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                          {contacts.find((c) => c.ContactNo)?.ContactNo}
-                        </div>
-                      )}
+          <Separator className="my-6" />
+
+          <Tabs defaultValue="details">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="details">Basic Details</TabsTrigger>
+              <TabsTrigger value="contacts">Contacts ({contacts.length})</TabsTrigger>
+              <TabsTrigger value="documents">Documents ({attachments.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="details" className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Personal Information</h3>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Customer ID:</span>
+                      <span>{customer.CustomerID}</span>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
-                  Tax & Account Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Tax Registration Number</div>
-                    <div>{customer.TaxRegNo || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Tax Type</div>
-                    <div>{customer.TaxID ? `ID: ${customer.TaxID}` : "N/A"}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Customer Number:</span>
+                      <span>{customer.CustomerNo || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Full Name:</span>
+                      <span>{customer.CustomerFullName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">First Name:</span>
+                      <span>{customer.FirstName || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Last Name:</span>
+                      <span>{customer.LastName || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Customer Type:</span>
+                      <span>{getCustomerTypeName(customer.TypeID)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Gender:</span>
+                      <span>{customer.Gender || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Birth Date:</span>
+                      <span>{customer.BirthDate ? formatDate(customer.BirthDate) : "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Identity Number:</span>
+                      <span>{customer.CustomerIdentityNo || "—"}</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Account Code</div>
-                    <div>{customer.AccountCode || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Account Name</div>
-                    <div>{customer.AccountName || "N/A"}</div>
-                  </div>
-                </div>
-
-                {customer.CreateGL && (
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">GL Account</div>
-                    <div>
-                      {customer.CreateGL} {customer.GLID && `(ID: ${customer.GLID})`}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Account Information</h3>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Account Code:</span>
+                      <span>{customer.AccountCode || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Account Name:</span>
+                      <span>{customer.AccountName || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Tax Registration No:</span>
+                      <span>{customer.TaxRegNo || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Created By:</span>
+                      <span>{customer.CreatedBy || "—"}</span>
                     </div>
                   </div>
                 )}
@@ -782,44 +636,67 @@ const CustomerDetails = () => {
                   Add Contact
                 </Button>
               </div>
-              <CardDescription>Manage customer contacts and communication details</CardDescription>
-            </CardHeader>
-            <CardContent>
+
+              {customer.Remark && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-2">Remarks</h3>
+                  <p className="p-4 bg-gray-50 rounded-md">{customer.Remark}</p>
+                </div>
+              )}
+
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">Address Information</h3>
+                <div className="p-4 bg-gray-50 rounded-md">
+                  <p>{customer.Address || "No address information provided"}</p>
+                  {customer.CityName && (
+                    <div className="mt-2">
+                      <span className="font-medium">City:</span> {customer.CityName}
+                    </div>
+                  )}
+                  {customer.CountryName && (
+                    <div>
+                      <span className="font-medium">Country:</span> {customer.CountryName}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="contacts" className="mt-6">
               {contacts.length === 0 ? (
-                <div className="text-center py-8 border rounded-md bg-muted/10">
-                  <p className="text-muted-foreground">No contacts added yet</p>
-                  <Button variant="outline" className="mt-4" onClick={() => openContactDialog()}>
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <p className="text-muted-foreground mb-4">No contacts associated with this customer.</p>
+                  <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Contact
                   </Button>
                 </div>
               ) : (
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-4">
-                    {contacts.map((contact) => (
-                      <Card key={contact.CustomerContactID}>
-                        <CardContent className="p-4">
-                          <div className="flex justify-between">
-                            <div className="space-y-2">
-                              <div className="flex items-center">
-                                <span className="font-medium text-lg">{contact.ContactName}</span>
-                                {contact.ContactTypeName && <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-100">{contact.ContactTypeName}</Badge>}
-                              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {contacts.map((contact) => (
+                    <Card key={contact.CustomerContactID}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <span className="font-medium">{contact.ContactName}</span>
+                              {contact.ContactTypeName && <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-100">{contact.ContactTypeName}</Badge>}
+                            </div>
+                            <div className="text-sm space-y-1">
                               {contact.EmailID && (
-                                <div className="flex items-center text-sm text-muted-foreground">
-                                  <Mail className="h-4 w-4 mr-1.5" />
+                                <div className="flex items-center text-muted-foreground">
+                                  <Mail className="h-3.5 w-3.5 mr-1.5" />
                                   {contact.EmailID}
                                 </div>
                               )}
                               {contact.ContactNo && (
-                                <div className="flex items-center text-sm text-muted-foreground">
-                                  <Phone className="h-4 w-4 mr-1.5" />
+                                <div className="flex items-center text-muted-foreground">
+                                  <Phone className="h-3.5 w-3.5 mr-1.5" />
                                   {contact.ContactNo}
                                 </div>
                               )}
-                              {(contact.CityName || contact.CountryName || contact.Address) && (
-                                <div className="flex items-start text-sm text-muted-foreground">
-                                  <MapPin className="h-4 w-4 mr-1.5 mt-0.5" />
+                              {(contact.Address || contact.CityName || contact.CountryName) && (
+                                <div className="flex items-start text-muted-foreground">
+                                  <Home className="h-3.5 w-3.5 mr-1.5 mt-0.5" />
                                   <div>
                                     {contact.Address && <div>{contact.Address}</div>}
                                     {(contact.CityName || contact.CountryName) && (
@@ -833,127 +710,68 @@ const CustomerDetails = () => {
                                 </div>
                               )}
                             </div>
-                            <div className="flex space-x-2">
-                              <Button variant="ghost" size="icon" onClick={() => openContactDialog(contact)}>
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="text-red-500" onClick={() => openDeleteContactDialog(contact.CustomerContactID)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="attachments">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Attachments</CardTitle>
-                <Button onClick={() => openAttachmentDialog()}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Attachment
-                </Button>
-              </div>
-              <CardDescription>Manage customer documents and files</CardDescription>
-            </CardHeader>
-            <CardContent>
+            </TabsContent>
+            <TabsContent value="documents" className="mt-6">
               {attachments.length === 0 ? (
-                <div className="text-center py-8 border rounded-md bg-muted/10">
-                  <p className="text-muted-foreground">No attachments added yet</p>
-                  <Button variant="outline" className="mt-4" onClick={() => openAttachmentDialog()}>
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <p className="text-muted-foreground mb-4">No documents associated with this customer.</p>
+                  <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Attachment
+                    Add Document
                   </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {attachments.map((attachment) => {
-                    const expiry = attachment.DocExpiryDate ? getTimeUntilExpiry(attachment.DocExpiryDate) : null;
-                    const hasFileContent = Boolean(attachment.FileContent);
-
-                    return (
-                      <Card key={attachment.CustomerAttachmentID}>
-                        <CardContent className="p-4">
-                          <div className="flex justify-between">
-                            <div className="space-y-2">
-                              <div className="flex items-center">
-                                <span className="font-medium">{attachment.DocumentName}</span>
-                                {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
-                              </div>
-
-                              {hasFileContent && attachment.FileSize && (
-                                <div className="text-sm text-muted-foreground flex items-center">
-                                  <FileText className="h-3.5 w-3.5 mr-1" />
-                                  {formatFileSize(attachment.FileSize)}
+                  {attachments.map((attachment) => (
+                    <Card key={attachment.CustomerAttachmentID}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <span className="font-medium">{attachment.DocumentName}</span>
+                              {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                            </div>
+                            <div className="text-sm space-y-1">
+                              {attachment.DocIssueDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Issue date: {formatDate(attachment.DocIssueDate)}
                                 </div>
                               )}
-
-                              <div className="text-sm space-y-1">
-                                {attachment.DocIssueDate && (
-                                  <div className="text-muted-foreground flex items-center">
-                                    <Calendar className="h-3.5 w-3.5 mr-1" />
-                                    Issue date: {format(new Date(attachment.DocIssueDate), "PPP")}
-                                  </div>
-                                )}
-                                {attachment.DocExpiryDate && (
-                                  <div className={`flex items-center ${expiry?.expired ? "text-red-500" : "text-muted-foreground"}`}>
-                                    <Calendar className="h-3.5 w-3.5 mr-1" />
-                                    Expiry date: {format(new Date(attachment.DocExpiryDate), "PPP")}
-                                    {expiry && (
-                                      <span className="ml-2">
-                                        {expiry.expired ? (
-                                          <Badge variant="destructive" className="text-xs">
-                                            Expired {expiry.days} days ago
-                                          </Badge>
-                                        ) : expiry.days <= 30 ? (
-                                          <Badge variant="outline" className="bg-amber-50 text-amber-800 text-xs">
-                                            Expires in {expiry.days} days
-                                          </Badge>
-                                        ) : null}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                {attachment.Remark && <div className="text-muted-foreground">{attachment.Remark}</div>}
-                              </div>
-                            </div>
-                            <div className="flex space-x-1">
-                              {hasFileContent && (
-                                <>
-                                  <Button variant="ghost" size="icon" onClick={() => handleViewAttachment(attachment)} title="View">
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleDownloadAttachment(attachment)} title="Download">
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </>
+                              {attachment.DocExpiryDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Expiry date: {formatDate(attachment.DocExpiryDate)}
+                                </div>
                               )}
-                              <Button variant="ghost" size="icon" onClick={() => openAttachmentDialog(attachment)}>
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="text-red-500" onClick={() => openDeleteAttachmentDialog(attachment.CustomerAttachmentID)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {attachment.Remark && <div className="text-muted-foreground mt-1">{attachment.Remark}</div>}
+                              {attachment.fileUrl && (
+                                <div className="flex items-center mt-2">
+                                  <Link className="h-3.5 w-3.5 mr-1.5" />
+                                  <a href={attachment.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                    View Document
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* Delete Customer Confirmation Dialog */}
       <ConfirmationDialog
@@ -961,20 +779,7 @@ const CustomerDetails = () => {
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDeleteCustomer}
         title="Delete Customer"
-        description={`Are you sure you want to delete ${customer.CustomerFullName}? This will also delete all associated contacts and attachments. This action cannot be undone.`}
-        cancelText="Cancel"
-        confirmText="Delete"
-        type="danger"
-      />
-
-      {/* Delete Contact Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={deleteContactDialogOpen}
-        onClose={closeDeleteContactDialog}
-        onConfirm={handleDeleteContact}
-        title="Delete Contact"
-        description="Are you sure you want to delete this contact? This action cannot be undone."
-        cancelText="Cancel"
+        description={`Are you sure you want to delete ${customer.CustomerFullName}? This action cannot be undone and will remove all data associated with this customer.`}
         confirmText="Delete"
         type="danger"
       />
