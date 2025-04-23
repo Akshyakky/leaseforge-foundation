@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { PlusCircle, Edit, Trash2, Eye, DollarSign, Check, Search, RefreshCw } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Eye, Check, Search, RefreshCw } from "lucide-react";
 import { currencyService, Currency } from "@/services/currencyService";
-import { DataTable } from "@/components/data-display/DataTable";
+import { DataTable, Column } from "@/components/data-display/DataTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -59,7 +58,7 @@ const CurrencyList = () => {
   // Handle currency deletion
   const handleConfirmDelete = async () => {
     if (!currencyToDelete) return;
-    
+
     try {
       const success = await currencyService.deleteCurrency(currencyToDelete.CurrencyID);
       if (success) {
@@ -73,7 +72,7 @@ const CurrencyList = () => {
   // Handle setting default currency
   const handleConfirmSetDefault = async () => {
     if (!currencyToSetDefault) return;
-    
+
     try {
       const success = await currencyService.setDefaultCurrency(currencyToSetDefault.CurrencyID);
       if (success) {
@@ -85,13 +84,11 @@ const CurrencyList = () => {
   };
 
   // Define columns for data table
-  const columns = [
+  const columns: Column<Currency>[] = [
     {
       header: "Currency Code",
       accessorKey: "CurrencyCode",
-      cell: ({ row }: any) => (
-        <div className="font-medium">{row.original.CurrencyCode}</div>
-      ),
+      cell: ({ row }) => <div className="font-medium">{row.CurrencyCode}</div>,
     },
     {
       header: "Currency Name",
@@ -100,15 +97,13 @@ const CurrencyList = () => {
     {
       header: "Conversion Rate",
       accessorKey: "ConversionRate",
-      cell: ({ row }: any) => (
-        <div>{row.original.ConversionRate.toFixed(4)}</div>
-      ),
+      cell: ({ row }) => <div>{row.ConversionRate.toFixed(4)}</div>,
     },
     {
       header: "Status",
       accessorKey: "IsDefault",
-      cell: ({ row }: any) => (
-        row.original.IsDefault ? (
+      cell: ({ row }) =>
+        row.IsDefault ? (
           <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
             Default Currency
           </Badge>
@@ -116,36 +111,26 @@ const CurrencyList = () => {
           <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
             Secondary
           </Badge>
-        )
-      ),
+        ),
     },
     {
       header: "Actions",
-      cell: ({ row }: any) => (
+      accessorKey: "CurrencyID",
+      cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/currencies/${row.original.CurrencyID}`)}
-            title="View Details"
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/currencies/${row.CurrencyID}`)} title="View Details">
             <Eye className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/currencies/edit/${row.original.CurrencyID}`)}
-            title="Edit Currency"
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/currencies/edit/${row.CurrencyID}`)} title="Edit Currency">
             <Edit className="h-4 w-4" />
           </Button>
-          {!row.original.IsDefault && (
+          {!row.IsDefault && (
             <>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  setCurrencyToSetDefault(row.original);
+                  setCurrencyToSetDefault(row);
                   setDefaultDialogOpen(true);
                 }}
                 title="Set as Default Currency"
@@ -156,7 +141,7 @@ const CurrencyList = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  setCurrencyToDelete(row.original);
+                  setCurrencyToDelete(row);
                   setDeleteDialogOpen(true);
                 }}
                 title="Delete Currency"
@@ -203,12 +188,7 @@ const CurrencyList = () => {
             </Button>
           </div>
 
-          <DataTable
-            columns={columns}
-            data={currencies}
-            isLoading={loading}
-            noDataMessage="No currencies found"
-          />
+          <DataTable columns={columns} data={currencies} isLoading={loading} />
         </CardContent>
       </Card>
 

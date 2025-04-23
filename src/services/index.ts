@@ -18,5 +18,6 @@ export * from "./propertyService";
 export * from "./taxService";
 export * from "./additionalChargesCategoryService";
 export * from "./additionalChargesService";
+export * from "./currencyService";
 
 // Add any new services to this file for easy importing
