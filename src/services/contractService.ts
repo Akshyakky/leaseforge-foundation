@@ -1,18 +1,6 @@
 // src/services/contractService.ts
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
-import { 
-  Contract, 
-  ContractUnit, 
-  ContractAdditionalCharge, 
-  ContractAttachment,
-  ContractRequest,
-  ContractSearchParams,
-  ContractStatistics,
-  ApiResponse
-} from "../types/contractTypes";
-
-// Re-export types from contractTypes
-export type {
+import {
   Contract,
   ContractUnit,
   ContractAdditionalCharge,
@@ -20,8 +8,11 @@ export type {
   ContractRequest,
   ContractSearchParams,
   ContractStatistics,
-  ApiResponse
-};
+  ApiResponse,
+} from "../types/contractTypes";
+
+// Re-export types from contractTypes
+export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment, ContractRequest, ContractSearchParams, ContractStatistics, ApiResponse };
 
 /**
  * Service for contract management operations
@@ -29,7 +20,7 @@ export type {
 class ContractService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Contract/contractmanagement");
+    super("/Master/contractmanagement");
   }
 
   /**
@@ -89,10 +80,8 @@ class ContractService extends BaseService {
 
     // Prepare JSON data for child records
     const unitsJSON = data.units && data.units.length > 0 ? JSON.stringify(data.units) : null;
-    const additionalChargesJSON = data.additionalCharges && data.additionalCharges.length > 0 
-      ? JSON.stringify(data.additionalCharges) : null;
-    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 
-      ? JSON.stringify(processedAttachments) : null;
+    const additionalChargesJSON = data.additionalCharges && data.additionalCharges.length > 0 ? JSON.stringify(data.additionalCharges) : null;
+    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null;
 
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Contract
@@ -107,11 +96,11 @@ class ContractService extends BaseService {
         AdditionalCharges: data.contract.AdditionalCharges,
         GrandTotal: data.contract.GrandTotal,
         Remarks: data.contract.Remarks,
-        
+
         // JSON parameters for child records
         UnitsJSON: unitsJSON,
         AdditionalChargesJSON: additionalChargesJSON,
-        AttachmentsJSON: attachmentsJSON
+        AttachmentsJSON: attachmentsJSON,
       },
     };
 
@@ -122,13 +111,13 @@ class ContractService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Contract created successfully",
-        NewContractID: response.NewContractID
+        NewContractID: response.NewContractID,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to create contract"
+      Message: response.message || "Failed to create contract",
     };
   }
 
@@ -146,10 +135,8 @@ class ContractService extends BaseService {
 
     // Prepare JSON data for child records
     const unitsJSON = data.units && data.units.length > 0 ? JSON.stringify(data.units) : null;
-    const additionalChargesJSON = data.additionalCharges && data.additionalCharges.length > 0 
-      ? JSON.stringify(data.additionalCharges) : null;
-    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 
-      ? JSON.stringify(processedAttachments) : null;
+    const additionalChargesJSON = data.additionalCharges && data.additionalCharges.length > 0 ? JSON.stringify(data.additionalCharges) : null;
+    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null;
 
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Contract
@@ -165,11 +152,11 @@ class ContractService extends BaseService {
         AdditionalCharges: data.contract.AdditionalCharges,
         GrandTotal: data.contract.GrandTotal,
         Remarks: data.contract.Remarks,
-        
+
         // JSON parameters for child records
         UnitsJSON: unitsJSON,
         AdditionalChargesJSON: additionalChargesJSON,
-        AttachmentsJSON: attachmentsJSON
+        AttachmentsJSON: attachmentsJSON,
       },
     };
 
@@ -179,13 +166,13 @@ class ContractService extends BaseService {
       this.showSuccess("Contract updated successfully");
       return {
         Status: 1,
-        Message: response.message || "Contract updated successfully"
+        Message: response.message || "Contract updated successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to update contract"
+      Message: response.message || "Failed to update contract",
     };
   }
 
@@ -263,13 +250,13 @@ class ContractService extends BaseService {
       this.showSuccess("Contract deleted successfully");
       return {
         Status: 1,
-        Message: response.message || "Contract deleted successfully"
+        Message: response.message || "Contract deleted successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to delete contract"
+      Message: response.message || "Failed to delete contract",
     };
   }
 
@@ -288,7 +275,7 @@ class ContractService extends BaseService {
         FilterFromDate: params.fromDate,
         FilterToDate: params.toDate,
         FilterUnitID: params.unitID,
-        FilterPropertyID: params.propertyID
+        FilterPropertyID: params.propertyID,
       },
     };
 
@@ -307,7 +294,7 @@ class ContractService extends BaseService {
       mode: 7, // Mode 7: Change Contract Status
       parameters: {
         ContractID: contractId,
-        ContractStatus: status
+        ContractStatus: status,
       },
     };
 
@@ -317,13 +304,13 @@ class ContractService extends BaseService {
       this.showSuccess(`Contract status changed to ${status} successfully`);
       return {
         Status: 1,
-        Message: response.message || `Contract status changed to ${status} successfully`
+        Message: response.message || `Contract status changed to ${status} successfully`,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to change contract status"
+      Message: response.message || "Failed to change contract status",
     };
   }
 
@@ -343,14 +330,14 @@ class ContractService extends BaseService {
       return {
         statusCounts: response.table1 || [],
         propertyUnitCounts: response.table2 || [],
-        customerCounts: response.table3 || []
+        customerCounts: response.table3 || [],
       };
     }
 
     return {
       statusCounts: [],
       propertyUnitCounts: [],
-      customerCounts: []
+      customerCounts: [],
     };
   }
 
@@ -363,7 +350,7 @@ class ContractService extends BaseService {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Contracts by Unit
       parameters: {
-        UnitID: unitId
+        UnitID: unitId,
       },
     };
 
@@ -398,7 +385,7 @@ class ContractService extends BaseService {
         RentFreeAmount: contractUnit.RentFreeAmount,
         UnitTaxPercentage: contractUnit.TaxPercentage,
         UnitTaxAmount: contractUnit.TaxAmount,
-        UnitTotalAmount: contractUnit.TotalAmount
+        UnitTotalAmount: contractUnit.TotalAmount,
       },
     };
 
@@ -409,13 +396,13 @@ class ContractService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Unit added to contract successfully",
-        NewContractUnitID: response.NewContractUnitID
+        NewContractUnitID: response.NewContractUnitID,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to add unit to contract"
+      Message: response.message || "Failed to add unit to contract",
     };
   }
 
@@ -446,7 +433,7 @@ class ContractService extends BaseService {
         RentFreeAmount: contractUnit.RentFreeAmount,
         UnitTaxPercentage: contractUnit.TaxPercentage,
         UnitTaxAmount: contractUnit.TaxAmount,
-        UnitTotalAmount: contractUnit.TotalAmount
+        UnitTotalAmount: contractUnit.TotalAmount,
       },
     };
 
@@ -456,13 +443,13 @@ class ContractService extends BaseService {
       this.showSuccess("Contract unit updated successfully");
       return {
         Status: 1,
-        Message: response.message || "Contract unit updated successfully"
+        Message: response.message || "Contract unit updated successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to update contract unit"
+      Message: response.message || "Failed to update contract unit",
     };
   }
 
@@ -475,7 +462,7 @@ class ContractService extends BaseService {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Remove Unit from Contract
       parameters: {
-        ContractUnitID: contractUnitId
+        ContractUnitID: contractUnitId,
       },
     };
 
@@ -485,13 +472,13 @@ class ContractService extends BaseService {
       this.showSuccess("Unit removed from contract successfully");
       return {
         Status: 1,
-        Message: response.message || "Unit removed from contract successfully"
+        Message: response.message || "Unit removed from contract successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to remove unit from contract"
+      Message: response.message || "Failed to remove unit from contract",
     };
   }
 
@@ -509,7 +496,7 @@ class ContractService extends BaseService {
         ChargeAmount: charge.Amount,
         ChargeTaxPercentage: charge.TaxPercentage,
         ChargeTaxAmount: charge.TaxAmount,
-        ChargeTotalAmount: charge.TotalAmount
+        ChargeTotalAmount: charge.TotalAmount,
       },
     };
 
@@ -520,13 +507,13 @@ class ContractService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Additional charge added to contract successfully",
-        NewContractChargeID: response.NewContractChargeID
+        NewContractChargeID: response.NewContractChargeID,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to add additional charge to contract"
+      Message: response.message || "Failed to add additional charge to contract",
     };
   }
 
@@ -544,7 +531,7 @@ class ContractService extends BaseService {
         ChargeAmount: charge.Amount,
         ChargeTaxPercentage: charge.TaxPercentage,
         ChargeTaxAmount: charge.TaxAmount,
-        ChargeTotalAmount: charge.TotalAmount
+        ChargeTotalAmount: charge.TotalAmount,
       },
     };
 
@@ -554,13 +541,13 @@ class ContractService extends BaseService {
       this.showSuccess("Additional charge updated successfully");
       return {
         Status: 1,
-        Message: response.message || "Additional charge updated successfully"
+        Message: response.message || "Additional charge updated successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to update additional charge"
+      Message: response.message || "Failed to update additional charge",
     };
   }
 
@@ -573,7 +560,7 @@ class ContractService extends BaseService {
     const request: BaseRequest = {
       mode: 15, // Mode 15: Remove Additional Charge (assuming this is the correct mode)
       parameters: {
-        ContractAdditionalChargeID: chargeId
+        ContractAdditionalChargeID: chargeId,
       },
     };
 
@@ -583,13 +570,13 @@ class ContractService extends BaseService {
       this.showSuccess("Additional charge removed successfully");
       return {
         Status: 1,
-        Message: response.message || "Additional charge removed successfully"
+        Message: response.message || "Additional charge removed successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to remove additional charge"
+      Message: response.message || "Failed to remove additional charge",
     };
   }
 
@@ -614,7 +601,7 @@ class ContractService extends BaseService {
         FileSize: processedAttachment.FileSize,
         DocIssueDate: processedAttachment.DocIssueDate,
         DocExpiryDate: processedAttachment.DocExpiryDate,
-        AttachmentRemarks: processedAttachment.Remarks
+        AttachmentRemarks: processedAttachment.Remarks,
       },
     };
 
@@ -625,13 +612,13 @@ class ContractService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Attachment added to contract successfully",
-        NewContractAttachmentID: response.NewContractAttachmentID
+        NewContractAttachmentID: response.NewContractAttachmentID,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to add attachment to contract"
+      Message: response.message || "Failed to add attachment to contract",
     };
   }
 
@@ -656,7 +643,7 @@ class ContractService extends BaseService {
         FileSize: processedAttachment.FileSize,
         DocIssueDate: processedAttachment.DocIssueDate,
         DocExpiryDate: processedAttachment.DocExpiryDate,
-        AttachmentRemarks: processedAttachment.Remarks
+        AttachmentRemarks: processedAttachment.Remarks,
       },
     };
 
@@ -666,13 +653,13 @@ class ContractService extends BaseService {
       this.showSuccess("Contract attachment updated successfully");
       return {
         Status: 1,
-        Message: response.message || "Contract attachment updated successfully"
+        Message: response.message || "Contract attachment updated successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to update contract attachment"
+      Message: response.message || "Failed to update contract attachment",
     };
   }
 
@@ -685,7 +672,7 @@ class ContractService extends BaseService {
     const request: BaseRequest = {
       mode: 18, // Mode 18: Remove Contract Attachment (assuming this is the correct mode)
       parameters: {
-        ContractAttachmentID: attachmentId
+        ContractAttachmentID: attachmentId,
       },
     };
 
@@ -695,13 +682,13 @@ class ContractService extends BaseService {
       this.showSuccess("Attachment removed from contract successfully");
       return {
         Status: 1,
-        Message: response.message || "Attachment removed from contract successfully"
+        Message: response.message || "Attachment removed from contract successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to remove attachment from contract"
+      Message: response.message || "Failed to remove attachment from contract",
     };
   }
 }
