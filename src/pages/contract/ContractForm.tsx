@@ -1148,7 +1148,15 @@ const ContractForm: React.FC = () => {
                                       <FormItem>
                                         <FormLabel>Amount</FormLabel>
                                         <FormControl>
-                                          <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)} />
+                                          <Input
+                                            type="number"
+                                            placeholder="0.00"
+                                            {...field}
+                                            onChange={(e) => {
+                                              const value = e.target.value;
+                                              field.onChange(value === "" ? 0 : parseFloat(value));
+                                            }}
+                                          />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1167,7 +1175,10 @@ const ContractForm: React.FC = () => {
                                               type="number"
                                               placeholder="0.00"
                                               {...field}
-                                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                              onChange={(e) => {
+                                                const value = e.target.value;
+                                                field.onChange(value === "" ? 0 : parseFloat(value));
+                                              }}
                                             />
                                           </FormControl>
                                           <FormMessage />

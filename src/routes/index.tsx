@@ -21,6 +21,7 @@ import additionalChargesRoutes from "./additionalChargesRoutes";
 import currencyRoutes from "./currencyRoutes";
 import deductionChargesRoutes from "./deductionChargesRoutes";
 import contractRoutes from "./contractRoutes";
+import terminationRoutes from "./terminationRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -85,6 +86,9 @@ const AppRoutes = () => {
 
           {/* Contract Management routes */}
           {contractRoutes}
+
+          {/* Termination Management routes */}
+          {terminationRoutes}
         </Route>
 
         {/* Catch-all route */}

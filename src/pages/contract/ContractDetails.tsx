@@ -5,15 +5,16 @@ import { contractService, Contract, ContractUnit, ContractAdditionalCharge, Cont
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag } from "lucide-react";
+import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag, Eye, Image, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +31,12 @@ const ContractDetails: React.FC = () => {
   const [activeTab, setActiveTab] = useState("details");
   const [selectedAttachment, setSelectedAttachment] = useState<ContractAttachment | null>(null);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+
+  // Contract renewal states
+  const [isRenewDialogOpen, setIsRenewDialogOpen] = useState(false);
+  const [renewalPeriod, setRenewalPeriod] = useState<{ years: number; months: number }>({ years: 1, months: 0 });
+  const [isRenewing, setIsRenewing] = useState(false);
 
   // Contract status options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
@@ -181,6 +188,106 @@ const ContractDetails: React.FC = () => {
     return attachment.FileContentType.startsWith("image/") || attachment.FileContentType === "application/pdf";
   };
 
+  // Get file type icon
+  const getFileIcon = (contentType?: string, fileName?: string) => {
+    if (!contentType) {
+      // Try to determine type from filename if available
+      if (fileName) {
+        const extension = fileName.split(".").pop()?.toLowerCase();
+        if (["pdf"].includes(extension || "")) return <FileText className="h-16 w-16 text-red-500" />;
+        if (["doc", "docx"].includes(extension || "")) return <FileText className="h-16 w-16 text-blue-500" />;
+        if (["xls", "xlsx"].includes(extension || "")) return <FileText className="h-16 w-16 text-green-500" />;
+        if (["jpg", "jpeg", "png", "gif"].includes(extension || "")) return <Image className="h-16 w-16 text-purple-500" />;
+      }
+      return <FileText className="h-16 w-16 text-muted-foreground" />;
+    }
+
+    if (contentType.startsWith("image/")) return <Image className="h-16 w-16 text-purple-500" />;
+    if (contentType === "application/pdf") return <FileText className="h-16 w-16 text-red-500" />;
+    if (contentType.includes("word") || contentType.includes("document")) return <FileText className="h-16 w-16 text-blue-500" />;
+    if (contentType.includes("excel") || contentType.includes("spreadsheet")) return <FileText className="h-16 w-16 text-green-500" />;
+
+    return <FileText className="h-16 w-16 text-muted-foreground" />;
+  };
+
+  // Contract renewal functions
+  const handleRenewContract = async () => {
+    if (!contract) return;
+
+    // Open confirmation dialog
+    setIsRenewDialogOpen(true);
+  };
+
+  const executeContractRenewal = async () => {
+    if (!contract) return;
+
+    try {
+      setIsRenewing(true);
+
+      // Create a copy of the current contract
+      const renewalData = {
+        contract: {
+          ContractNo: "", // Will be auto-generated
+          ContractStatus: "Draft",
+          CustomerID: contract.CustomerID,
+          JointCustomerID: contract.JointCustomerID,
+          TransactionDate: new Date(),
+          TotalAmount: contract.TotalAmount,
+          AdditionalCharges: contract.AdditionalCharges,
+          GrandTotal: contract.GrandTotal,
+          Remarks: `Renewal of contract ${contract.ContractNo}. ${contract.Remarks || ""}`,
+        },
+        units: units.map((unit) => {
+          // Calculate new dates based on renewal period
+          const fromDate = new Date();
+          const toDate = new Date(fromDate);
+          toDate.setFullYear(toDate.getFullYear() + renewalPeriod.years);
+          toDate.setMonth(toDate.getMonth() + renewalPeriod.months);
+
+          return {
+            UnitID: unit.UnitID,
+            FromDate: fromDate,
+            ToDate: toDate,
+            FitoutFromDate: null,
+            FitoutToDate: null,
+            CommencementDate: fromDate,
+            ContractDays: 0,
+            ContractMonths: renewalPeriod.months,
+            ContractYears: renewalPeriod.years,
+            RentPerMonth: unit.RentPerMonth,
+            RentPerYear: unit.RentPerYear,
+            NoOfInstallments: unit.NoOfInstallments,
+            RentFreePeriodFrom: null,
+            RentFreePeriodTo: null,
+            RentFreeAmount: null,
+            TaxPercentage: unit.TaxPercentage,
+            TaxAmount: unit.TaxAmount,
+            TotalAmount: unit.TotalAmount,
+          };
+        }),
+        additionalCharges: additionalCharges,
+        attachments: [], // Don't copy attachments to the renewal
+      };
+
+      // Create new contract with the renewal data
+      const response = await contractService.createContract(renewalData);
+
+      if (response.Status === 1 && response.NewContractID) {
+        toast.success("Contract renewed successfully");
+        // Navigate to the new contract
+        navigate(`/contracts/${response.NewContractID}`);
+      } else {
+        toast.error(response.Message || "Failed to renew contract");
+      }
+    } catch (error) {
+      console.error("Error renewing contract:", error);
+      toast.error("Failed to renew contract");
+    } finally {
+      setIsRenewing(false);
+      setIsRenewDialogOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -214,23 +321,40 @@ const ContractDetails: React.FC = () => {
         </div>
         <div className="flex space-x-2">
           <div className="relative">
-            <Button variant="outline" onClick={() => {}}>
+            <Button variant="outline" onClick={() => setStatusDropdownOpen(!statusDropdownOpen)} onBlur={() => setTimeout(() => setStatusDropdownOpen(false), 100)}>
               Change Status
               <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
-            <div className="absolute right-0 top-10 z-10 w-56 rounded-md border border-gray-100 bg-white shadow-lg">
-              {contractStatusOptions
-                .filter((status) => status !== contract.ContractStatus)
-                .map((status) => (
-                  <button key={status} className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100" onClick={() => openStatusChangeDialog(status)}>
-                    Set as {status}
-                  </button>
-                ))}
-            </div>
+            {statusDropdownOpen && (
+              <div className="absolute right-0 top-10 z-10 w-56 rounded-md border border-gray-100  shadow-lg">
+                {contractStatusOptions
+                  .filter((status) => status !== contract.ContractStatus)
+                  .map((status) => (
+                    <button
+                      key={status}
+                      className="block w-full px-4 py-2 text-left text-sm "
+                      onClick={() => {
+                        openStatusChangeDialog(status);
+                        setStatusDropdownOpen(false);
+                      }}
+                    >
+                      Set as {status}
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
           <Button variant="outline" onClick={handleEdit}>
             <Edit2 className="mr-2 h-4 w-4" />
             Edit
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleRenewContract}
+            disabled={contract.ContractStatus !== "Active" && contract.ContractStatus !== "Completed" && contract.ContractStatus !== "Expired"}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Renew
           </Button>
           <Button variant="destructive" onClick={openDeleteDialog} disabled={contract.ContractStatus === "Active" || contract.ContractStatus === "Completed"}>
             <Trash2 className="mr-2 h-4 w-4" />
@@ -498,12 +622,36 @@ const ContractDetails: React.FC = () => {
                           <TableCell>{attachment.DocExpiryDate ? formatDate(attachment.DocExpiryDate) : "N/A"}</TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
-                              {isPreviewable(attachment) && (
-                                <Button variant="outline" size="sm" onClick={() => openAttachmentPreview(attachment)}>
-                                  Preview
+                              {attachment.FileContentType && (
+                                <Button variant="outline" size="sm" onClick={() => openAttachmentPreview(attachment)} className="flex items-center gap-1">
+                                  {isPreviewable(attachment) ? (
+                                    <>
+                                      <Eye className="h-4 w-4" /> Preview
+                                    </>
+                                  ) : (
+                                    <>
+                                      {getFileIcon(attachment.FileContentType, attachment.DocumentName)}
+                                      <span>View File Info</span>
+                                    </>
+                                  )}
                                 </Button>
                               )}
-                              <Button variant="outline" size="sm" disabled>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!attachment.FileContent}
+                                onClick={() => {
+                                  if (attachment.fileUrl) {
+                                    // Create an anchor element and trigger download
+                                    const link = document.createElement("a");
+                                    link.href = attachment.fileUrl;
+                                    link.download = attachment.DocumentName || "document";
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }
+                                }}
+                              >
                                 <Download className="h-4 w-4" />
                               </Button>
                             </div>
@@ -549,25 +697,135 @@ const ContractDetails: React.FC = () => {
       <Dialog open={isPreviewDialogOpen} onOpenChange={closeAttachmentPreview}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{selectedAttachment?.DocumentName}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedAttachment && getFileIcon(selectedAttachment.FileContentType, selectedAttachment.DocumentName)}
+              <span>{selectedAttachment?.DocumentName}</span>
+            </DialogTitle>
+            {selectedAttachment?.DocTypeID && (
+              <DialogDescription>
+                Document Type: {selectedAttachment.DocTypeName}
+                {selectedAttachment.DocIssueDate && <span className="ml-4">Issued: {formatDate(selectedAttachment.DocIssueDate)}</span>}
+                {selectedAttachment.DocExpiryDate && (
+                  <span className="ml-4">
+                    Expires: {formatDate(selectedAttachment.DocExpiryDate)}
+                    {new Date(selectedAttachment.DocExpiryDate) < new Date() && (
+                      <Badge variant="destructive" className="ml-2">
+                        Expired
+                      </Badge>
+                    )}
+                  </span>
+                )}
+              </DialogDescription>
+            )}
           </DialogHeader>
           <div className="h-[60vh] overflow-auto flex items-center justify-center p-4 bg-muted/50">
-            {selectedAttachment &&
-              selectedAttachment.fileUrl &&
-              (selectedAttachment.FileContentType?.startsWith("image/") ? (
+            {selectedAttachment && selectedAttachment.fileUrl ? (
+              selectedAttachment.FileContentType?.startsWith("image/") ? (
                 <img src={selectedAttachment.fileUrl} alt={selectedAttachment.DocumentName} className="max-w-full max-h-full object-contain" />
               ) : selectedAttachment.FileContentType === "application/pdf" ? (
                 <iframe src={selectedAttachment.fileUrl} className="w-full h-full" title={selectedAttachment.DocumentName} />
               ) : (
                 <div className="text-center">
-                  <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+                  {getFileIcon(selectedAttachment.FileContentType, selectedAttachment.DocumentName)}
                   <p className="mt-2">Preview not available for this file type</p>
+                  <p className="text-sm text-muted-foreground">File type: {selectedAttachment.FileContentType}</p>
+                  {selectedAttachment.FileSize && <p className="text-sm text-muted-foreground">Size: {(selectedAttachment.FileSize / 1024).toFixed(2)} KB</p>}
                 </div>
-              ))}
+              )
+            ) : (
+              <div className="text-center">
+                <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+                <p className="mt-2">No file content available</p>
+              </div>
+            )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex justify-between">
+            <div>
+              {selectedAttachment?.fileUrl && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedAttachment.fileUrl) {
+                      const link = document.createElement("a");
+                      link.href = selectedAttachment.fileUrl;
+                      link.download = selectedAttachment.DocumentName || "document";
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+              )}
+            </div>
             <Button variant="outline" onClick={closeAttachmentPreview}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contract Renewal Dialog */}
+      <Dialog open={isRenewDialogOpen} onOpenChange={setIsRenewDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renew Contract</DialogTitle>
+            <DialogDescription>Create a new contract based on the current one with updated dates.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col space-y-1.5">
+                <Label htmlFor="years">Years</Label>
+                <Input
+                  id="years"
+                  type="number"
+                  min="0"
+                  value={renewalPeriod.years}
+                  onChange={(e) => setRenewalPeriod({ ...renewalPeriod, years: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="flex flex-col space-y-1.5">
+                <Label htmlFor="months">Months</Label>
+                <Input
+                  id="months"
+                  type="number"
+                  min="0"
+                  max="11"
+                  value={renewalPeriod.months}
+                  onChange={(e) => setRenewalPeriod({ ...renewalPeriod, months: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Contract Details to Copy</Label>
+              <div className="text-sm text-muted-foreground">
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Customer information</li>
+                  <li>Units with updated dates</li>
+                  <li>Additional charges</li>
+                  <li>Contract values and amounts</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenewDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={executeContractRenewal} disabled={isRenewing || (renewalPeriod.years === 0 && renewalPeriod.months === 0)}>
+              {isRenewing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Renewing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Renew Contract
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
