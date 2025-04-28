@@ -22,6 +22,7 @@ interface ConfirmationDialogProps {
   cancelText?: string;
   confirmText?: string;
   type?: ConfirmationDialogType;
+  confirmDisabled?: boolean;
 }
 
 const iconMap: Record<ConfirmationDialogType, React.ReactNode> = {
@@ -38,7 +39,17 @@ const typeClasses: Record<ConfirmationDialogType, string> = {
   danger: "bg-red-500",
 };
 
-export const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, description, cancelText = "Cancel", confirmText = "Confirm", type = "info" }: ConfirmationDialogProps) => {
+export const ConfirmationDialog = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  cancelText = "Cancel",
+  confirmText = "Confirm",
+  type = "info",
+  confirmDisabled = false,
+}: ConfirmationDialogProps) => {
   const handleConfirm = () => {
     onConfirm();
     onClose();
@@ -56,7 +67,7 @@ export const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, descript
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4">
           <AlertDialogCancel>{cancelText}</AlertDialogCancel>
-          <AlertDialogAction className={typeClasses[type]} onClick={handleConfirm}>
+          <AlertDialogAction className={typeClasses[type]} onClick={handleConfirm} disabled={confirmDisabled}>
             {confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>
