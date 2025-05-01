@@ -1,14 +1,13 @@
-
 import React from "react";
 import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import { lazyLoad } from "@/lib/performance";
 
 // Import unit master module components
-import { UnitMasterPage } from "@/pages/UnitMaster";
-import { UnitDashboard } from "@/pages/UnitMaster/UnitDashboard";
-import { UnitStatistics } from "@/pages/UnitMaster/UnitStatistics";
-import { UnitMasterSettingsPage } from "@/pages/UnitMaster/UnitMasterSettingsPage";
+import { UnitMasterPage } from "@/pages/unitMaster";
+import { UnitDashboard } from "@/pages/unitMaster/UnitDashboard";
+import { UnitStatistics } from "@/pages/unitMaster/UnitStatistics";
+import { UnitMasterSettingsPage } from "@/pages/unitMaster/UnitMasterSettingsPage";
 
 // Lazy-loaded unit pages
 // const UnitDashboard = lazyLoad(() => import("@/pages/UnitMaster/UnitDashboard"));

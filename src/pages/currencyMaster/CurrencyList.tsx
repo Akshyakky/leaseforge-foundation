@@ -1,314 +1,275 @@
-
-// Just fixing the column typing
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { currencyService, Currency } from "@/services/currencyService";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, MoreHorizontal, Search, Plus, DollarSign, RefreshCw, CheckCircle, Ban } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { currencyService, Currency } from "@/services/currencyService";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { debounce } from "lodash";
 import { toast } from "sonner";
-import { CheckCircle, Edit, MoreHorizontal, Plus, Search, Star, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-type Column = {
-  header: string;
-  accessorKey?: keyof Currency;
-  cell?: ({ row }: { row: { original: Currency } }) => React.ReactNode;
-};
-
-const CurrencyList = () => {
+const CurrencyList: React.FC = () => {
   const navigate = useNavigate();
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [filteredCurrencies, setFilteredCurrencies] = useState<Currency[]>([]);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [defaultSetId, setDefaultSetId] = useState<number | null>(null);
-  const [rateUpdateId, setRateUpdateId] = useState<number | null>(null);
-  const [newRate, setNewRate] = useState<number>(0);
 
+  // State variables
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDefaultDialogOpen, setIsDefaultDialogOpen] = useState(false);
+
+  // Fetch currencies on component mount
   useEffect(() => {
     fetchCurrencies();
   }, []);
 
-  useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredCurrencies(currencies);
-    } else {
-      const filtered = currencies.filter(
-        (currency) =>
-          currency.CurrencyCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          currency.CurrencyName.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredCurrencies(filtered);
-    }
-  }, [searchTerm, currencies]);
-
-  const fetchCurrencies = async () => {
-    setLoading(true);
+  // Fetch all currencies
+  const fetchCurrencies = async (search?: string) => {
     try {
-      const data = await currencyService.getAll();
-      setCurrencies(data);
-      setFilteredCurrencies(data);
+      setLoading(true);
+      let currenciesData: Currency[];
+
+      if (search && search.length >= 2) {
+        currenciesData = await currencyService.searchCurrencies(search);
+      } else {
+        currenciesData = await currencyService.getAllCurrencies();
+      }
+
+      setCurrencies(currenciesData);
     } catch (error) {
-      console.error("Failed to fetch currencies:", error);
+      console.error("Error fetching currencies:", error);
       toast.error("Failed to load currencies");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (deleteId) {
-      try {
-        await currencyService.delete(deleteId);
+  // Debounced search function
+  const debouncedSearch = debounce((value: string) => {
+    if (value.length >= 2 || value === "") {
+      fetchCurrencies(value);
+    }
+  }, 500);
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
+  };
+
+  // Navigation handlers
+  const handleAddCurrency = () => {
+    navigate("/currencies/new");
+  };
+
+  const handleEditCurrency = (currencyId: number) => {
+    navigate(`/currencies/edit/${currencyId}`);
+  };
+
+  const handleViewCurrency = (currencyId: number) => {
+    navigate(`/currencies/${currencyId}`);
+  };
+
+  // Delete confirmation handlers
+  const openDeleteDialog = (currency: Currency) => {
+    setSelectedCurrency(currency);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setIsDeleteDialogOpen(false);
+    setSelectedCurrency(null);
+  };
+
+  const handleDeleteCurrency = async () => {
+    if (!selectedCurrency) return;
+
+    try {
+      const success = await currencyService.deleteCurrency(selectedCurrency.CurrencyID);
+
+      if (success) {
+        setCurrencies(currencies.filter((c) => c.CurrencyID !== selectedCurrency.CurrencyID));
         toast.success("Currency deleted successfully");
-        fetchCurrencies();
-      } catch (error) {
-        console.error("Failed to delete currency:", error);
+      } else {
         toast.error("Failed to delete currency");
-      } finally {
-        setDeleteId(null);
       }
+    } catch (error) {
+      console.error("Error deleting currency:", error);
+      toast.error("Failed to delete currency");
+    } finally {
+      closeDeleteDialog();
     }
   };
 
-  const handleSetDefault = async () => {
-    if (defaultSetId) {
-      try {
-        await currencyService.setDefault(defaultSetId);
-        toast.success("Default currency set successfully");
-        fetchCurrencies();
-      } catch (error) {
-        console.error("Failed to set default currency:", error);
+  // Set default currency handlers
+  const openDefaultDialog = (currency: Currency) => {
+    if (currency.IsDefault) {
+      toast.info("This currency is already set as the default");
+      return;
+    }
+    setSelectedCurrency(currency);
+    setIsDefaultDialogOpen(true);
+  };
+
+  const closeDefaultDialog = () => {
+    setIsDefaultDialogOpen(false);
+    setSelectedCurrency(null);
+  };
+
+  const handleSetDefaultCurrency = async () => {
+    if (!selectedCurrency) return;
+
+    try {
+      const success = await currencyService.setDefaultCurrency(selectedCurrency.CurrencyID);
+
+      if (success) {
+        // Update the currencies list to reflect the new default
+        const updatedCurrencies = currencies.map((currency) => ({
+          ...currency,
+          IsDefault: currency.CurrencyID === selectedCurrency.CurrencyID,
+        }));
+        setCurrencies(updatedCurrencies);
+        toast.success(`${selectedCurrency.CurrencyName} set as default currency`);
+      } else {
         toast.error("Failed to set default currency");
-      } finally {
-        setDefaultSetId(null);
       }
+    } catch (error) {
+      console.error("Error setting default currency:", error);
+      toast.error("Failed to set default currency");
+    } finally {
+      closeDefaultDialog();
     }
   };
-
-  const handleRateUpdate = async () => {
-    if (rateUpdateId && newRate > 0) {
-      try {
-        const currencyToUpdate = currencies.find(c => c.CurrencyID === rateUpdateId);
-        if (currencyToUpdate) {
-          await currencyService.update({
-            ...currencyToUpdate,
-            ConversionRate: newRate
-          });
-          toast.success("Conversion rate updated successfully");
-          fetchCurrencies();
-        }
-      } catch (error) {
-        console.error("Failed to update conversion rate:", error);
-        toast.error("Failed to update conversion rate");
-      } finally {
-        setRateUpdateId(null);
-        setNewRate(0);
-      }
-    }
-  };
-
-  const columns: Column[] = [
-    {
-      header: "Default",
-      cell: ({ row }) => (
-        <div className="flex justify-center">
-          {row.original.IsDefault && (
-            <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-          )}
-        </div>
-      ),
-    },
-    {
-      header: "Currency Code",
-      accessorKey: "CurrencyCode",
-    },
-    {
-      header: "Currency Name",
-      accessorKey: "CurrencyName",
-    },
-    {
-      header: "Conversion Rate",
-      accessorKey: "ConversionRate",
-      cell: ({ row }) => (
-        <Badge variant="outline" className="font-mono">
-          {row.original.ConversionRate.toFixed(4)}
-        </Badge>
-      ),
-    },
-    {
-      header: "Actions",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/currencies/${row.original.CurrencyID}`)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            
-            <DropdownMenuItem onClick={() => navigate(`/currencies/details/${row.original.CurrencyID}`)}>
-              <Search className="mr-2 h-4 w-4" />
-              View Details
-            </DropdownMenuItem>
-            
-            {!row.original.IsDefault && (
-              <DropdownMenuItem onClick={() => setDefaultSetId(row.original.CurrencyID)}>
-                <Star className="mr-2 h-4 w-4" />
-                Set as Default
-              </DropdownMenuItem>
-            )}
-            
-            <DropdownMenuItem onClick={() => {
-              setRateUpdateId(row.original.CurrencyID);
-              setNewRate(row.original.ConversionRate);
-            }}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Update Rate
-            </DropdownMenuItem>
-            
-            {!row.original.IsDefault && (
-              <DropdownMenuItem onClick={() => setDeleteId(row.original.CurrencyID)} className="text-red-600">
-                <Trash className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ];
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Currencies</h1>
+        <Button onClick={handleAddCurrency}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Currency
+        </Button>
+      </div>
+
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-2xl">Currencies</CardTitle>
-          <Button onClick={() => navigate("/currencies/new")}>
-            <Plus className="mr-2 h-4 w-4" /> Add Currency
-          </Button>
+        <CardHeader className="pb-3">
+          <CardTitle>Currency Management</CardTitle>
+          <CardDescription>Manage currencies, rates, and set default currency</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <Input
-              placeholder="Search by currency code or name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-              icon={<Search className="h-4 w-4" />}
-            />
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input type="text" placeholder="Search currencies..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
+            </div>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin h-8 w-8 border-2 border-primary rounded-full border-t-transparent"></div>
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : filteredCurrencies.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {searchTerm ? "No currencies match your search" : "No currencies found. Add your first currency."}
-            </div>
+          ) : currencies.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">{searchTerm ? "No currencies found matching your search." : "No currencies found."}</div>
           ) : (
-            <div className="rounded-md border">
+            <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {columns.map((column, i) => (
-                      <TableHead key={i} className={column.header === "Default" ? "w-16" : column.header === "Actions" ? "w-16 text-right" : ""}>
-                        {column.header}
-                      </TableHead>
-                    ))}
+                    <TableHead className="w-[100px]">Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="text-right">Conversion Rate</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCurrencies.map((currency) => (
+                  {currencies.map((currency) => (
                     <TableRow key={currency.CurrencyID}>
-                      {columns.map((column, i) => (
-                        <TableCell key={i} className={column.header === "Actions" ? "text-right" : ""}>
-                          {column.cell 
-                            ? column.cell({ row: { original: currency } }) 
-                            : column.accessorKey 
-                              ? currency[column.accessorKey]?.toString() 
-                              : null}
-                        </TableCell>
-                      ))}
+                      <TableCell className="font-medium">{currency.CurrencyCode}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                          {currency.CurrencyName}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{currency.ConversionRate.toFixed(4)}</TableCell>
+                      <TableCell>
+                        {currency.IsDefault ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                            Default
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Standard</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewCurrency(currency.CurrencyID)}>View details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditCurrency(currency.CurrencyID)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openDefaultDialog(currency)} disabled={currency.IsDefault}>
+                              Set as default
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-500"
+                              onClick={() => openDeleteDialog(currency)}
+                              disabled={currency.IsDefault} // Prevent deleting default currency
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           )}
-
-          {/* Delete Confirmation Dialog */}
-          <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure you want to delete this currency?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the currency and remove it from the system.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-red-600 text-white hover:bg-red-700">
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {/* Set Default Currency Dialog */}
-          <AlertDialog open={defaultSetId !== null} onOpenChange={(open) => !open && setDefaultSetId(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Set as Default Currency?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will set the selected currency as the default currency for the system. The current default will be unset.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleSetDefault}>Confirm</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {/* Update Rate Dialog */}
-          <AlertDialog open={rateUpdateId !== null} onOpenChange={(open) => !open && setRateUpdateId(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Update Conversion Rate</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Enter the new conversion rate for this currency.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="py-4">
-                <Input
-                  type="number"
-                  min="0.0001"
-                  step="0.0001"
-                  value={newRate}
-                  onChange={(e) => setNewRate(parseFloat(e.target.value))}
-                  placeholder="New conversion rate"
-                />
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleRateUpdate}>Update</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </CardContent>
       </Card>
+
+      <ConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={closeDeleteDialog}
+        onConfirm={handleDeleteCurrency}
+        title="Delete Currency"
+        description={
+          selectedCurrency
+            ? `Are you sure you want to delete "${selectedCurrency.CurrencyName} (${selectedCurrency.CurrencyCode})"? This action cannot be undone.`
+            : "Are you sure you want to delete this currency?"
+        }
+        cancelText="Cancel"
+        confirmText="Delete"
+        type="danger"
+      />
+
+      <ConfirmationDialog
+        isOpen={isDefaultDialogOpen}
+        onClose={closeDefaultDialog}
+        onConfirm={handleSetDefaultCurrency}
+        title="Set Default Currency"
+        description={
+          selectedCurrency
+            ? `Are you sure you want to set "${selectedCurrency.CurrencyName} (${selectedCurrency.CurrencyCode})" as the default currency? This will change the base currency for all calculations.`
+            : "Are you sure you want to change the default currency?"
+        }
+        cancelText="Cancel"
+        confirmText="Set as Default"
+        type="info"
+      />
     </div>
   );
 };
