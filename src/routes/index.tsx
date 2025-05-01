@@ -23,6 +23,7 @@ import deductionChargesRoutes from "./deductionChargesRoutes";
 import contractRoutes from "./contractRoutes";
 import terminationRoutes from "./terminationRoutes";
 import invoiceRoutes from "./invoiceRoutes";
+import receiptRoutes from "./receiptRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -93,6 +94,9 @@ const AppRoutes = () => {
 
           {/* Lease Invoice routes */}
           {invoiceRoutes}
+
+          {/* Lease Receipt routes */}
+          {receiptRoutes}
         </Route>
 
         {/* Catch-all route */}
