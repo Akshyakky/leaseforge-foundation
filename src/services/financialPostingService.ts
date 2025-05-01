@@ -20,7 +20,7 @@ import {
 class FinancialPostingService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Finance/financialposting");
+    super("/Master/financialposting");
   }
 
   /**

@@ -8,7 +8,7 @@ import { LeaseReceipt, ReceiptDetail, ReceiptStatistics, ReceiptSearchParams, Ap
 class LeaseReceiptService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Finance/leasereceipt");
+    super("/Master/leasereceipt");
   }
 
   /**

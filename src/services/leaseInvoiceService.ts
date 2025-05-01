@@ -17,7 +17,7 @@ import {
 class LeaseInvoiceService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Finance/leaseinvoice");
+    super("/Master/leaseinvoice");
   }
 
   /**
