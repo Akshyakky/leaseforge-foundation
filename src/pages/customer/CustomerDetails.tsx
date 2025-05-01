@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { customerService } from "@/services/customerService";
+import { customerService, CustomerType } from "@/services/customerService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
-import { Customer, CustomerContact, CustomerAttachment, CustomerType } from "@/types/customerTypes";
+import { Customer, CustomerContact, CustomerAttachment } from "@/types/customerTypes";
 import { format } from "date-fns";
 
 export const CustomerDetails = () => {
