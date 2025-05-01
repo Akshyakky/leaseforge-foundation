@@ -1,34 +1,31 @@
 // src/types/financialPostingTypes.ts
-export interface BaseEntity {
+export interface BasePosting {
   CreatedBy?: string;
   CreatedOn?: string;
-  CreatedID?: number;
   UpdatedBy?: string;
   UpdatedOn?: string;
-  UpdatedID?: number;
   DeletedBy?: string;
   DeletedOn?: string;
-  DeletedID?: number;
-  RecordStatus?: number;
+  RecordStatus?: boolean;
 }
 
-export interface Posting extends BaseEntity {
+export interface Posting extends BasePosting {
   PostingID: number;
   PostingNo: string;
-  PostingType: string; // Invoice, Receipt, Journal, Payment, Petty Cash, Revenue, Reversal
+  PostingType: string;
   PostingDate: string | Date;
   TransactionDate: string | Date;
   FiscalYearID: number;
   ReferenceNo?: string;
-  SourceType?: string; // Contract, Termination, Manual, etc.
-  SourceID?: number; // ContractID, TerminationID, etc.
+  SourceType?: string;
+  SourceID?: number;
   AccountID: number;
   TotalDebit: number;
   TotalCredit: number;
   CurrencyID: number;
   ExchangeRate: number;
   Narration?: string;
-  PostingStatus: string; // Draft, Posted, Reversed
+  PostingStatus: string;
   IsReversed?: boolean;
   ReversalID?: number;
   ReversalReason?: string;
@@ -53,15 +50,15 @@ export interface Posting extends BaseEntity {
   CostCenter4Name?: string;
 }
 
-export interface PostingDetail extends BaseEntity {
+export interface PostingDetail extends BasePosting {
   PostingDetailID: number;
   PostingID: number;
   LineNo: number;
   AccountID: number;
   DebitAmount: number;
   CreditAmount: number;
-  BaseDebitAmount: number;
-  BaseCreditAmount: number;
+  BaseDebitAmount?: number;
+  BaseCreditAmount?: number;
   Narration?: string;
   ReferenceNo?: string;
   ReferenceDate?: string | Date;
@@ -86,13 +83,13 @@ export interface PostingDetail extends BaseEntity {
   PropertyName?: string;
 }
 
-export interface PostingAttachment extends BaseEntity {
+export interface PostingAttachment extends BasePosting {
   PostingAttachmentID: number;
   PostingID: number;
   DocTypeID: number;
   DocumentName: string;
   FilePath?: string;
-  FileContent?: string | ArrayBuffer | null; // Base64 encoded string
+  FileContent?: string | ArrayBuffer | null;
   FileContentType?: string;
   FileSize?: number;
   DocIssueDate?: string | Date;
@@ -104,13 +101,83 @@ export interface PostingAttachment extends BaseEntity {
 
   // For UI only - not sent to backend
   file?: File;
-  fileUrl?: string; // For displaying preview
+  fileUrl?: string;
+}
+
+export interface PostingValidation {
+  Status: number;
+  Message: string;
+  TotalDebit: number;
+  TotalCredit: number;
+  Difference: number;
 }
 
 export interface PostingStatistics {
-  typeCounts: { PostingType: string; PostingCount: number; PostedCount: number; ReversedCount: number; TotalAmount: number }[];
-  dailyPostings: { PostingDate: string | Date; TotalAmount: number; PostingCount: number }[];
-  topAccounts: { AccountID: number; AccountName: string; PostingCount: number; TotalDebits: number; TotalCredits: number }[];
+  byType: {
+    PostingType: string;
+    PostingCount: number;
+    PostedCount: number;
+    ReversedCount: number;
+    TotalAmount: number;
+  }[];
+  byDay: {
+    PostingDate: string | Date;
+    TotalAmount: number;
+    PostingCount: number;
+  }[];
+  topAccounts: {
+    AccountID: number;
+    AccountName: string;
+    PostingCount: number;
+    TotalDebits: number;
+    TotalCredits: number;
+  }[];
+}
+
+export interface GeneralLedgerReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeName: string;
+  PostingDate: string | Date;
+  PostingNo: string;
+  PostingType: string;
+  ReferenceNo: string;
+  DebitAmount: number;
+  CreditAmount: number;
+  Narration: string;
+  PostingStatus: string;
+  IsReversed: boolean;
+}
+
+export interface TrialBalanceReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeName: string;
+  Balance: number;
+  TotalDebit: number;
+  TotalCredit: number;
+}
+
+export interface ProfitLossReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeName: string;
+  TotalDebit: number;
+  TotalCredit: number;
+  NetAmount: number;
+}
+
+export interface BalanceSheetReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeName: string;
+  TotalDebit: number;
+  TotalCredit: number;
+  Balance: number;
 }
 
 // Search parameters
@@ -127,65 +194,13 @@ export interface PostingSearchParams {
   companyID?: number;
 }
 
-// Financial reports
-export interface GeneralLedgerEntry {
-  AccountID: number;
-  AccountCode: string;
-  AccountName: string;
-  AccountTypeName: string;
-  PostingDate: string | Date;
-  PostingNo: string;
-  PostingType: string;
-  ReferenceNo?: string;
-  DebitAmount: number;
-  CreditAmount: number;
-  Narration?: string;
-  PostingStatus: string;
-  IsReversed: boolean;
-}
-
-export interface TrialBalanceEntry {
-  AccountID: number;
-  AccountCode: string;
-  AccountName: string;
-  AccountTypeName: string;
-  Balance: number;
-  TotalDebit: number;
-  TotalCredit: number;
-}
-
-export interface ProfitLossEntry {
-  AccountID: number;
-  AccountCode: string;
-  AccountName: string;
-  AccountTypeName: string;
-  TotalDebit: number;
-  TotalCredit: number;
-  NetAmount: number;
-}
-
-export interface BalanceSheetEntry {
-  AccountID: number;
-  AccountCode: string;
-  AccountName: string;
-  AccountTypeName: string;
-  TotalDebit: number;
-  TotalCredit: number;
-  Balance: number;
-}
-
-// Request for creating/updating a posting with details and attachments
-export interface PostingRequest {
-  posting: Partial<Posting>;
-  details?: Partial<PostingDetail>[];
-  attachments?: Partial<PostingAttachment>[];
-}
-
 // API response
 export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
   NewPostingID?: number;
+  ReversalPostingID?: number;
+  PostingID?: number;
   [key: string]: any;
   data?: T;
 }

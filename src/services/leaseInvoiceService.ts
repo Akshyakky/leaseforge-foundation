@@ -1,17 +1,15 @@
 // src/services/leaseInvoiceService.ts
-import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
+import { BaseService, BaseRequest } from "./BaseService";
 import {
   LeaseInvoice,
-  InvoicePaymentAllocation,
+  PaymentAllocation,
   AdditionalCharge,
   InvoiceStatistics,
-  OverdueInvoice,
-  OverdueStatistics,
+  InvoiceAgingReport,
   InvoiceSearchParams,
-  GenerateInvoiceParams,
-  InvoiceRequest,
+  InvoiceGenerationParams,
   ApiResponse,
-} from "../types/leaseTypes";
+} from "../types/leaseInvoiceTypes";
 
 /**
  * Service for lease invoice management operations
@@ -19,15 +17,19 @@ import {
 class LeaseInvoiceService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Lease/invoice");
+    super("/Finance/leaseinvoice");
   }
 
   /**
-   * Create a new invoice with optional payment allocations and additional charges
-   * @param data - The invoice data, payment allocations, and additional charges
+   * Create a new lease invoice with optional payment allocations and additional charges
+   * @param data - The invoice data with optional payment allocations and additional charges
    * @returns Response with status and newly created invoice ID
    */
-  async createInvoice(data: InvoiceRequest): Promise<ApiResponse> {
+  async createInvoice(data: {
+    invoice: Partial<LeaseInvoice>;
+    paymentAllocations?: Partial<PaymentAllocation>[];
+    additionalCharges?: Partial<AdditionalCharge>[];
+  }): Promise<ApiResponse> {
     // Prepare JSON data for child records
     const paymentAllocationsJSON = data.paymentAllocations && data.paymentAllocations.length > 0 ? JSON.stringify(data.paymentAllocations) : null;
 
@@ -36,7 +38,7 @@ class LeaseInvoiceService extends BaseService {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Invoice
       parameters: {
-        // Invoice master data
+        // Invoice header parameters
         InvoiceNo: data.invoice.InvoiceNo,
         InvoiceDate: data.invoice.InvoiceDate,
         DueDate: data.invoice.DueDate,
@@ -67,9 +69,9 @@ class LeaseInvoiceService extends BaseService {
         PaymentAllocationJSON: paymentAllocationsJSON,
         AdditionalChargesJSON: additionalChargesJSON,
 
-        // Current user info
-        CurrentUserID: data.invoice.CreatedID,
-        CurrentUserName: data.invoice.CreatedBy,
+        // Current user information for audit
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -91,11 +93,15 @@ class LeaseInvoiceService extends BaseService {
   }
 
   /**
-   * Update an existing invoice
-   * @param data - The invoice data to update
+   * Update an existing lease invoice
+   * @param data - The invoice data with optional payment allocations and additional charges
    * @returns Response with status
    */
-  async updateInvoice(data: InvoiceRequest & { invoice: Partial<LeaseInvoice> & { InvoiceID: number } }): Promise<ApiResponse> {
+  async updateInvoice(data: {
+    invoice: Partial<LeaseInvoice> & { InvoiceID: number };
+    paymentAllocations?: Partial<PaymentAllocation>[];
+    additionalCharges?: Partial<AdditionalCharge>[];
+  }): Promise<ApiResponse> {
     // Prepare JSON data for child records
     const paymentAllocationsJSON = data.paymentAllocations && data.paymentAllocations.length > 0 ? JSON.stringify(data.paymentAllocations) : null;
 
@@ -104,7 +110,7 @@ class LeaseInvoiceService extends BaseService {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Invoice
       parameters: {
-        // Invoice master data
+        // Invoice header parameters
         InvoiceID: data.invoice.InvoiceID,
         InvoiceNo: data.invoice.InvoiceNo,
         InvoiceDate: data.invoice.InvoiceDate,
@@ -136,9 +142,9 @@ class LeaseInvoiceService extends BaseService {
         PaymentAllocationJSON: paymentAllocationsJSON,
         AdditionalChargesJSON: additionalChargesJSON,
 
-        // Current user info
-        CurrentUserID: data.invoice.UpdatedID,
-        CurrentUserName: data.invoice.UpdatedBy,
+        // Current user information for audit
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -175,11 +181,11 @@ class LeaseInvoiceService extends BaseService {
   /**
    * Get an invoice by ID (including payment allocations)
    * @param invoiceId - The ID of the invoice to fetch
-   * @returns Invoice object with payment allocations
+   * @returns Object containing the invoice and its payment allocations
    */
   async getInvoiceById(invoiceId: number): Promise<{
     invoice: LeaseInvoice | null;
-    paymentAllocations: InvoicePaymentAllocation[];
+    paymentAllocations: PaymentAllocation[];
   }> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch Invoice by ID
@@ -210,7 +216,8 @@ class LeaseInvoiceService extends BaseService {
       mode: 5, // Mode 5: Soft Delete Invoice
       parameters: {
         InvoiceID: invoiceId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -257,7 +264,7 @@ class LeaseInvoiceService extends BaseService {
   }
 
   /**
-   * Update an invoice status
+   * Update invoice status
    * @param invoiceId - The ID of the invoice
    * @param status - The new status
    * @returns Response with status
@@ -268,7 +275,8 @@ class LeaseInvoiceService extends BaseService {
       parameters: {
         InvoiceID: invoiceId,
         InvoiceStatus: status,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -290,10 +298,10 @@ class LeaseInvoiceService extends BaseService {
 
   /**
    * Generate invoices for a contract
-   * @param params - Parameters for invoice generation
-   * @returns Response with status and array of generated invoice IDs
+   * @param params - Invoice generation parameters
+   * @returns Response with status and array of newly created invoice IDs
    */
-  async generateInvoices(params: GenerateInvoiceParams): Promise<ApiResponse> {
+  async generateInvoices(params: InvoiceGenerationParams): Promise<ApiResponse & { invoiceIds?: number[] }> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Generate Invoices for Contract
       parameters: {
@@ -302,19 +310,22 @@ class LeaseInvoiceService extends BaseService {
         GenerateForYear: params.year,
         GenerateFromDate: params.fromDate,
         GenerateToDate: params.toDate,
-        GenerateInvoiceType: params.invoiceType,
-        CurrentUserID: this.getCurrentUser(),
+        GenerateInvoiceType: params.invoiceType || "Rent",
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
+      const invoiceIds = response.data ? response.data.map((item: any) => item.InvoiceID) : [];
+
       this.showSuccess("Invoices generated successfully");
       return {
         Status: 1,
         Message: response.message || "Invoices generated successfully",
-        GeneratedInvoices: response.data || [],
+        invoiceIds: invoiceIds,
       };
     }
 
@@ -326,102 +337,111 @@ class LeaseInvoiceService extends BaseService {
 
   /**
    * Get invoice statistics
+   * @param fromDate - Optional start date for statistics
+   * @param toDate - Optional end date for statistics
+   * @param companyId - Optional company ID filter
    * @returns Invoice statistics
    */
-  async getInvoiceStatistics(): Promise<InvoiceStatistics> {
+  async getInvoiceStatistics(fromDate?: Date | string, toDate?: Date | string, companyId?: number): Promise<InvoiceStatistics> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Invoice Statistics
-      parameters: {},
+      parameters: {
+        FilterFromDate: fromDate,
+        FilterToDate: toDate,
+        FilterCompanyID: companyId,
+      },
     };
 
     const response = await this.execute(request, false);
 
     if (response.success) {
       return {
-        statusCounts: response.table1 || [],
+        byStatus: response.table1 || [],
         overdueInvoices: response.table2 || [],
-        invoicesByCustomer: response.table3 || [],
-        invoicesByMonth: response.table4 || [],
+        byCustomer: response.table3 || [],
+        byMonth: response.table4 || [],
       };
     }
 
     return {
-      statusCounts: [],
+      byStatus: [],
       overdueInvoices: [],
-      invoicesByCustomer: [],
-      invoicesByMonth: [],
+      byCustomer: [],
+      byMonth: [],
     };
   }
 
   /**
-   * Process payment (apply receipt to invoice)
+   * Apply payment to an invoice
    * @param invoiceId - The invoice ID
-   * @param allocations - Payment allocations
+   * @param allocations - Array of payment allocations
    * @returns Response with status
    */
-  async processPayment(invoiceId: number, allocations: Partial<InvoicePaymentAllocation>[]): Promise<ApiResponse> {
-    const paymentAllocationJSON = JSON.stringify(allocations);
+  async applyPayment(invoiceId: number, allocations: Partial<PaymentAllocation>[]): Promise<ApiResponse> {
+    const paymentAllocationsJSON = allocations.length > 0 ? JSON.stringify(allocations) : null;
 
     const request: BaseRequest = {
       mode: 10, // Mode 10: Process Payment (Apply Receipt to Invoice)
       parameters: {
         InvoiceID: invoiceId,
-        PaymentAllocationJSON: paymentAllocationJSON,
-        CurrentUserID: this.getCurrentUser(),
+        PaymentAllocationJSON: paymentAllocationsJSON,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment processed successfully");
+      this.showSuccess("Payment applied successfully");
       return {
         Status: 1,
-        Message: response.message || "Payment processed successfully",
+        Message: response.message || "Payment applied successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to process payment",
+      Message: response.message || "Failed to apply payment",
     };
   }
 
   /**
-   * Post an invoice to the financial system
+   * Create financial posting (GL entries) for an invoice
    * @param invoiceId - The invoice ID
    * @returns Response with status and posting ID
    */
-  async postInvoiceToFinancials(invoiceId: number): Promise<ApiResponse> {
+  async createFinancialPosting(invoiceId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 11, // Mode 11: Financial Posting
+      mode: 11, // Mode 11: Financial Posting (Creating GL entries for invoice)
       parameters: {
         InvoiceID: invoiceId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Invoice posted to financial system successfully");
+      this.showSuccess("Invoice posted to general ledger successfully");
       return {
         Status: 1,
-        Message: response.message || "Invoice posted to financial system successfully",
+        Message: response.message || "Invoice posted to general ledger successfully",
         PostingID: response.PostingID,
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to post invoice to financial system",
+      Message: response.message || "Failed to post invoice to general ledger",
     };
   }
 
   /**
    * Get invoices by contract
    * @param contractId - The contract ID
-   * @returns Array of invoices for the contract
+   * @returns Array of invoices for the specified contract
    */
   async getInvoicesByContract(contractId: number): Promise<LeaseInvoice[]> {
     const request: BaseRequest = {
@@ -438,7 +458,7 @@ class LeaseInvoiceService extends BaseService {
   /**
    * Get invoices by customer
    * @param customerId - The customer ID
-   * @returns Array of invoices for the customer
+   * @returns Array of invoices for the specified customer
    */
   async getInvoicesByCustomer(customerId: number): Promise<LeaseInvoice[]> {
     const request: BaseRequest = {
@@ -455,7 +475,7 @@ class LeaseInvoiceService extends BaseService {
   /**
    * Get invoices by unit
    * @param unitId - The unit ID
-   * @returns Array of invoices for the unit
+   * @returns Array of invoices for the specified unit
    */
   async getInvoicesByUnit(unitId: number): Promise<LeaseInvoice[]> {
     const request: BaseRequest = {
@@ -470,13 +490,13 @@ class LeaseInvoiceService extends BaseService {
   }
 
   /**
-   * Get overdue invoices report
+   * Get overdue invoices report with aging analysis
    * @param customerId - Optional customer ID filter
    * @param contractId - Optional contract ID filter
    * @param companyId - Optional company ID filter
-   * @returns Overdue invoices report
+   * @returns Overdue invoices report with aging analysis
    */
-  async getOverdueInvoicesReport(customerId?: number, contractId?: number, companyId?: number): Promise<OverdueStatistics> {
+  async getOverdueInvoicesReport(customerId?: number, contractId?: number, companyId?: number): Promise<InvoiceAgingReport> {
     const request: BaseRequest = {
       mode: 15, // Mode 15: Get Overdue Invoices Report
       parameters: {
@@ -491,14 +511,30 @@ class LeaseInvoiceService extends BaseService {
     if (response.success) {
       return {
         invoices: response.table1 || [],
-        agingSummary: response.table2 || [],
+        summary: response.table2 || [],
       };
     }
 
     return {
       invoices: [],
-      agingSummary: [],
+      summary: [],
     };
+  }
+
+  /**
+   * Helper method to get the current user ID
+   * @returns The current user ID
+   */
+  private getCurrentUserId(): number | undefined {
+    try {
+      const state = (window as any).store.getState();
+      if (state && state.auth && state.auth.user) {
+        return state.auth.user.userID;
+      }
+    } catch (error) {
+      console.warn("Error retrieving current user ID from store:", error);
+    }
+    return undefined;
   }
 }
 

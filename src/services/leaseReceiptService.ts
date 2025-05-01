@@ -1,6 +1,6 @@
 // src/services/leaseReceiptService.ts
-import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
-import { LeaseReceipt, ReceiptDetail, ReceiptStatistics, ReceiptSearchParams, ReceiptRequest, ApiResponse } from "../types/leaseTypes";
+import { BaseService, BaseRequest } from "./BaseService";
+import { LeaseReceipt, ReceiptDetail, ReceiptStatistics, ReceiptSearchParams, ApiResponse } from "../types/leaseReceiptTypes";
 
 /**
  * Service for lease receipt management operations
@@ -8,22 +8,22 @@ import { LeaseReceipt, ReceiptDetail, ReceiptStatistics, ReceiptSearchParams, Re
 class LeaseReceiptService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Lease/receipt");
+    super("/Finance/leasereceipt");
   }
 
   /**
-   * Create a new receipt with optional details
-   * @param data - The receipt data and details
+   * Create a new lease receipt with optional details (invoice allocations)
+   * @param data - The receipt data with optional details
    * @returns Response with status and newly created receipt ID
    */
-  async createReceipt(data: ReceiptRequest): Promise<ApiResponse> {
-    // Prepare JSON data for details
+  async createReceipt(data: { receipt: Partial<LeaseReceipt>; details?: Partial<ReceiptDetail>[] }): Promise<ApiResponse> {
+    // Prepare JSON data for details if provided
     const receiptDetailsJSON = data.details && data.details.length > 0 ? JSON.stringify(data.details) : null;
 
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Receipt with Details
       parameters: {
-        // Receipt master data
+        // Receipt header parameters
         ReceiptNo: data.receipt.ReceiptNo,
         ReceiptDate: data.receipt.ReceiptDate,
         CustomerID: data.receipt.CustomerID,
@@ -46,9 +46,9 @@ class LeaseReceiptService extends BaseService {
         // JSON parameter for details
         ReceiptDetailsJSON: receiptDetailsJSON,
 
-        // Current user info
-        CurrentUserID: data.receipt.CreatedID,
-        CurrentUserName: data.receipt.CreatedBy,
+        // Current user information for audit
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -70,18 +70,18 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Update an existing receipt
-   * @param data - The receipt data to update
+   * Update an existing lease receipt
+   * @param data - The receipt data with optional details
    * @returns Response with status
    */
-  async updateReceipt(data: ReceiptRequest & { receipt: Partial<LeaseReceipt> & { ReceiptID: number } }): Promise<ApiResponse> {
-    // Prepare JSON data for details
+  async updateReceipt(data: { receipt: Partial<LeaseReceipt> & { ReceiptID: number }; details?: Partial<ReceiptDetail>[] }): Promise<ApiResponse> {
+    // Prepare JSON data for details if provided
     const receiptDetailsJSON = data.details && data.details.length > 0 ? JSON.stringify(data.details) : null;
 
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing Receipt
       parameters: {
-        // Receipt master data
+        // Receipt header parameters
         ReceiptID: data.receipt.ReceiptID,
         ReceiptNo: data.receipt.ReceiptNo,
         ReceiptDate: data.receipt.ReceiptDate,
@@ -105,9 +105,9 @@ class LeaseReceiptService extends BaseService {
         // JSON parameter for details
         ReceiptDetailsJSON: receiptDetailsJSON,
 
-        // Current user info
-        CurrentUserID: data.receipt.UpdatedID,
-        CurrentUserName: data.receipt.UpdatedBy,
+        // Current user information for audit
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -144,7 +144,7 @@ class LeaseReceiptService extends BaseService {
   /**
    * Get a receipt by ID (including details)
    * @param receiptId - The ID of the receipt to fetch
-   * @returns Receipt object with details
+   * @returns Object containing the receipt and its details
    */
   async getReceiptById(receiptId: number): Promise<{
     receipt: LeaseReceipt | null;
@@ -179,7 +179,8 @@ class LeaseReceiptService extends BaseService {
       mode: 5, // Mode 5: Soft Delete Receipt
       parameters: {
         ReceiptID: receiptId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -225,16 +226,17 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Post a receipt to the financial system
+   * Post receipt to financial system
    * @param receiptId - The receipt ID
    * @returns Response with status and posting ID
    */
-  async postReceiptToFinancials(receiptId: number): Promise<ApiResponse> {
+  async postToFinancialSystem(receiptId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Post Receipt to Financial System
       parameters: {
         ReceiptID: receiptId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -257,7 +259,7 @@ class LeaseReceiptService extends BaseService {
 
   /**
    * Change receipt status
-   * @param receiptId - The ID of the receipt
+   * @param receiptId - The receipt ID
    * @param status - The new status
    * @returns Response with status
    */
@@ -267,7 +269,8 @@ class LeaseReceiptService extends BaseService {
       parameters: {
         ReceiptID: receiptId,
         ReceiptStatus: status,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -288,7 +291,7 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Get unpaid invoices for a customer and contract
+   * Get unpaid invoices for customer and contract
    * @param customerId - The customer ID
    * @param contractId - The contract ID
    * @returns Array of unpaid invoices
@@ -307,20 +310,21 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Add invoice allocation to a receipt
+   * Add invoice to receipt
    * @param receiptId - The receipt ID
    * @param invoiceId - The invoice ID
    * @param allocatedAmount - The amount to allocate
    * @returns Response with status and new detail ID
    */
-  async addInvoiceAllocation(receiptId: number, invoiceId: number, allocatedAmount: number): Promise<ApiResponse> {
+  async addInvoiceToReceipt(receiptId: number, invoiceId: number, allocatedAmount: number): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 10, // Mode 10: Add Invoice to Receipt
       parameters: {
         ReceiptID: receiptId,
         InvoiceID: invoiceId,
         AllocatedAmount: allocatedAmount,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -342,102 +346,109 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Update a receipt detail (allocation)
+   * Update receipt detail (allocation)
    * @param detailId - The receipt detail ID
    * @param allocatedAmount - The new allocated amount
    * @returns Response with status
    */
-  async updateInvoiceAllocation(detailId: number, allocatedAmount: number): Promise<ApiResponse> {
+  async updateReceiptDetail(detailId: number, allocatedAmount: number): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Update Receipt Detail (Allocation)
       parameters: {
         ReceiptDetailID: detailId,
         AllocatedAmount: allocatedAmount,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Invoice allocation updated successfully");
+      this.showSuccess("Allocation updated successfully");
       return {
         Status: 1,
-        Message: response.message || "Invoice allocation updated successfully",
+        Message: response.message || "Allocation updated successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to update invoice allocation",
+      Message: response.message || "Failed to update allocation",
     };
   }
 
   /**
-   * Delete a receipt detail (allocation)
+   * Delete receipt detail (remove allocation)
    * @param detailId - The receipt detail ID
    * @returns Response with status
    */
-  async deleteInvoiceAllocation(detailId: number): Promise<ApiResponse> {
+  async deleteReceiptDetail(detailId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 12, // Mode 12: Delete Receipt Detail (Allocation)
+      mode: 12, // Mode 12: Delete Receipt Detail (Remove Allocation)
       parameters: {
         ReceiptDetailID: detailId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Invoice allocation removed successfully");
+      this.showSuccess("Allocation removed successfully");
       return {
         Status: 1,
-        Message: response.message || "Invoice allocation removed successfully",
+        Message: response.message || "Allocation removed successfully",
       };
     }
 
     return {
       Status: 0,
-      Message: response.message || "Failed to remove invoice allocation",
+      Message: response.message || "Failed to remove allocation",
     };
   }
 
   /**
-   * Validate a receipt (check for balance)
+   * Validate receipt (check allocation balance)
    * @param receiptId - The receipt ID
-   * @returns Validation results
+   * @returns Response with validation result
    */
-  async validateReceipt(receiptId: number): Promise<{
-    valid: boolean;
-    message: string;
-    receiptAmount?: number;
-    allocatedAmount?: number;
-    difference?: number;
-  }> {
+  async validateReceipt(receiptId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Validate Receipt (Check for Balance)
       parameters: {
         ReceiptID: receiptId,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
-    const response = await this.execute(request, false);
+    const response = await this.execute(request);
+
+    if (response.success) {
+      return {
+        Status: 1,
+        Message: response.message || "Receipt validation successful",
+        ReceiptAmount: response.ReceiptAmount,
+        AllocatedAmount: response.AllocatedAmount,
+        Difference: response.Difference,
+      };
+    }
 
     return {
-      valid: response.Status === 1,
-      message: response.Message,
-      receiptAmount: response.ReceiptAmount,
-      allocatedAmount: response.AllocatedAmount,
-      difference: response.Difference,
+      Status: 0,
+      Message: response.message || "Receipt validation failed",
+      ReceiptAmount: response.ReceiptAmount,
+      AllocatedAmount: response.AllocatedAmount,
+      Difference: response.Difference,
     };
   }
 
   /**
    * Get receipt statistics
-   * @param fromDate - Start date for statistics
-   * @param toDate - End date for statistics
+   * @param fromDate - Optional start date for statistics
+   * @param toDate - Optional end date for statistics
    * @param companyId - Optional company ID filter
    * @returns Receipt statistics
    */
@@ -455,17 +466,17 @@ class LeaseReceiptService extends BaseService {
 
     if (response.success) {
       return {
-        statusCounts: response.table1 || [],
-        paymentMethodCounts: response.table2 || [],
-        dailyReceipts: response.table3 || [],
+        byStatus: response.table1 || [],
+        byPaymentMethod: response.table2 || [],
+        byDate: response.table3 || [],
         topCustomers: response.table4 || [],
       };
     }
 
     return {
-      statusCounts: [],
-      paymentMethodCounts: [],
-      dailyReceipts: [],
+      byStatus: [],
+      byPaymentMethod: [],
+      byDate: [],
       topCustomers: [],
     };
   }
@@ -473,7 +484,7 @@ class LeaseReceiptService extends BaseService {
   /**
    * Get receipts by customer
    * @param customerId - The customer ID
-   * @returns Array of receipts for the customer
+   * @returns Array of receipts for the specified customer
    */
   async getReceiptsByCustomer(customerId: number): Promise<LeaseReceipt[]> {
     const request: BaseRequest = {
@@ -490,7 +501,7 @@ class LeaseReceiptService extends BaseService {
   /**
    * Get receipts by contract
    * @param contractId - The contract ID
-   * @returns Array of receipts for the contract
+   * @returns Array of receipts for the specified contract
    */
   async getReceiptsByContract(contractId: number): Promise<LeaseReceipt[]> {
     const request: BaseRequest = {
@@ -508,7 +519,7 @@ class LeaseReceiptService extends BaseService {
    * Mark cheque as cleared/uncleared
    * @param receiptId - The receipt ID
    * @param isCleared - Whether the cheque is cleared
-   * @param clearingDate - Date of clearing (if cleared)
+   * @param clearingDate - Optional clearing date (defaults to current date if isCleared is true)
    * @returns Response with status
    */
   async markChequeStatus(receiptId: number, isCleared: boolean, clearingDate?: Date | string): Promise<ApiResponse> {
@@ -518,7 +529,8 @@ class LeaseReceiptService extends BaseService {
         ReceiptID: receiptId,
         IsCleared: isCleared,
         ClearingDate: clearingDate,
-        CurrentUserID: this.getCurrentUser(),
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -539,9 +551,9 @@ class LeaseReceiptService extends BaseService {
   }
 
   /**
-   * Get receipts that can be posted to financials
+   * Get receipts for posting
    * @param companyId - Optional company ID filter
-   * @returns Array of receipts ready for posting
+   * @returns Array of receipts that can be posted
    */
   async getReceiptsForPosting(companyId?: number): Promise<LeaseReceipt[]> {
     const request: BaseRequest = {
@@ -553,6 +565,22 @@ class LeaseReceiptService extends BaseService {
 
     const response = await this.execute<LeaseReceipt[]>(request);
     return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Helper method to get the current user ID
+   * @returns The current user ID
+   */
+  private getCurrentUserId(): number | undefined {
+    try {
+      const state = (window as any).store.getState();
+      if (state && state.auth && state.auth.user) {
+        return state.auth.user.userID;
+      }
+    } catch (error) {
+      console.warn("Error retrieving current user ID from store:", error);
+    }
+    return undefined;
   }
 }
 
