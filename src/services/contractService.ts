@@ -12,7 +12,7 @@ import {
 } from "../types/contractTypes";
 
 // Re-export types from contractTypes
-export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment, ContractRequest, ContractSearchParams, ContractStatistics, ApiResponse };
+export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment, ContractRequest, ContractSearchParams, ContractStatistics };
 
 /**
  * Service for contract management operations

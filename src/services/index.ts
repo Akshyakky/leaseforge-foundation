@@ -21,5 +21,9 @@ export * from "./additionalChargesService";
 export * from "./currencyService";
 export * from "./deductionService";
 export * from "./contractService";
+export * from "./terminationService";
+export * from "./financialPostingService";
+export * from "./leaseInvoiceService";
+export * from "./leaseReceiptService";
 
 // Add any new services to this file for easy importing
