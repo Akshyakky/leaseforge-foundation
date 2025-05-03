@@ -3,7 +3,6 @@ import { BaseService, BaseRequest } from "./BaseService";
 
 export interface User {
   UserID: number;
-  CompID?: number;
   UserName: string;
   UserFullName: string;
   PhoneNo?: string;
@@ -11,9 +10,17 @@ export interface User {
   DepartmentID?: number;
   RoleID?: number;
   IsActive: boolean;
-  CompanyName?: string;
+  // Updated to support new company structure
+  DefaultCompanyID?: number;
+  DefaultCompanyName?: string;
   DepartmentName?: string;
   RoleName?: string;
+}
+
+export interface UserCompany {
+  CompanyID: number;
+  CompanyName: string;
+  IsDefault: boolean;
 }
 
 /**
@@ -42,9 +49,9 @@ class UserService extends BaseService {
   /**
    * Get a user by ID
    * @param userId - The ID of the user to fetch
-   * @returns The user object or null if not found
+   * @returns The user object and their companies or null if not found
    */
-  async getUserById(userId: number): Promise<User | null> {
+  async getUserById(userId: number): Promise<{ user: User | null; companies: UserCompany[] }> {
     const request: BaseRequest = {
       mode: 4, // Mode 4: Fetch User by ID
       parameters: {
@@ -52,20 +59,51 @@ class UserService extends BaseService {
       },
     };
 
-    const response = await this.execute<User[]>(request);
-    return response.success && response.data && response.data.length > 0 ? response.data[0] : null;
+    const response = await this.execute<any>(request);
+
+    // The first result set contains user data
+    const user = response.success && response.table1 && response.table1.length > 0 ? response.table1[0] : null;
+
+    // The second result set contains company data
+    const companies = response.table2 && response.table2.length > 0 ? response.table2 : [];
+
+    return { user, companies };
+  }
+
+  /**
+   * Get companies assigned to a user
+   * @param userId - The ID of the user
+   * @returns JSON string of companies
+   */
+  async getUserCompanies(userId: number): Promise<UserCompany[]> {
+    const request: BaseRequest = {
+      mode: 9, // Mode 9: Get Companies for JSON output
+      parameters: {
+        UserID: userId,
+      },
+    };
+
+    const response = await this.execute<{ CompaniesJSON: string }>(request);
+
+    if (response.success && response.data && response.data.CompaniesJSON) {
+      return JSON.parse(response.data.CompaniesJSON);
+    }
+
+    return [];
   }
 
   /**
    * Create a new user
    * @param user - The user data to create
+   * @param companies - The companies to assign to the user
    * @returns true if successful, false otherwise
    */
-  async createUser(user: Partial<User>): Promise<boolean> {
+  async createUser(user: Partial<User>, companies: UserCompany[]): Promise<boolean> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New User
       parameters: {
         ...user,
+        CompaniesJSON: JSON.stringify(companies),
       },
     };
 
@@ -81,13 +119,16 @@ class UserService extends BaseService {
   /**
    * Update an existing user
    * @param user - The user data to update
+   * @param companies - The companies to assign to the user, or null to not update companies
    * @returns true if successful, false otherwise
    */
-  async updateUser(user: Partial<User>): Promise<boolean> {
+  async updateUser(user: Partial<User>, companies?: UserCompany[]): Promise<boolean> {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Existing User
       parameters: {
         ...user,
+        // Only include CompaniesJSON if companies were provided
+        ...(companies ? { CompaniesJSON: JSON.stringify(companies) } : {}),
       },
     };
 

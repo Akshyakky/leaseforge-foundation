@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,14 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   isOpen: boolean;
+  permissions?: {
+    canView: boolean;
+    canAdd?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
+    canExport?: boolean;
+    canPrint?: boolean;
+  };
 }
 
 interface SubMenuProps {
@@ -24,9 +32,22 @@ interface SubMenuProps {
   label: string;
   isOpen: boolean;
   children: React.ReactNode;
+  permissions?: {
+    canView: boolean;
+    canAdd?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
+    canExport?: boolean;
+    canPrint?: boolean;
+  };
 }
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen, permissions }) => {
+  // Skip rendering if user doesn't have view permission
+  if (permissions && !permissions.canView) {
+    return null;
+  }
+
   if (!isOpen) {
     return (
       <TooltipProvider>
@@ -66,8 +87,30 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isOpen }) => {
   );
 };
 
-const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
+const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children, permissions }) => {
+  const location = useLocation();
   const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
+
+  // Skip rendering if user doesn't have view permission
+  if (permissions && !permissions.canView) {
+    return null;
+  }
+
+  // Check if any child routes are active to automatically expand the submenu
+  useEffect(() => {
+    // This assumes children are NavItem components with to props
+    const childrenArray = React.Children.toArray(children);
+    const hasActiveChild = childrenArray.some((child) => {
+      if (React.isValidElement(child) && child.props.to) {
+        return location.pathname.startsWith(child.props.to);
+      }
+      return false;
+    });
+
+    if (hasActiveChild) {
+      setIsSubmenuOpen(true);
+    }
+  }, [location.pathname, children]);
 
   if (!isOpen) {
     // When the sidebar is collapsed, show a tooltip with submenu items
@@ -95,11 +138,23 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
     );
   }
 
+  // Filter out any null children (those without view permissions)
+  const visibleChildren = React.Children.toArray(children).filter((child) => child !== null);
+
+  // Don't render the submenu if it has no visible children
+  if (visibleChildren.length === 0) {
+    return null;
+  }
+
   return (
     <div className="space-y-1">
       <button
         onClick={() => setIsSubmenuOpen(!isSubmenuOpen)}
-        className={cn("w-full flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors", "hover:bg-accent/50 text-muted-foreground hover:text-foreground")}
+        className={cn(
+          "w-full flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
+          "hover:bg-accent/50 text-muted-foreground hover:text-foreground",
+          isSubmenuOpen && "bg-accent/30"
+        )}
       >
         <div className="flex items-center gap-3">
           {icon}
@@ -108,7 +163,7 @@ const SubMenu: React.FC<SubMenuProps> = ({ icon, label, isOpen, children }) => {
         {isSubmenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
 
-      {isSubmenuOpen && <div className="pl-6 space-y-1">{children}</div>}
+      {isSubmenuOpen && <div className="pl-6 space-y-1">{visibleChildren}</div>}
     </div>
   );
 };
@@ -118,11 +173,13 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   const { user } = useAppSelector((state) => state.auth);
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMenus = async () => {
       try {
         setLoading(true);
+        setError(null);
         let menuData: MenuItem[] = [];
 
         // If user ID is available, fetch user-specific menus
@@ -136,6 +193,7 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
         setMenus(menuData);
       } catch (error) {
         console.error("Error fetching menus:", error);
+        setError("Failed to load navigation menu. Please try refreshing the page.");
       } finally {
         setLoading(false);
       }
@@ -143,6 +201,40 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
     fetchMenus();
   }, [user?.id]);
+
+  // Static menu items that are always available
+  const staticMenuItems = useMemo(
+    () => [
+      {
+        path: "/dashboard",
+        icon: "LayoutDashboard",
+        label: t("nav.dashboard"),
+      },
+    ],
+    [t]
+  );
+
+  // Footer menu items
+  const footerMenuItems = useMemo(
+    () => [
+      {
+        path: "/settings",
+        icon: "Settings",
+        label: t("nav.settings"),
+      },
+      {
+        path: "/language-settings",
+        icon: "Languages",
+        label: t("nav.language"),
+      },
+      {
+        path: "/support",
+        icon: "HelpCircle",
+        label: t("nav.support"),
+      },
+    ],
+    [t]
+  );
 
   return (
     <aside className={cn("fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-width duration-300 ease-in-out", isOpen ? "w-64" : "w-16")}>
@@ -168,35 +260,69 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
             <div className="flex justify-center py-4">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : error ? (
+            <div className="text-sm text-destructive px-3 py-2 text-center">{error}</div>
           ) : (
             <>
-              {/* Home dashboard is always available */}
-              <NavItem to="/dashboard" icon={getLucideIcon("LayoutDashboard", 18)} label={t("nav.dashboard")} isOpen={isOpen} />
+              {/* Static menu items first */}
+              {staticMenuItems.map((item) => (
+                <NavItem key={`static-${item.path}`} to={item.path} icon={getLucideIcon(item.icon, 18)} label={item.label} isOpen={isOpen} />
+              ))}
+
+              {/* Separator between static and dynamic items */}
+              {menus.length > 0 && <div className="h-px bg-border/70 my-2" />}
 
               {/* Render dynamic menu items */}
               {menus.map((menu) => {
                 const menuIcon = getLucideIcon(menu.MenuIcon || "CircleDot", 18);
+                const menuPermissions = {
+                  canView: menu.CanView !== undefined ? menu.CanView : true,
+                  canAdd: menu.CanAdd,
+                  canEdit: menu.CanEdit,
+                  canDelete: menu.CanDelete,
+                  canExport: menu.CanExport,
+                  canPrint: menu.CanPrint,
+                };
+
+                // Skip rendering if user doesn't have view permission
+                if (!menuPermissions.canView) {
+                  return null;
+                }
 
                 // Menu with submenus
                 if (menu.subMenus && menu.subMenus.length > 0) {
                   return (
-                    <SubMenu key={`menu-${menu.MenuID}`} icon={menuIcon} label={menu.MenuName} isOpen={isOpen}>
-                      {menu.subMenus.map((subMenu) => (
-                        <NavItem
-                          key={`submenu-${subMenu.SubMenuID}`}
-                          to={subMenu.SubMenuPath || "#"}
-                          icon={getLucideIcon(subMenu.SubMenuIcon || "Circle", 16)}
-                          label={subMenu.SubMenuName}
-                          isOpen={true}
-                        />
-                      ))}
+                    <SubMenu key={`menu-${menu.MenuID}`} icon={menuIcon} label={menu.MenuName} isOpen={isOpen} permissions={menuPermissions}>
+                      {menu.subMenus.map((subMenu) => {
+                        const subMenuPermissions = {
+                          canView: subMenu.CanView !== undefined ? subMenu.CanView : true,
+                          canAdd: subMenu.CanAdd,
+                          canEdit: subMenu.CanEdit,
+                          canDelete: subMenu.CanDelete,
+                          canExport: subMenu.CanExport,
+                          canPrint: subMenu.CanPrint,
+                        };
+
+                        return (
+                          <NavItem
+                            key={`submenu-${subMenu.SubMenuID}`}
+                            to={subMenu.SubMenuPath || "#"}
+                            icon={getLucideIcon(subMenu.SubMenuIcon || "Circle", 16)}
+                            label={subMenu.SubMenuName}
+                            isOpen={true}
+                            permissions={subMenuPermissions}
+                          />
+                        );
+                      })}
                     </SubMenu>
                   );
                 }
-                // Menu without submenus
-                else {
-                  return <NavItem key={`menu-${menu.MenuID}`} to={menu.MenuPath || "#"} icon={menuIcon} label={menu.MenuName} isOpen={isOpen} />;
+                // Menu without submenus (direct link)
+                else if (menu.MenuPath) {
+                  return <NavItem key={`menu-${menu.MenuID}`} to={menu.MenuPath} icon={menuIcon} label={menu.MenuName} isOpen={isOpen} permissions={menuPermissions} />;
                 }
+
+                return null;
               })}
             </>
           )}
@@ -204,11 +330,9 @@ const DynamicSidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
         {/* Footer navigation - settings and support */}
         <nav className="space-y-1 mt-auto pt-4 border-t border-border/50 w-full">
-          <NavItem to="/settings" icon={getLucideIcon("Settings", 18)} label={t("nav.settings")} isOpen={isOpen} />
-
-          <NavItem to="/language-settings" icon={getLucideIcon("Languages", 18)} label={t("nav.language")} isOpen={isOpen} />
-
-          <NavItem to="/support" icon={getLucideIcon("HelpCircle", 18)} label="Support" isOpen={isOpen} />
+          {footerMenuItems.map((item) => (
+            <NavItem key={`footer-${item.path}`} to={item.path} icon={getLucideIcon(item.icon, 18)} label={item.label} isOpen={isOpen} />
+          ))}
         </nav>
       </div>
     </aside>

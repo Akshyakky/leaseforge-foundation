@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { roleService, Role } from "@/services/roleService";
-import { userRightsService, UserRight } from "@/services/userRightsService";
+import { roleRightsService, RoleRight } from "@/services/roleRightsService";
 import { menuService, MenuItem } from "@/services/menuService";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,7 +35,8 @@ const RolePermissions = () => {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [originalRights, setOriginalRights] = useState<UserRight[]>([]);
+  const [originalRights, setOriginalRights] = useState<RoleRight[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number>(1); // Default company ID
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,8 +61,13 @@ const RolePermissions = () => {
         const menuData = await menuService.getAllMenus();
 
         // Fetch current role permissions
-        const rightsData = await userRightsService.getRoleRights(parseInt(id));
+        const rightsData = await roleRightsService.getRoleRightsByRoleId(parseInt(id));
         setOriginalRights(rightsData);
+
+        // Get company ID from the first right if available
+        if (rightsData.length > 0 && rightsData[0].CompanyID) {
+          setSelectedCompanyId(rightsData[0].CompanyID);
+        }
 
         // Build permissions structure
         const permissionsData = buildPermissionsStructure(menuData, rightsData);
@@ -77,7 +83,7 @@ const RolePermissions = () => {
     fetchData();
   }, [id, navigate]);
 
-  const buildPermissionsStructure = (menus: MenuItem[], rights: UserRight[]): Permission[] => {
+  const buildPermissionsStructure = (menus: MenuItem[], rights: RoleRight[]): Permission[] => {
     return menus.map((menu) => {
       const menuPermission: Permission = {
         MenuID: menu.MenuID,
@@ -145,8 +151,8 @@ const RolePermissions = () => {
     try {
       setSaving(true);
 
-      // Convert permissions structure back to UserRight array
-      const updatedRights: UserRight[] = [];
+      // Convert permissions structure back to RoleRight array
+      const updatedRights: RoleRight[] = [];
 
       permissions.forEach((menu) => {
         menu.subMenus.forEach((subMenu) => {
@@ -156,7 +162,8 @@ const RolePermissions = () => {
             const existingRight = originalRights.find((r) => r.MenuID === menu.MenuID && r.SubMenuID === subMenu.SubMenuID);
 
             updatedRights.push({
-              UserRightID: existingRight?.UserRightID || 0,
+              RoleRightID: existingRight?.RoleRightID || 0,
+              CompanyID: selectedCompanyId,
               RoleID: role.RoleID,
               MenuID: menu.MenuID,
               SubMenuID: subMenu.SubMenuID,
@@ -168,7 +175,7 @@ const RolePermissions = () => {
         });
       });
 
-      const success = await userRightsService.saveRoleRights(role.RoleID, updatedRights);
+      const success = await roleRightsService.saveRoleRights(role.RoleID, updatedRights);
 
       if (success) {
         toast.success("Permissions saved successfully");

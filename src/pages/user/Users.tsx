@@ -140,6 +140,7 @@ const Users = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Company</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
@@ -157,6 +158,7 @@ const Users = () => {
                           {user.IsActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
+                      <TableCell>{user.DefaultCompanyName || "N/A"}</TableCell>
                       <TableCell className="text-muted-foreground">{user.DepartmentName || "N/A"}</TableCell>
                       <TableCell>
                         <DropdownMenu>

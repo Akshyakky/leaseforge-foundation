@@ -1,4 +1,4 @@
-// src/services/RoleService.ts
+// src/services/roleService.ts
 import { BaseService, BaseRequest } from "./BaseService";
 
 export interface Role {
@@ -118,6 +118,23 @@ class RoleService extends BaseService {
   }
 
   /**
+   * Search roles
+   * @param searchText - Text to search for in role names
+   * @returns Array of matching roles
+   */
+  async searchRoles(searchText: string): Promise<Role[]> {
+    const request: BaseRequest = {
+      mode: 6, // Mode 6: Search Roles
+      parameters: {
+        SearchText: searchText,
+      },
+    };
+
+    const response = await this.execute<Role[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
    * Get users associated with a role
    * @param roleId - The role ID
    * @returns Array of users
@@ -132,6 +149,30 @@ class RoleService extends BaseService {
 
     const response = await this.execute<any[]>(request);
     return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Clone a role with a new name
+   * @param sourceRoleId - Source role ID
+   * @param newRoleName - New role name
+   * @returns true if successful, false otherwise
+   */
+  async cloneRole(sourceRoleId: number, newRoleName: string): Promise<boolean> {
+    const request: BaseRequest = {
+      mode: 8, // Mode 8: Clone Role
+      parameters: {
+        RoleID: sourceRoleId,
+        RoleName: newRoleName,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Role cloned successfully");
+    }
+
+    return response.success;
   }
 
   /**

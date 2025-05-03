@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
-import { userService, User } from "@/services/userService";
+import { userService, User, UserCompany } from "@/services/userService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -15,6 +15,10 @@ import { Separator } from "@/components/ui/separator";
 import { roleService, Role } from "@/services/roleService";
 import { departmentService } from "@/services/departmentService";
 import { companyService } from "@/services/companyService";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { FormControl, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 // Interface for department
 interface Department {
@@ -36,10 +40,10 @@ const formSchema = z
     ConfirmPassword: z.string().optional(),
     EmailID: z.string().email("Invalid email address").max(100, "Email cannot exceed 100 characters"),
     PhoneNo: z.string().optional(),
-    CompID: z.string().min(1, "Company is required"),
     DepartmentID: z.string().optional(),
     RoleID: z.string().min(1, "Role is required"),
     IsActive: z.boolean().default(true),
+    // We will handle company selection separately
   })
   .refine(
     (data) => {
@@ -72,6 +76,10 @@ const UserForm = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
 
+  // State to manage selected companies
+  const [selectedCompanies, setSelectedCompanies] = useState<UserCompany[]>([]);
+  const [defaultCompanyId, setDefaultCompanyId] = useState<number | null>(null);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -81,7 +89,6 @@ const UserForm = () => {
       ConfirmPassword: "",
       EmailID: "",
       PhoneNo: "",
-      CompID: preselectedCompanyId || "",
       DepartmentID: "",
       RoleID: preselectedRoleId || "",
       IsActive: true,
@@ -111,6 +118,22 @@ const UserForm = () => {
             companyName: company.CompanyName,
           }))
         );
+
+        // If there's a preselected company, add it to the selected companies
+        if (preselectedCompanyId && !isEdit) {
+          const companyId = parseInt(preselectedCompanyId);
+          const company = companiesData.find((c) => c.CompanyID === companyId);
+          if (company) {
+            setSelectedCompanies([
+              {
+                CompanyID: company.CompanyID,
+                CompanyName: company.CompanyName,
+                IsDefault: true,
+              },
+            ]);
+            setDefaultCompanyId(company.CompanyID);
+          }
+        }
       } catch (error) {
         console.error("Error fetching initial data:", error);
         toast.error("Failed to load form data");
@@ -118,27 +141,36 @@ const UserForm = () => {
     };
 
     fetchInitialData();
-  }, []);
+  }, [preselectedCompanyId, isEdit]);
 
   useEffect(() => {
     const fetchUser = async () => {
       if (isEdit && id) {
         try {
           const userData = await userService.getUserById(parseInt(id));
-          if (userData) {
-            setUser(userData);
+
+          if (userData.user) {
+            setUser(userData.user);
             form.reset({
-              UserName: userData.UserName,
-              UserFullName: userData.UserFullName,
-              EmailID: userData.EmailID,
-              PhoneNo: userData.PhoneNo || "",
-              CompID: userData.CompID?.toString() || "",
-              DepartmentID: userData.DepartmentID?.toString() || "",
-              RoleID: userData.RoleID?.toString() || "",
-              IsActive: userData.IsActive,
+              UserName: userData.user.UserName,
+              UserFullName: userData.user.UserFullName,
+              EmailID: userData.user.EmailID,
+              PhoneNo: userData.user.PhoneNo || "",
+              DepartmentID: userData.user.DepartmentID?.toString() || "",
+              RoleID: userData.user.RoleID?.toString() || "",
+              IsActive: userData.user.IsActive,
               UserPassword: "",
               ConfirmPassword: "",
             });
+
+            // Set the user's companies
+            setSelectedCompanies(userData.companies);
+
+            // Set default company
+            const defaultCompany = userData.companies.find((c) => c.IsDefault);
+            if (defaultCompany) {
+              setDefaultCompanyId(defaultCompany.CompanyID);
+            }
           } else {
             toast.error("User not found");
             navigate("/users");
@@ -158,7 +190,81 @@ const UserForm = () => {
     fetchUser();
   }, [id, isEdit, navigate, form]);
 
+  const handleCompanySelection = (companyId: number, checked: boolean) => {
+    if (checked) {
+      // Find the company to add
+      const companyToAdd = companies.find((c) => c.companyID === companyId);
+      if (companyToAdd) {
+        // If this is the first company being added, make it default
+        const isDefault = selectedCompanies.length === 0 || companyId === defaultCompanyId;
+
+        if (isDefault) {
+          setDefaultCompanyId(companyId);
+        }
+
+        setSelectedCompanies([
+          ...selectedCompanies,
+          {
+            CompanyID: companyToAdd.companyID,
+            CompanyName: companyToAdd.companyName,
+            IsDefault: isDefault,
+          },
+        ]);
+      }
+    } else {
+      // Remove the company
+      const updatedCompanies = selectedCompanies.filter((c) => c.CompanyID !== companyId);
+      setSelectedCompanies(updatedCompanies);
+
+      // If the default company was removed, set a new default if any companies remain
+      if (companyId === defaultCompanyId && updatedCompanies.length > 0) {
+        setDefaultCompanyId(updatedCompanies[0].CompanyID);
+
+        // Update the IsDefault flag
+        setSelectedCompanies(
+          updatedCompanies.map((c) => ({
+            ...c,
+            IsDefault: c.CompanyID === updatedCompanies[0].CompanyID,
+          }))
+        );
+      } else if (updatedCompanies.length === 0) {
+        setDefaultCompanyId(null);
+      }
+    }
+  };
+
+  const handleDefaultCompanyChange = (companyId: number) => {
+    setDefaultCompanyId(companyId);
+
+    // Update all companies to reflect the new default
+    setSelectedCompanies(
+      selectedCompanies.map((company) => ({
+        ...company,
+        IsDefault: company.CompanyID === companyId,
+      }))
+    );
+  };
+
+  const validateCompanies = () => {
+    if (selectedCompanies.length === 0) {
+      toast.error("At least one company must be selected");
+      return false;
+    }
+
+    if (!selectedCompanies.some((c) => c.IsDefault)) {
+      toast.error("A default company must be selected");
+      return false;
+    }
+
+    return true;
+  };
+
   const onSubmit = async (data: FormValues) => {
+    // Validate company selection
+    if (!validateCompanies()) {
+      return;
+    }
+
     setLoading(true);
     try {
       let success;
@@ -168,7 +274,6 @@ const UserForm = () => {
         UserFullName: data.UserFullName,
         EmailID: data.EmailID,
         PhoneNo: data.PhoneNo,
-        CompID: data.CompID ? parseInt(data.CompID) : undefined,
         DepartmentID: data.DepartmentID ? parseInt(data.DepartmentID) : undefined,
         RoleID: data.RoleID ? parseInt(data.RoleID) : undefined,
         IsActive: data.IsActive,
@@ -176,17 +281,20 @@ const UserForm = () => {
       };
 
       if (isEdit && user) {
-        success = await userService.updateUser({
-          ...userData,
-          UserID: user.UserID,
-        });
+        success = await userService.updateUser(
+          {
+            ...userData,
+            UserID: user.UserID,
+          },
+          selectedCompanies
+        );
       } else {
         if (!userData.UserPassword) {
           toast.error("Password is required for new users");
           setLoading(false);
           return;
         }
-        success = await userService.createUser(userData);
+        success = await userService.createUser(userData, selectedCompanies);
       }
 
       if (success) {
@@ -238,19 +346,48 @@ const UserForm = () => {
 
               <Separator />
 
+              {/* Company Selection Section */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium">Company Assignment</h3>
+                  <p className="text-sm text-muted-foreground">Select the companies this user can access</p>
+                </div>
+
+                <div className="border rounded-md p-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    {companies.map((company) => {
+                      const isSelected = selectedCompanies.some((c) => c.CompanyID === company.companyID);
+                      return (
+                        <div key={company.companyID} className="flex flex-col space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`company-${company.companyID}`}
+                              checked={isSelected}
+                              onCheckedChange={(checked) => handleCompanySelection(company.companyID, checked === true)}
+                            />
+                            <Label htmlFor={`company-${company.companyID}`}>{company.companyName}</Label>
+                          </div>
+
+                          {isSelected && (
+                            <div className="ml-6">
+                              <RadioGroup value={defaultCompanyId?.toString() || ""} onValueChange={(value) => handleDefaultCompanyChange(parseInt(value))}>
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value={company.companyID.toString()} id={`default-${company.companyID}`} />
+                                  <Label htmlFor={`default-${company.companyID}`}>Set as default company</Label>
+                                </div>
+                              </RadioGroup>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {selectedCompanies.length === 0 && <p className="text-sm text-red-500">At least one company must be selected</p>}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  form={form}
-                  name="CompID"
-                  label="Company"
-                  type="select"
-                  options={companies.map((company) => ({
-                    label: company.companyName,
-                    value: company.companyID.toString(),
-                  }))}
-                  placeholder="Select company"
-                  required
-                />
                 <FormField
                   form={form}
                   name="DepartmentID"
