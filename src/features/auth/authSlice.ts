@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction, createAsyncThunk, isRejectedWithValue } from "@reduxjs/toolkit";
 import { authService, LoginRequest, LoginResponse } from "@/services/authService";
 import { toast } from "sonner";
 
@@ -11,7 +11,13 @@ interface User {
   phoneNo?: string;
   departmentName?: string;
   roleName?: string;
-  companyName?: string;
+  currentCompanyId: string;
+  currentCompanyName: string;
+  companies: Array<{
+    id: string;
+    name: string;
+    isDefault: boolean;
+  }>;
 }
 
 interface AuthState {
@@ -22,7 +28,6 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 }
-
 const initialState: AuthState = {
   user: null,
   token: null,
@@ -93,6 +98,35 @@ export const checkAuthStatus = createAsyncThunk("auth/checkStatus", async (_, { 
   return true;
 });
 
+export const switchCompany = createAsyncThunk("auth/switchCompany", async (companyId: string, { getState, dispatch }) => {
+  try {
+    const state = getState() as { auth: AuthState };
+    const user = state.auth.user;
+
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+
+    const company = user.companies.find((c) => c.id === companyId);
+    if (!company) {
+      throw new Error("Company not found in user's company list");
+    }
+
+    // You may want to call an API here to update the user's default company
+    // For now, we'll just update the state
+
+    return {
+      companyId: company.id,
+      companyName: company.name,
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      return isRejectedWithValue(error.message);
+    }
+    return isRejectedWithValue("An unknown error occurred");
+  }
+});
+
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -144,7 +178,6 @@ const authSlice = createSlice({
           state.token = action.payload.token;
           state.refreshToken = action.payload.refreshToken || null;
 
-          // Map API user structure to our state structure
           state.user = {
             id: action.payload.user.userID.toString(),
             name: action.payload.user.userName,
@@ -154,7 +187,13 @@ const authSlice = createSlice({
             phoneNo: action.payload.user.phoneNo,
             departmentName: action.payload.user.departmentName,
             roleName: action.payload.user.roleName,
-            companyName: action.payload.user.companyName,
+            currentCompanyId: action.payload.user.compID.toString(),
+            currentCompanyName: action.payload.user.companyName,
+            companies: (action.payload.companies || []).map((company) => ({
+              id: company.companyID.toString(),
+              name: company.companyName,
+              isDefault: company.isDefault,
+            })),
           };
         }
       })
@@ -180,7 +219,13 @@ const authSlice = createSlice({
             phoneNo: action.payload.user.phoneNo,
             departmentName: action.payload.user.departmentName,
             roleName: action.payload.user.roleName,
-            companyName: action.payload.user.companyName,
+            currentCompanyId: action.payload.user.compID.toString(),
+            currentCompanyName: action.payload.user.companyName,
+            companies: (action.payload.companies || []).map((company) => ({
+              id: company.companyID.toString(),
+              name: company.companyName,
+              isDefault: company.isDefault,
+            })),
           };
         }
       })
@@ -207,6 +252,14 @@ const authSlice = createSlice({
           state.user = null;
           state.token = null;
           state.refreshToken = null;
+        }
+      })
+      .addCase(switchCompany.fulfilled, (state, action) => {
+        if (state.user) {
+          if (action.payload && typeof action.payload === "object" && "companyId" in action.payload && "companyName" in action.payload) {
+            state.user.currentCompanyId = action.payload.companyId;
+            state.user.currentCompanyName = action.payload.companyName;
+          }
         }
       });
   },

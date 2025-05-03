@@ -22,8 +22,14 @@ export interface LoginResponse {
     phoneNo?: string;
     departmentName?: string;
     roleName?: string;
-    companyName?: string;
+    compID: number;
+    companyName: string;
   };
+  companies?: Array<{
+    companyID: number;
+    companyName: string;
+    isDefault: boolean;
+  }>;
   token?: string;
   refreshToken?: string;
 }
@@ -42,6 +48,11 @@ export interface ChangePasswordRequest {
 export interface ResetPasswordRequest {
   username: string;
   email: string;
+}
+
+export interface SwitchCompanyRequest {
+  userID: number;
+  companyID: number;
 }
 
 /**
@@ -172,6 +183,31 @@ class AuthService extends BaseService {
     } else {
       toast.error("An error occurred while processing your request");
       return false;
+    }
+  }
+
+  async switchCompany(request: SwitchCompanyRequest): Promise<LoginResponse> {
+    try {
+      const response = await this.api.post<LoginResponse>("auth/switch-company", request);
+
+      if (response.data.success && response.data.token) {
+        // Update token and user info
+        sessionStorage.setItem("token", response.data.token);
+        localStorage.setItem("token", response.data.token);
+
+        if (response.data.refreshToken) {
+          localStorage.setItem("refreshToken", response.data.refreshToken);
+        }
+
+        return response.data;
+      } else {
+        throw new Error(response.data.message || "Company switch failed");
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || "Company switch failed");
+      }
+      throw error;
     }
   }
 

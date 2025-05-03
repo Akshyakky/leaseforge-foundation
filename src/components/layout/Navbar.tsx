@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input";
 import NotificationCenter from "@/components/notifications/NotificationCenter";
 import ThemeCustomizer from "@/components/theme/ThemeCustomizer";
+import CompanySelector from "@/components/common/CompanySelector";
 
 const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -38,6 +39,9 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* Company Selector */}
+          <CompanySelector />
+
           {/* Theme Customizer */}
           <ThemeCustomizer />
 
