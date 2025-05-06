@@ -4,7 +4,7 @@ import { customerService } from "@/services/customerService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, UserRound, Building, Home, Phone, Mail, CalendarDays, FileText, Link, Calendar, Plus } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, UserRound, Building, Home, Phone, Mail, CalendarDays, FileText, Link, Calendar, Plus, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,6 +12,10 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { Customer, CustomerContact, CustomerAttachment, CustomerType } from "@/types/customerTypes";
 import { format } from "date-fns";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 
 export const CustomerDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +27,21 @@ export const CustomerDetails = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [previewAttachment, setPreviewAttachment] = useState<CustomerAttachment | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
+
+  const openAttachmentPreview = (attachment: CustomerAttachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewOpen(true);
+  };
+
+  const openAttachmentGallery = (attachmentId?: number) => {
+    setInitialAttachmentId(attachmentId);
+    setGalleryOpen(true);
+  };
 
   useEffect(() => {
     const fetchCustomerData = async () => {
@@ -355,45 +374,71 @@ export const CustomerDetails = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {attachments.map((attachment) => (
-                    <Card key={attachment.CustomerAttachmentID}>
-                      <CardContent className="p-4">
-                        <div className="flex justify-between">
-                          <div className="space-y-2">
-                            <div className="flex items-center">
-                              <span className="font-medium">{attachment.DocumentName}</span>
-                              {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
-                            </div>
-                            <div className="text-sm space-y-1">
-                              {attachment.DocIssueDate && (
-                                <div className="flex items-center text-muted-foreground">
-                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                                  Issue date: {formatDate(attachment.DocIssueDate)}
-                                </div>
-                              )}
-                              {attachment.DocExpiryDate && (
-                                <div className="flex items-center text-muted-foreground">
-                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                                  Expiry date: {formatDate(attachment.DocExpiryDate)}
-                                </div>
-                              )}
-                              {attachment.Remark && <div className="text-muted-foreground mt-1">{attachment.Remark}</div>}
+                <>
+                  <div className="flex justify-end mb-4">
+                    <Button variant="outline" onClick={() => openAttachmentGallery()}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      View All Documents
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {attachments.map((attachment) => (
+                      <Card key={attachment.CustomerAttachmentID} className="overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex gap-4">
+                            <AttachmentThumbnail
+                              fileUrl={attachment.fileUrl}
+                              fileName={attachment.DocumentName || "Document"}
+                              fileType={attachment.FileContentType}
+                              onClick={() => attachment.fileUrl && openAttachmentPreview(attachment)}
+                            />
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center">
+                                <span className="font-medium">{attachment.DocumentName}</span>
+                                {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                              </div>
+                              <div className="text-sm space-y-1">
+                                {attachment.DocIssueDate && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                    Issue date: {formatDate(attachment.DocIssueDate)}
+                                  </div>
+                                )}
+                                {attachment.DocExpiryDate && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                    Expiry date: {formatDate(attachment.DocExpiryDate)}
+                                  </div>
+                                )}
+                                {attachment.Remark && <div className="text-muted-foreground mt-1">{attachment.Remark}</div>}
+                              </div>
+
+                              {/* Document preview and download buttons */}
                               {attachment.fileUrl && (
-                                <div className="flex items-center mt-2">
-                                  <Link className="h-3.5 w-3.5 mr-1.5" />
-                                  <a href={attachment.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                    View Document
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Button variant="outline" size="sm" onClick={() => openAttachmentGallery(attachment.CustomerAttachmentID)} className="h-8 px-3">
+                                    <FileTypeIcon fileName={attachment.DocumentName || "Document"} fileType={attachment.FileContentType} size={14} className="mr-1.5" />
+                                    Preview
+                                  </Button>
+                                  <a
+                                    href={attachment.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={attachment.DocumentName}
+                                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+                                  >
+                                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                                    Download
                                   </a>
                                 </div>
                               )}
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </>
               )}
             </TabsContent>
           </Tabs>
@@ -410,6 +455,28 @@ export const CustomerDetails = () => {
         cancelText="Cancel"
         type="danger"
       />
+      {/* Attachment Preview Dialog */}
+      {previewAttachment && (
+        <AttachmentPreview
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUrl={previewAttachment.fileUrl}
+          fileName={previewAttachment.DocumentName || "Document"}
+          fileType={previewAttachment.FileContentType}
+          fileSize={previewAttachment.FileSize}
+          uploadDate={previewAttachment.CreatedOn}
+          uploadedBy={previewAttachment.CreatedBy}
+          description={previewAttachment.Remark}
+          documentType={previewAttachment.DocTypeName}
+          issueDate={previewAttachment.DocIssueDate}
+          expiryDate={previewAttachment.DocExpiryDate}
+        />
+      )}
+
+      {/* Attachment Gallery Dialog */}
+      {attachments.length > 0 && (
+        <AttachmentGallery isOpen={galleryOpen} onClose={() => setGalleryOpen(false)} attachments={attachments} initialAttachmentId={initialAttachmentId} />
+      )}
     </div>
   );
 };

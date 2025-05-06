@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
 import CustomerDashboard from "./CustomerDashboard";
+import ContractAnalyticsDashboard from "../contract/ContractAnalyticsDashboard";
 
 const DashboardCard = ({
   title,
@@ -174,6 +175,7 @@ const Dashboard = () => {
           </div>
         </CardContent>
       </Card>
+      <ContractAnalyticsDashboard />
       <CustomerDashboard />
     </div>
   );

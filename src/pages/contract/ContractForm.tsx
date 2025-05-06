@@ -14,7 +14,6 @@ import { unitService } from "@/services/unitService";
 import { additionalChargesService } from "@/services/additionalChargesService";
 import { docTypeService } from "@/services/docTypeService";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,9 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
+import { addMonths, addYears, differenceInDays, differenceInMonths, differenceInYears, format } from "date-fns";
 
 // Create schema for contract form validation
 const contractSchema = z.object({
@@ -279,7 +276,10 @@ const ContractForm: React.FC = () => {
         const units = form.getValues("units");
         if (units && units[index]) {
           const monthlyRent = units[index].RentPerMonth || 0;
-          form.setValue(`units.${index}.RentPerYear`, monthlyRent * 12);
+          const installments = units[index].NoOfInstallments || 12;
+
+          // Calculate yearly rent based on monthly rent and installments
+          form.setValue(`units.${index}.RentPerYear`, monthlyRent * installments);
         }
       }
 
@@ -297,15 +297,44 @@ const ContractForm: React.FC = () => {
       }
 
       // Auto-calculate charge total amount based on amount and tax
-      if (name && (name.includes("Amount") || name.includes("TaxPercentage")) && name.includes("additionalCharges")) {
+      if (name && (name.includes("Amount") || name.includes("TaxPercentage"))) {
         const index = parseInt(name.split(".")[1]);
         const charges = form.getValues("additionalCharges");
         if (charges && charges[index]) {
           const amount = charges[index].Amount || 0;
           const taxPercent = charges[index].TaxPercentage || 0;
           const taxAmount = (amount * taxPercent) / 100;
-          form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
-          form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
+          if (taxAmount > 0) {
+            form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+          }
+          if (amount > 0) {
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+          }
+          if (amount > 0 && taxAmount > 0) {
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
+          }
+        }
+      }
+
+      if (name && (name.includes(".FromDate") || name.includes(".ToDate"))) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const fromDate = units[index].FromDate;
+          const toDate = units[index].ToDate;
+
+          if (fromDate && toDate && toDate >= fromDate) {
+            // Calculate total days, months, and years between dates
+            const totalDays = differenceInDays(toDate, fromDate);
+            const totalMonths = differenceInMonths(toDate, fromDate);
+            const totalYears = differenceInYears(toDate, fromDate);
+
+            // Update form values with total counts
+            form.setValue(`units.${index}.ContractDays`, totalDays);
+            form.setValue(`units.${index}.ContractMonths`, totalMonths);
+            form.setValue(`units.${index}.ContractYears`, totalYears);
+          }
         }
       }
     });
@@ -313,21 +342,80 @@ const ContractForm: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [form]);
 
+  useEffect(() => {
+    const handleUnitChange = async (unitId: string, index: number) => {
+      if (unitId) {
+        try {
+          // Find unit in already loaded units first
+          let unitDetails = units.find((u) => u.UnitID.toString() === unitId);
+
+          // If not found, fetch the unit details from the API
+          if (!unitDetails) {
+            const { unit } = await unitService.getUnitById(parseInt(unitId));
+            unitDetails = unit;
+          }
+
+          if (unitDetails) {
+            // Populate rent values from the selected unit
+            if (unitDetails.PerMonth) {
+              form.setValue(`units.${index}.RentPerMonth`, unitDetails.PerMonth);
+            }
+
+            if (unitDetails.PerYear) {
+              form.setValue(`units.${index}.RentPerYear`, unitDetails.PerYear);
+            }
+
+            if (unitDetails.NoOfInstallmentLease) {
+              form.setValue(`units.${index}.NoOfInstallments`, unitDetails.NoOfInstallmentLease);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching unit details:", error);
+        }
+      }
+    };
+
+    // Subscribe to changes in unit selection
+    const subscription = form.watch((value, { name, type }) => {
+      // When a unit is selected
+      if (name && name.includes(".UnitID") && value) {
+        const index = parseInt(name.split(".")[1]);
+        const unitId = form.getValues(`units.${index}.UnitID`);
+        if (unitId) {
+          handleUnitChange(unitId, index);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, units]);
+
   // Add a new unit to the contract
   const addUnit = () => {
+    const fromDate = new Date();
+    const toDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+
+    // Calculate contract duration values
+    const totalDays = differenceInDays(toDate, fromDate);
+    const totalMonths = differenceInMonths(toDate, fromDate);
+    const totalYears = differenceInYears(toDate, fromDate);
+
     unitsFieldArray.append({
       UnitID: "",
-      FromDate: new Date(),
-      ToDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+      FromDate: fromDate,
+      ToDate: toDate,
       RentPerMonth: 0,
       RentPerYear: 0,
       TotalAmount: 0,
+      // Include calculated duration values
+      ContractDays: totalDays,
+      ContractMonths: totalMonths,
+      ContractYears: totalYears,
     });
 
     // Switch to units tab
     setActiveTab("units");
   };
-
   // Add a new charge to the contract
   const addCharge = () => {
     chargesFieldArray.append({
@@ -872,7 +960,13 @@ const ContractForm: React.FC = () => {
                                         <FormItem>
                                           <FormLabel>Contract Days</FormLabel>
                                           <FormControl>
-                                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)} />
+                                            <Input
+                                              type="number"
+                                              placeholder="0"
+                                              {...field}
+                                              readOnly
+                                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                            />
                                           </FormControl>
                                           <FormMessage />
                                         </FormItem>
@@ -886,7 +980,13 @@ const ContractForm: React.FC = () => {
                                         <FormItem>
                                           <FormLabel>Contract Months</FormLabel>
                                           <FormControl>
-                                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)} />
+                                            <Input
+                                              type="number"
+                                              placeholder="0"
+                                              {...field}
+                                              readOnly
+                                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                            />
                                           </FormControl>
                                           <FormMessage />
                                         </FormItem>
@@ -900,7 +1000,13 @@ const ContractForm: React.FC = () => {
                                         <FormItem>
                                           <FormLabel>Contract Years</FormLabel>
                                           <FormControl>
-                                            <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)} />
+                                            <Input
+                                              type="number"
+                                              placeholder="0"
+                                              {...field}
+                                              readOnly
+                                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                            />
                                           </FormControl>
                                           <FormMessage />
                                         </FormItem>

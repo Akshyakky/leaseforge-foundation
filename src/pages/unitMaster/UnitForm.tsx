@@ -195,6 +195,62 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     form.setValue("TotalAreaSqft", totalArea > 0 ? totalArea : undefined);
   }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft"), form]);
 
+  // Synchronize rent values based on available parameters
+  useEffect(() => {
+    // Get current values
+    const monthlyRent = form.watch("PerMonth");
+    const yearlyRent = form.watch("PerYear");
+    const installments = form.watch("NoOfInstallmentLease");
+
+    // Track which values are provided (not undefined, null, or 0)
+    const hasMonthly = monthlyRent !== undefined && monthlyRent !== null && monthlyRent !== 0;
+    const hasYearly = yearlyRent !== undefined && yearlyRent !== null && yearlyRent !== 0;
+    const hasInstallments = installments !== undefined && installments !== null && installments !== 0;
+
+    // Variables to track if we need to update values to prevent infinite loops
+    let updatingMonthly = false;
+    let updatingYearly = false;
+    let updatingInstallments = false;
+
+    // Case 1: Monthly and Yearly are provided, calculate Installments
+    if (hasMonthly && hasYearly && !hasInstallments) {
+      if (monthlyRent > 0) {
+        const calculatedInstallments = Math.round(yearlyRent / monthlyRent);
+        form.setValue("NoOfInstallmentLease", calculatedInstallments);
+        updatingInstallments = true;
+      }
+    }
+
+    // Case 2: Monthly and Installments are provided, calculate Yearly
+    if (hasMonthly && hasInstallments && !hasYearly) {
+      const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
+      form.setValue("PerYear", calculatedYearly);
+      updatingYearly = true;
+    }
+
+    // Case 3: Yearly and Installments are provided, calculate Monthly
+    if (hasYearly && hasInstallments && !hasMonthly) {
+      if (installments > 0) {
+        const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
+        form.setValue("PerMonth", calculatedMonthly);
+        updatingMonthly = true;
+      }
+    }
+
+    // Prevent inconsistencies if all three values are provided
+    if (hasMonthly && hasYearly && hasInstallments) {
+      // Check if values are consistent (within a small epsilon for floating point comparison)
+      const calculatedYearly = monthlyRent * installments;
+      const epsilon = 0.01; // Allow for small rounding differences
+
+      if (Math.abs(calculatedYearly - yearlyRent) > epsilon) {
+        // Values are inconsistent, prioritize monthly and installments
+        const newYearly = parseFloat((monthlyRent * installments).toFixed(2));
+        form.setValue("PerYear", newYearly);
+      }
+    }
+  }, [form.watch("PerMonth"), form.watch("PerYear"), form.watch("NoOfInstallmentLease")]);
+
   const handleContactsChange = (updatedContacts: UnitContact[]) => {
     setContacts(updatedContacts as ContactRow[]);
   };
