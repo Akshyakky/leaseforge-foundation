@@ -1,14 +1,14 @@
 // src/pages/contract/ContractForm.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Building, DollarSign, Calendar, Upload } from "lucide-react";
-import { contractService, Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment } from "@/services/contractService";
+import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Building, DollarSign } from "lucide-react";
+import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
 import { unitService } from "@/services/unitService";
 import { additionalChargesService } from "@/services/additionalChargesService";
@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { addMonths, addYears, differenceInDays, differenceInMonths, differenceInYears, format } from "date-fns";
+import { differenceInDays, differenceInMonths, differenceInYears, format } from "date-fns";
 
 // Create schema for contract form validation
 const contractSchema = z.object({
@@ -296,26 +296,6 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // Auto-calculate charge total amount based on amount and tax
-      if (name && (name.includes("Amount") || name.includes("TaxPercentage"))) {
-        const index = parseInt(name.split(".")[1]);
-        const charges = form.getValues("additionalCharges");
-        if (charges && charges[index]) {
-          const amount = charges[index].Amount || 0;
-          const taxPercent = charges[index].TaxPercentage || 0;
-          const taxAmount = (amount * taxPercent) / 100;
-          if (taxAmount > 0) {
-            form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
-          }
-          if (amount > 0) {
-            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
-          }
-          if (amount > 0 && taxAmount > 0) {
-            form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
-          }
-        }
-      }
-
       if (name && (name.includes(".FromDate") || name.includes(".ToDate"))) {
         const index = parseInt(name.split(".")[1]);
         const units = form.getValues("units");
@@ -334,6 +314,25 @@ const ContractForm: React.FC = () => {
             form.setValue(`units.${index}.ContractDays`, totalDays);
             form.setValue(`units.${index}.ContractMonths`, totalMonths);
             form.setValue(`units.${index}.ContractYears`, totalYears);
+          }
+        }
+      }
+      //Auto-calculate charge total amount based on amount and tax
+      if (name && (name.includes("Amount") || name.includes("TaxPercentage"))) {
+        const index = parseInt(name.split(".")[1]);
+        const charges = form.getValues("additionalCharges");
+        if (charges && charges[index]) {
+          const amount = charges[index].Amount || 0;
+          const taxPercent = charges[index].TaxPercentage || 0;
+          const taxAmount = (amount * taxPercent) / 100;
+          if (taxAmount > 0) {
+            form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+          }
+          if (amount > 0) {
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+          }
+          if (amount > 0 && taxAmount > 0) {
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
           }
         }
       }
