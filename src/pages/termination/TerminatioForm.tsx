@@ -1,19 +1,17 @@
 // src/pages/termination/TerminationForm.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload } from "lucide-react";
-import { terminationService, ContractTermination, TerminationDeduction, TerminationAttachment } from "@/services/terminationService";
+import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent } from "lucide-react";
+import { terminationService, ContractTermination } from "@/services/terminationService";
 import { contractService } from "@/services/contractService";
-import { deductionService } from "@/services/deductionService";
 import { docTypeService } from "@/services/docTypeService";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,8 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 
 // Create schema for termination form validation
@@ -61,6 +57,9 @@ const terminationSchema = z.object({
             required_error: "Deduction amount is required",
           })
           .min(0),
+        TaxID: z.number().optional().nullable(),
+        TaxCode: z.string().optional(),
+        TaxName: z.string().optional(),
         TaxPercentage: z.number().optional().nullable(),
         TaxAmount: z.number().optional().nullable(),
         TotalAmount: z
@@ -107,6 +106,7 @@ const TerminationForm: React.FC = () => {
   const [contracts, setContracts] = useState<any[]>([]);
   const [deductions, setDeductions] = useState<any[]>([]);
   const [docTypes, setDocTypes] = useState<any[]>([]);
+  const [taxes, setTaxes] = useState<Tax[]>([]);
 
   // Initialize form
   const form = useForm<TerminationFormValues>({
@@ -148,15 +148,17 @@ const TerminationForm: React.FC = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [contractsData, deductionsData, docTypesData] = await Promise.all([
+        const [contractsData, deductionsData, docTypesData, taxesData] = await Promise.all([
           contractService.getAllContracts(),
           terminationService.getAvailableDeductions(),
           docTypeService.getAllDocTypes(),
+          taxService.getAllTaxes(),
         ]);
 
         setContracts(contractsData);
         setDeductions(deductionsData);
         setDocTypes(docTypesData);
+        setTaxes(taxesData);
 
         // If editing, fetch the termination data
         if (isEdit && id) {
@@ -242,21 +244,38 @@ const TerminationForm: React.FC = () => {
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       // Auto-calculate deduction total amount based on amount and tax
-      if (name && (name.includes("DeductionAmount") || name.includes("TaxPercentage")) && name.includes("deductions")) {
+      if (name && (name.includes("DeductionAmount") || name.includes("TaxPercentage") || name.includes("TaxID")) && name.includes("deductions")) {
         const index = parseInt(name.split(".")[1]);
         const deductions = form.getValues("deductions");
         if (deductions && deductions[index]) {
           const amount = deductions[index].DeductionAmount || 0;
-          const taxPercent = deductions[index].TaxPercentage || 0;
-          const taxAmount = (amount * taxPercent) / 100;
-          form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
-          form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
+
+          // If TaxID is present, use the tax rate from the selected tax
+          if (deductions[index].TaxID) {
+            const selectedTax = taxes.find((tax) => tax.TaxID === deductions[index].TaxID);
+            if (selectedTax) {
+              const taxRate = selectedTax.TaxRate;
+              const taxAmount = (amount * taxRate) / 100;
+
+              form.setValue(`deductions.${index}.TaxPercentage`, taxRate);
+              form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
+              form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
+              form.setValue(`deductions.${index}.TaxCode`, selectedTax.TaxCode);
+              form.setValue(`deductions.${index}.TaxName`, selectedTax.TaxName);
+            }
+          } else {
+            // Fallback to manual tax percentage if no TaxID
+            const taxPercent = deductions[index].TaxPercentage || 0;
+            const taxAmount = (amount * taxPercent) / 100;
+            form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
+            form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
+          }
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, taxes]);
 
   // Calculate totals
   const calculateTotals = () => {
@@ -278,6 +297,7 @@ const TerminationForm: React.FC = () => {
     deductionsFieldArray.append({
       DeductionName: "",
       DeductionAmount: 0,
+      TaxID: null,
       TaxPercentage: 0,
       TaxAmount: 0,
       TotalAmount: 0,
@@ -340,6 +360,9 @@ const TerminationForm: React.FC = () => {
           DeductionName: deduction.DeductionName,
           DeductionDescription: deduction.DeductionDescription,
           DeductionAmount: deduction.DeductionAmount,
+          TaxID: deduction.TaxID, // Save Tax ID
+          TaxCode: deduction.TaxCode, // Save Tax Code
+          TaxName: deduction.TaxName, // Save Tax Name
           TaxPercentage: deduction.TaxPercentage,
           TaxAmount: deduction.TaxAmount,
           TotalAmount: deduction.TotalAmount,
@@ -450,10 +473,55 @@ const TerminationForm: React.FC = () => {
         form.setValue(`deductions.${index}.DeductionAmount`, selectedDeduction.DeductionValue);
       }
 
-      // Recalculate totals
+      // Recalculate totals based on tax
       const amount = form.getValues(`deductions.${index}.DeductionAmount`) || 0;
-      const taxPercent = form.getValues(`deductions.${index}.TaxPercentage`) || 0;
-      const taxAmount = (amount * taxPercent) / 100;
+      const taxId = form.getValues(`deductions.${index}.TaxID`);
+
+      if (taxId) {
+        const selectedTax = taxes.find((tax) => tax.TaxID === taxId);
+        if (selectedTax) {
+          const taxRate = selectedTax.TaxRate;
+          const taxAmount = (amount * taxRate) / 100;
+
+          form.setValue(`deductions.${index}.TaxPercentage`, taxRate);
+          form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
+          form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
+        }
+      } else {
+        const taxPercent = form.getValues(`deductions.${index}.TaxPercentage`) || 0;
+        const taxAmount = (amount * taxPercent) / 100;
+        form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
+        form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
+      }
+    }
+  };
+
+  // Handle tax selection
+  const handleTaxSelect = (taxId: string, index: number) => {
+    const taxIdNum = parseInt(taxId);
+    if (taxIdNum === 0) {
+      // Clear tax
+      form.setValue(`deductions.${index}.TaxCode`, "");
+      form.setValue(`deductions.${index}.TaxName`, "");
+      form.setValue(`deductions.${index}.TaxPercentage`, 0);
+
+      // Recalculate with zero tax
+      const amount = form.getValues(`deductions.${index}.DeductionAmount`) || 0;
+      form.setValue(`deductions.${index}.TaxAmount`, 0);
+      form.setValue(`deductions.${index}.TotalAmount`, amount);
+
+      return;
+    }
+
+    const selectedTax = taxes.find((tax) => tax.TaxID === taxIdNum);
+    if (selectedTax) {
+      form.setValue(`deductions.${index}.TaxCode`, selectedTax.TaxCode);
+      form.setValue(`deductions.${index}.TaxName`, selectedTax.TaxName);
+      form.setValue(`deductions.${index}.TaxPercentage`, selectedTax.TaxRate);
+
+      // Recalculate tax amount and total
+      const amount = form.getValues(`deductions.${index}.DeductionAmount`) || 0;
+      const taxAmount = (amount * selectedTax.TaxRate) / 100;
       form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
       form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
     }
@@ -484,16 +552,6 @@ const TerminationForm: React.FC = () => {
       refundAmount,
       creditNoteAmount,
     };
-  };
-
-  // Format date for display
-  const formatDate = (date?: Date | null) => {
-    if (!date) return "";
-    try {
-      return format(date, "dd MMM yyyy");
-    } catch (error) {
-      return "";
-    }
   };
 
   if (initialLoading) {
@@ -949,6 +1007,39 @@ const TerminationForm: React.FC = () => {
                                   )}
                                 />
 
+                                {/* Tax selection from Tax Master */}
+                                <div className="space-y-2">
+                                  <FormLabel>Tax Selection</FormLabel>
+                                  <Select
+                                    value={form.watch(`deductions.${index}.TaxID`) ? form.watch(`deductions.${index}.TaxID`).toString() : "0"}
+                                    onValueChange={(value) => handleTaxSelect(value, index)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Select Tax" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="0">No Tax</SelectItem>
+                                      {taxes.map((tax) => (
+                                        <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
+                                          {tax.TaxName} ({tax.TaxCode}) - {tax.TaxRate}%
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormDescription>
+                                    {form.watch(`deductions.${index}.TaxID`) ? (
+                                      <div className="flex items-center mt-1">
+                                        <Percent className="h-4 w-4 mr-1 text-muted-foreground" />
+                                        <span>
+                                          Using: {form.watch(`deductions.${index}.TaxName`)} ({form.watch(`deductions.${index}.TaxCode`)})
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      "Select a tax from Tax Master or use manual rate"
+                                    )}
+                                  </FormDescription>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                   <FormField
                                     control={form.control}
@@ -957,7 +1048,13 @@ const TerminationForm: React.FC = () => {
                                       <FormItem>
                                         <FormLabel>Tax Percentage (%)</FormLabel>
                                         <FormControl>
-                                          <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
+                                          <Input
+                                            type="number"
+                                            placeholder="0.00"
+                                            {...field}
+                                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                            disabled={!!form.watch(`deductions.${index}.TaxID`)}
+                                          />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1188,5 +1285,6 @@ const TerminationForm: React.FC = () => {
 
 // Import DollarSign icon
 import { DollarSign } from "lucide-react";
+import { Tax, taxService } from "@/services";
 
 export default TerminationForm;
