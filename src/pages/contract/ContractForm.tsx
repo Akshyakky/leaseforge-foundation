@@ -22,6 +22,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { differenceInDays, differenceInMonths, differenceInYears, format } from "date-fns";
+import { Tax, taxService } from "@/services";
 
 // Create schema for contract form validation
 const contractSchema = z.object({
@@ -63,6 +64,7 @@ const contractSchema = z.object({
         RentFreePeriodFrom: z.date().optional().nullable(),
         RentFreePeriodTo: z.date().optional().nullable(),
         RentFreeAmount: z.number().optional().nullable(),
+        TaxID: z.string().optional(),
         TaxPercentage: z.number().optional().nullable(),
         TaxAmount: z.number().optional().nullable(),
         TotalAmount: z
@@ -84,6 +86,7 @@ const contractSchema = z.object({
             required_error: "Amount is required",
           })
           .min(0),
+        TaxID: z.string().optional(), // Add TaxID field for reference to tax master
         TaxPercentage: z.number().optional().nullable(),
         TaxAmount: z.number().optional().nullable(),
         TotalAmount: z
@@ -129,6 +132,7 @@ const ContractForm: React.FC = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [charges, setCharges] = useState<any[]>([]);
   const [docTypes, setDocTypes] = useState<any[]>([]);
+  const [taxes, setTaxes] = useState<Tax[]>([]);
 
   // Initialize form
   const form = useForm<ContractFormValues>({
@@ -190,17 +194,19 @@ const ContractForm: React.FC = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [customersData, unitsData, chargesData, docTypesData] = await Promise.all([
+        const [customersData, unitsData, chargesData, docTypesData, taxesData] = await Promise.all([
           customerService.getAllCustomers(),
           unitService.getAllUnits(),
           additionalChargesService.getAllCharges(),
           docTypeService.getAllDocTypes(),
+          taxService.getAllTaxes(),
         ]);
 
         setCustomers(customersData);
         setUnits(unitsData);
         setCharges(chargesData);
         setDocTypes(docTypesData);
+        setTaxes(taxesData);
 
         // If editing, fetch the contract data
         if (isEdit && id) {
@@ -317,29 +323,92 @@ const ContractForm: React.FC = () => {
           }
         }
       }
-      //Auto-calculate charge total amount based on amount and tax
-      if (name && (name.includes("Amount") || name.includes("TaxPercentage"))) {
+      if (name && name.includes(".TaxID")) {
         const index = parseInt(name.split(".")[1]);
-        const charges = form.getValues("additionalCharges");
-        if (charges && charges[index]) {
-          const amount = charges[index].Amount || 0;
-          const taxPercent = charges[index].TaxPercentage || 0;
-          const taxAmount = (amount * taxPercent) / 100;
-          if (taxAmount > 0) {
-            form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+        const itemType = name.split(".")[0]; // "units" or "additionalCharges"
+
+        if (itemType === "units") {
+          const units = form.getValues("units");
+          const taxId = units[index].TaxID;
+
+          if (taxId) {
+            // Find the selected tax
+            const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
+
+            if (selectedTax) {
+              // Update the tax percentage based on the selected tax
+              form.setValue(`units.${index}.TaxPercentage`, selectedTax.TaxRate);
+
+              // Recalculate tax amount and total
+              const rentPerYear = units[index].RentPerYear || 0;
+              const taxAmount = (rentPerYear * selectedTax.TaxRate) / 100;
+              form.setValue(`units.${index}.TaxAmount`, taxAmount);
+              form.setValue(`units.${index}.TotalAmount`, rentPerYear + taxAmount);
+            }
           }
-          if (amount > 0) {
-            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+        } else if (itemType === "additionalCharges") {
+          const charges = form.getValues("additionalCharges");
+          const taxId = charges[index].TaxID;
+
+          if (taxId) {
+            // Find the selected tax
+            const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
+
+            if (selectedTax) {
+              // Update the tax percentage based on the selected tax
+              form.setValue(`additionalCharges.${index}.TaxPercentage`, selectedTax.TaxRate);
+
+              // Recalculate tax amount and total
+              const amount = charges[index].Amount || 0;
+              const taxAmount = (amount * selectedTax.TaxRate) / 100;
+              form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+              form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
+            }
           }
-          if (amount > 0 && taxAmount > 0) {
-            form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
+        }
+      }
+      if (name && (name.includes("RentPerYear") || name.includes(".Amount"))) {
+        const index = parseInt(name.split(".")[1]);
+        const itemType = name.split(".")[0]; // "units" or "additionalCharges"
+
+        if (itemType === "units") {
+          const units = form.getValues("units");
+          if (units && units[index]) {
+            const rentPerYear = units[index].RentPerYear || 0;
+            const taxId = units[index].TaxID;
+
+            if (taxId) {
+              const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
+              if (selectedTax) {
+                const taxRate = selectedTax.TaxRate;
+                const taxAmount = (rentPerYear * taxRate) / 100;
+                form.setValue(`units.${index}.TaxAmount`, taxAmount);
+                form.setValue(`units.${index}.TotalAmount`, rentPerYear + taxAmount);
+              }
+            }
+          }
+        } else if (itemType === "additionalCharges") {
+          const charges = form.getValues("additionalCharges");
+          if (charges && charges[index]) {
+            const amount = charges[index].Amount || 0;
+            const taxId = charges[index].TaxID;
+
+            if (taxId) {
+              const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
+              if (selectedTax) {
+                const taxRate = selectedTax.TaxRate;
+                const taxAmount = (amount * taxRate) / 100;
+                form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+                form.setValue(`additionalCharges.${index}.TotalAmount`, amount + taxAmount);
+              }
+            }
           }
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, taxes]);
 
   useEffect(() => {
     const handleUnitChange = async (unitId: string, index: number) => {
@@ -486,6 +555,7 @@ const ContractForm: React.FC = () => {
           RentFreePeriodFrom: unit.RentFreePeriodFrom,
           RentFreePeriodTo: unit.RentFreePeriodTo,
           RentFreeAmount: unit.RentFreeAmount,
+          TaxID: unit.TaxID ? parseInt(unit.TaxID) : undefined,
           TaxPercentage: unit.TaxPercentage,
           TaxAmount: unit.TaxAmount,
           TotalAmount: unit.TotalAmount,
@@ -494,6 +564,7 @@ const ContractForm: React.FC = () => {
           ContractAdditionalChargeID: charge.ContractAdditionalChargeID,
           AdditionalChargesID: parseInt(charge.AdditionalChargesID),
           Amount: charge.Amount,
+          TaxID: charge.TaxID ? parseInt(charge.TaxID) : undefined,
           TaxPercentage: charge.TaxPercentage,
           TaxAmount: charge.TaxAmount,
           TotalAmount: charge.TotalAmount,
@@ -1118,39 +1189,63 @@ const ContractForm: React.FC = () => {
                                     />
                                   </div>
 
-                                  <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-4">
                                     <FormField
                                       control={form.control}
-                                      name={`units.${index}.TaxPercentage`}
+                                      name={`units.${index}.TaxID`}
                                       render={({ field }) => (
                                         <FormItem>
-                                          <FormLabel>Tax Percentage (%)</FormLabel>
-                                          <FormControl>
-                                            <Input
-                                              type="number"
-                                              placeholder="0.00"
-                                              {...field}
-                                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                                            />
-                                          </FormControl>
+                                          <FormLabel>Applicable Tax</FormLabel>
+                                          <Select value={field.value} onValueChange={field.onChange}>
+                                            <FormControl>
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select a tax" />
+                                              </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                              <SelectItem value="0">No Tax</SelectItem>
+                                              {taxes.map((tax) => (
+                                                <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
+                                                  {tax.TaxName} ({tax.TaxCode}) - {tax.IsExemptOrZero ? "Exempt" : `${tax.TaxRate}%`}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                          <FormDescription>Select the applicable tax for this unit</FormDescription>
                                           <FormMessage />
                                         </FormItem>
                                       )}
                                     />
 
-                                    <FormField
-                                      control={form.control}
-                                      name={`units.${index}.TaxAmount`}
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>Tax Amount</FormLabel>
-                                          <FormControl>
-                                            <Input type="number" placeholder="0.00" {...field} disabled />
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <FormField
+                                        control={form.control}
+                                        name={`units.${index}.TaxPercentage`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>Tax Rate (%)</FormLabel>
+                                            <FormControl>
+                                              <Input type="number" placeholder="0.00" {...field} disabled />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+
+                                      <FormField
+                                        control={form.control}
+                                        name={`units.${index}.TaxAmount`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>Tax Amount</FormLabel>
+                                            <FormControl>
+                                              <Input type="number" placeholder="0.00" {...field} disabled />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    </div>
                                   </div>
 
                                   <FormField
@@ -1268,42 +1363,63 @@ const ContractForm: React.FC = () => {
                                     )}
                                   />
 
-                                  <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-4">
                                     <FormField
                                       control={form.control}
-                                      name={`additionalCharges.${index}.TaxPercentage`}
+                                      name={`additionalCharges.${index}.TaxID`}
                                       render={({ field }) => (
                                         <FormItem>
-                                          <FormLabel>Tax Percentage (%)</FormLabel>
-                                          <FormControl>
-                                            <Input
-                                              type="number"
-                                              placeholder="0.00"
-                                              {...field}
-                                              onChange={(e) => {
-                                                const value = e.target.value;
-                                                field.onChange(value === "" ? 0 : parseFloat(value));
-                                              }}
-                                            />
-                                          </FormControl>
+                                          <FormLabel>Applicable Tax</FormLabel>
+                                          <Select value={field.value} onValueChange={field.onChange}>
+                                            <FormControl>
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select a tax" />
+                                              </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                              <SelectItem value="0">No Tax</SelectItem>
+                                              {taxes.map((tax) => (
+                                                <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
+                                                  {tax.TaxName} ({tax.TaxCode}) - {tax.IsExemptOrZero ? "Exempt" : `${tax.TaxRate}%`}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                          <FormDescription>Select the applicable tax for this charge</FormDescription>
                                           <FormMessage />
                                         </FormItem>
                                       )}
                                     />
 
-                                    <FormField
-                                      control={form.control}
-                                      name={`additionalCharges.${index}.TaxAmount`}
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>Tax Amount</FormLabel>
-                                          <FormControl>
-                                            <Input type="number" placeholder="0.00" {...field} disabled />
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <FormField
+                                        control={form.control}
+                                        name={`additionalCharges.${index}.TaxPercentage`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>Tax Rate (%)</FormLabel>
+                                            <FormControl>
+                                              <Input type="number" placeholder="0.00" {...field} disabled />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+
+                                      <FormField
+                                        control={form.control}
+                                        name={`additionalCharges.${index}.TaxAmount`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>Tax Amount</FormLabel>
+                                            <FormControl>
+                                              <Input type="number" placeholder="0.00" {...field} disabled />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    </div>
                                   </div>
 
                                   <FormField
