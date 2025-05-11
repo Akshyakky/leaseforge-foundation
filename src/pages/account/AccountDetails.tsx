@@ -214,7 +214,7 @@ export const AccountDetails = () => {
                 <h3 className="text-lg font-medium">Transaction History</h3>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">As of:</span>
-                  <DatePicker date={asOfDate} onSelect={handleDateChange} />
+                  <DatePicker value={asOfDate} onChange={handleDateChange} />
                 </div>
               </div>
 

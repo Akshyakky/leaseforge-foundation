@@ -2,17 +2,15 @@ import React from "react";
 import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import { lazyLoad } from "@/lib/performance";
-
-// Import account module components
 import AccountList from "@/pages/account/AccountList";
 import AccountForm from "@/pages/account/AccountForm";
 import AccountDetails from "@/pages/account/AccountDetails";
 import AccountHierarchy from "@/pages/account/AccountHierarchy";
 import AccountTypeList from "@/pages/account/AccountTypeList";
 import AccountTypeForm from "@/pages/account/AccountTypeForm";
-import BalanceSheet from "@/pages/account/reports/BalanceSheet";
-import IncomeStatement from "@/pages/account/reports/IncomeStatement";
-import TrialBalance from "@/pages/account/reports/TrialBalance";
+import BalanceSheet from "@/pages/reports/BalanceSheet";
+
+// Import account module components
 
 const accountRoutes = (
   <>
@@ -93,7 +91,7 @@ const accountRoutes = (
         </ProtectedRoute>
       }
     />
-    <Route
+    {/* <Route
       path="financial-reports/income-statement"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
@@ -108,7 +106,7 @@ const accountRoutes = (
           <TrialBalance />
         </ProtectedRoute>
       }
-    />
+    /> */}
   </>
 );
 

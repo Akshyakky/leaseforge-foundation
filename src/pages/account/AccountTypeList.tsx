@@ -154,7 +154,7 @@ const AccountTypeList = () => {
                       <TableCell>{accountType.AccountLevel}</TableCell>
                       <TableCell>
                         {accountType.IsActive ? (
-                          <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100">
+                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Active
                           </Badge>

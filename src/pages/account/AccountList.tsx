@@ -187,7 +187,7 @@ const AccountList = () => {
                   <SelectValue placeholder="Account Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="0">All Types</SelectItem>
                   {accountTypes.map((type) => (
                     <SelectItem key={type.AccountTypeID} value={type.AccountTypeID.toString()}>
                       {type.AccountTypeName}
@@ -201,7 +201,7 @@ const AccountList = () => {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="0">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
@@ -212,7 +212,7 @@ const AccountList = () => {
                   <SelectValue placeholder="Postable" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="0">All</SelectItem>
                   <SelectItem value="yes">Postable</SelectItem>
                   <SelectItem value="no">Non-Postable</SelectItem>
                 </SelectContent>
@@ -257,7 +257,7 @@ const AccountList = () => {
                       <TableCell>{account.AccountTypeName || "Unknown"}</TableCell>
                       <TableCell>
                         {account.IsActive ? (
-                          <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100">
+                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Active
                           </Badge>

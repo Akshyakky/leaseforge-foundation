@@ -202,7 +202,7 @@ const AccountTypeForm = () => {
                     placeholder="Select parent account type (optional)"
                     onChange={handleParentTypeChange}
                   />
-                  <FormField form={form} name="AccountLevel" label="Account Level" type="number" min={1} readOnly={!!form.watch("ParentAccountTypeID")} required />
+                  <FormField form={form} name="AccountLevel" label="Account Level" type="number" min={1} disabled={!!form.watch("ParentAccountTypeID")} required />
                 </div>
 
                 <Separator />

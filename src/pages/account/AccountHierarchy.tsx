@@ -229,7 +229,7 @@ const AccountHierarchy = () => {
               <SelectValue placeholder="All Companies" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Companies</SelectItem>
+              <SelectItem value="0">All Companies</SelectItem>
               {companies.map((company) => (
                 <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
                   {company.CompanyName}
