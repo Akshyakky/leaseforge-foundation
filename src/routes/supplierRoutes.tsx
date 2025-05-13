@@ -8,6 +8,8 @@ import { lazyLoad } from "@/lib/performance";
 import SupplierList from "@/pages/supplier/SupplierList";
 import SupplierForm from "@/pages/supplier/SupplierForm";
 import SupplierDetails from "@/pages/supplier/SupplierDetails";
+import SupplierTypeList from "@/pages/supplier/supplierType/SupplierTypeList";
+import SupplierTypeForm from "@/pages/supplier/supplierType/SupplierTypeForm";
 
 const supplierRoutes = (
   <>
@@ -40,6 +42,30 @@ const supplierRoutes = (
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <SupplierDetails />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="supplier-types"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <SupplierTypeList />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="supplier-types/new"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <SupplierTypeForm />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="supplier-types/edit/:id"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <SupplierTypeForm />
         </ProtectedRoute>
       }
     />
