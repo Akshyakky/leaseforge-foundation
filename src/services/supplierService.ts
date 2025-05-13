@@ -15,6 +15,7 @@ import {
   SupplierRequest,
   GLAccountRequest,
   ApiResponse,
+  SupplierUpdateRequest,
 } from "../types/supplierTypes";
 
 /**
@@ -183,7 +184,7 @@ class SupplierService extends BaseService {
    * @param data - The supplier request data
    * @returns Response with status
    */
-  async updateSupplier(data: SupplierRequest & { supplier: Partial<Supplier> & { SupplierID: number } }): Promise<ApiResponse> {
+  async updateSupplier(data: SupplierUpdateRequest): Promise<ApiResponse> {
     // Prepare parameters for GL account
     let glAccountParams: any = {};
 

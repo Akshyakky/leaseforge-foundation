@@ -207,6 +207,21 @@ export interface GLAccountRequest {
   companyID?: number;
 }
 
+export interface SupplierUpdateRequest {
+  supplier: Partial<Supplier> & { SupplierID: number };
+  contacts?: Partial<SupplierContact>[];
+  bankDetails?: Partial<SupplierBankDetails>[];
+  glAccountDetails?: {
+    createNewAccount?: boolean;
+    accountID?: number;
+    accountCode?: string;
+    accountName?: string;
+    accountTypeID?: number;
+    currencyID?: number;
+    companyID?: number;
+  };
+}
+
 // API response
 export interface ApiResponse<T = any> {
   Status: number;
