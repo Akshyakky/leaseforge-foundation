@@ -6,26 +6,32 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { Form, FormControl } from "@/components/ui/form";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { accountService } from "@/services/accountService";
+import { companyService } from "@/services/companyService";
+import { currencyService } from "@/services/currencyService";
+import { costCenterService } from "@/services/costCenterService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
 import { Account, AccountType, AccountOpeningBalance } from "@/types/accountTypes";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Company } from "@/services/companyService";
+import { Currency } from "@/services/currencyService";
+import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Create the schema for account form validation
 const accountSchema = z.object({
-  AccountCode: z.string().min(1, "Account code is required"),
-  AccountName: z.string().min(2, "Account name must be at least 2 characters"),
+  AccountCode: z.string().min(1, "Account code is required").max(50, "Account code cannot exceed 50 characters"),
+  AccountName: z.string().min(2, "Account name must be at least 2 characters").max(100, "Account name cannot exceed 100 characters"),
   AccountTypeID: z.string().min(1, "Account type is required"),
   ParentAccountID: z.string().optional(),
   AccountLevel: z.number().optional(),
@@ -44,9 +50,9 @@ const accountSchema = z.object({
 // Opening balance schema
 const openingBalanceSchema = z.object({
   FiscalYearID: z.string().min(1, "Fiscal year is required"),
-  OpeningDebit: z.number().optional(),
-  OpeningCredit: z.number().optional(),
-  OpeningBalance: z.number().optional(),
+  OpeningDebit: z.coerce.number().min(0, "Debit amount cannot be negative").optional(),
+  OpeningCredit: z.coerce.number().min(0, "Credit amount cannot be negative").optional(),
+  OpeningBalance: z.coerce.number().optional(),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -64,14 +70,20 @@ const AccountForm = () => {
   const [account, setAccount] = useState<Account | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const [openingBalances, setOpeningBalances] = useState<AccountOpeningBalance[]>([]);
-  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
-  const [parentAccounts, setParentAccounts] = useState<Account[]>([]);
-  const [cashFlowCategories, setCashFlowCategories] = useState<any[]>([]);
-  const [currencies, setCurrencies] = useState<any[]>([]);
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [costCenters, setCostCenters] = useState<any[]>([]);
-  const [fiscalYears, setFiscalYears] = useState<any[]>([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  // Reference data states
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [defaultCurrency, setDefaultCurrency] = useState<Currency | null>(null);
+  const [parentAccounts, setParentAccounts] = useState<Account[]>([]);
+  const [costCenter1Options, setCostCenter1Options] = useState<CostCenter1[]>([]);
+  const [costCenter2Options, setCostCenter2Options] = useState<CostCenter2[]>([]);
+  const [costCenter3Options, setCostCenter3Options] = useState<CostCenter3[]>([]);
+  const [costCenter4Options, setCostCenter4Options] = useState<CostCenter4[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<any[]>([]);
 
   // Initialize forms
   const accountForm = useForm<AccountFormValues>({
@@ -109,43 +121,35 @@ const AccountForm = () => {
   useEffect(() => {
     const initializeForm = async () => {
       try {
-        // Fetch reference data
-        const typesData = await accountService.getAllAccountTypes();
+        setInitialLoading(true);
+
+        // Fetch all reference data in parallel
+        const [typesData, companiesData, currenciesData, defaultCurrencyData, costCenter1Data, accountsData] = await Promise.all([
+          accountService.getAllAccountTypes(),
+          companyService.getCompaniesForDropdown(true), // Only active companies
+          currencyService.getCurrenciesForDropdown(),
+          currencyService.getDefaultCurrency(),
+          costCenterService.getCostCentersByLevel(1),
+          accountService.getAllAccounts(),
+        ]);
+
         setAccountTypes(typesData);
+        setCompanies(companiesData);
+        setCurrencies(currenciesData);
+        setDefaultCurrency(defaultCurrencyData);
+        setCostCenter1Options(costCenter1Data);
+        setParentAccounts(accountsData);
 
-        // Mock data for other dropdowns (in real app, you'd fetch from respective services)
-        setCashFlowCategories([
-          { id: 3, name: "Operating Activities" },
-          { id: 4, name: "Investing Activities" },
-          { id: 5, name: "Financing Activities" },
-        ]);
+        // Set default currency if available and not editing
+        if (defaultCurrencyData && !isEdit) {
+          accountForm.setValue("CurrencyID", defaultCurrencyData.CurrencyID.toString());
+        }
 
-        setCurrencies([
-          { CurrencyID: 1, CurrencyName: "USD" },
-          { CurrencyID: 2, CurrencyName: "EUR" },
-          { CurrencyID: 3, CurrencyName: "GBP" },
-        ]);
-
-        setCompanies([
-          { CompanyID: 4, CompanyName: "Main Company" },
-          { CompanyID: 5, CompanyName: "Subsidiary 1" },
-          { CompanyID: 3, CompanyName: "Subsidiary 2" },
-        ]);
-
-        setCostCenters([
-          { CostCenterID: 1, CostCenterName: "Department 1" },
-          { CostCenterID: 2, CostCenterName: "Department 2" },
-          { CostCenterID: 3, CostCenterName: "Department 3" },
-        ]);
-
+        // Mock fiscal years (replace with actual service call)
         setFiscalYears([
           { FiscalYearID: 1, Description: "FY 2023-2024", StartDate: "2023-04-01", EndDate: "2024-03-31" },
           { FiscalYearID: 2, Description: "FY 2024-2025", StartDate: "2024-04-01", EndDate: "2025-03-31" },
         ]);
-
-        // Get all accounts for parent account dropdown
-        const accountsData = await accountService.getAllAccounts();
-        setParentAccounts(accountsData);
 
         // If editing, fetch the account data
         if (isEdit && id) {
@@ -173,6 +177,17 @@ const AccountForm = () => {
               CompanyID: data.account.CompanyID?.toString() || "",
               Description: data.account.Description || "",
             });
+
+            // Load cost center dependencies for existing account
+            if (data.account.CostCenter1ID) {
+              await loadCostCenter2Options(data.account.CostCenter1ID);
+              if (data.account.CostCenter2ID) {
+                await loadCostCenter3Options(data.account.CostCenter1ID, data.account.CostCenter2ID);
+                if (data.account.CostCenter3ID) {
+                  await loadCostCenter4Options(data.account.CostCenter1ID, data.account.CostCenter2ID, data.account.CostCenter3ID);
+                }
+              }
+            }
           } else {
             toast.error("Account not found");
             navigate("/accounts");
@@ -189,19 +204,134 @@ const AccountForm = () => {
     initializeForm();
   }, [id, isEdit, navigate, accountForm]);
 
+  // Handle account type change - update parent accounts based on selected type
+  const handleAccountTypeChange = async (value: string) => {
+    accountForm.setValue("AccountTypeID", value);
+    accountForm.setValue("ParentAccountID", "");
+
+    if (value) {
+      try {
+        const accounts = await accountService.searchAccounts({
+          accountTypeID: parseInt(value),
+          isPostable: false,
+        });
+        setParentAccounts(accounts);
+      } catch (error) {
+        console.error("Error filtering parent accounts:", error);
+        toast.error("Error loading parent accounts");
+      }
+    } else {
+      const accounts = await accountService.getAllAccounts();
+      setParentAccounts(accounts);
+    }
+  };
+
+  // Cost center change handlers
+  const loadCostCenter2Options = async (costCenter1ID: number) => {
+    try {
+      const level2Options = await costCenterService.getChildCostCenters(2, { CostCenter1ID: costCenter1ID });
+      setCostCenter2Options(level2Options as CostCenter2[]);
+    } catch (error) {
+      console.error("Error loading Level 2 cost centers:", error);
+      toast.error("Error loading cost centers");
+    }
+  };
+
+  const loadCostCenter3Options = async (costCenter1ID: number, costCenter2ID: number) => {
+    try {
+      const level3Options = await costCenterService.getChildCostCenters(3, { CostCenter1ID: costCenter1ID, CostCenter2ID: costCenter2ID });
+      setCostCenter3Options(level3Options as CostCenter3[]);
+    } catch (error) {
+      console.error("Error loading Level 3 cost centers:", error);
+      toast.error("Error loading cost centers");
+    }
+  };
+
+  const loadCostCenter4Options = async (costCenter1ID: number, costCenter2ID: number, costCenter3ID: number) => {
+    try {
+      const level4Options = await costCenterService.getChildCostCenters(4, {
+        CostCenter1ID: costCenter1ID,
+        CostCenter2ID: costCenter2ID,
+        CostCenter3ID: costCenter3ID,
+      });
+      setCostCenter4Options(level4Options as CostCenter4[]);
+    } catch (error) {
+      console.error("Error loading Level 4 cost centers:", error);
+      toast.error("Error loading cost centers");
+    }
+  };
+
+  const handleCostCenter1Change = async (value: string) => {
+    accountForm.setValue("CostCenter1ID", value);
+    accountForm.setValue("CostCenter2ID", "");
+    accountForm.setValue("CostCenter3ID", "");
+    accountForm.setValue("CostCenter4ID", "");
+
+    setCostCenter2Options([]);
+    setCostCenter3Options([]);
+    setCostCenter4Options([]);
+
+    if (value) {
+      await loadCostCenter2Options(parseInt(value));
+    }
+  };
+
+  const handleCostCenter2Change = async (value: string) => {
+    accountForm.setValue("CostCenter2ID", value);
+    accountForm.setValue("CostCenter3ID", "");
+    accountForm.setValue("CostCenter4ID", "");
+
+    setCostCenter3Options([]);
+    setCostCenter4Options([]);
+
+    if (value) {
+      const costCenter1ID = parseInt(accountForm.getValues("CostCenter1ID") || "0");
+      await loadCostCenter3Options(costCenter1ID, parseInt(value));
+    }
+  };
+
+  const handleCostCenter3Change = async (value: string) => {
+    accountForm.setValue("CostCenter3ID", value);
+    accountForm.setValue("CostCenter4ID", "");
+
+    setCostCenter4Options([]);
+
+    if (value) {
+      const costCenter1ID = parseInt(accountForm.getValues("CostCenter1ID") || "0");
+      const costCenter2ID = parseInt(accountForm.getValues("CostCenter2ID") || "0");
+      await loadCostCenter4Options(costCenter1ID, costCenter2ID, parseInt(value));
+    }
+  };
+
   // Submit handler for the account form
   const onSubmitAccount = async (data: AccountFormValues) => {
     setLoading(true);
+    setValidationErrors([]);
 
     try {
+      // Validate account relationships before submitting
+      // const validation = await accountService.validateAccountRelationships({
+      //   AccountCode: data.AccountCode,
+      //   AccountName: data.AccountName,
+      //   AccountTypeID: parseInt(data.AccountTypeID),
+      //   ParentAccountID: data.ParentAccountID ? parseInt(data.ParentAccountID) : undefined,
+      //   CompanyID: parseInt(data.CompanyID),
+      //   CurrencyID: parseInt(data.CurrencyID),
+      // });
+
+      // if (!validation.isValid) {
+      //   setValidationErrors(validation.errors);
+      //   return;
+      // }
+
       // Prepare account data
       const accountData: Partial<Account> = {
         AccountCode: data.AccountCode,
         AccountName: data.AccountName,
-        AccountTypeID: data.AccountTypeID ? parseInt(data.AccountTypeID) : undefined,
+        AccountTypeID: parseInt(data.AccountTypeID),
         ParentAccountID: data.ParentAccountID ? parseInt(data.ParentAccountID) : undefined,
         AccountLevel: data.AccountLevel,
-        CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
+        CurrencyID: parseInt(data.CurrencyID),
         CashFlowCategoryID: data.CashFlowCategoryID ? parseInt(data.CashFlowCategoryID) : undefined,
         IsActive: data.IsActive,
         IsPostable: data.IsPostable,
@@ -209,7 +339,7 @@ const AccountForm = () => {
         CostCenter2ID: data.CostCenter2ID ? parseInt(data.CostCenter2ID) : undefined,
         CostCenter3ID: data.CostCenter3ID ? parseInt(data.CostCenter3ID) : undefined,
         CostCenter4ID: data.CostCenter4ID ? parseInt(data.CostCenter4ID) : undefined,
-        CompanyID: data.CompanyID ? parseInt(data.CompanyID) : undefined,
+        CompanyID: parseInt(data.CompanyID),
         Description: data.Description,
       };
 
@@ -284,28 +414,6 @@ const AccountForm = () => {
     }
   };
 
-  // Handle account type change - update parent accounts based on selected type
-  const handleAccountTypeChange = async (value: string) => {
-    accountForm.setValue("AccountTypeID", value);
-
-    // Filter parent accounts based on account type
-    if (value) {
-      try {
-        const accounts = await accountService.searchAccounts({
-          accountTypeID: parseInt(value),
-          isPostable: false,
-        });
-        setParentAccounts(accounts);
-      } catch (error) {
-        console.error("Error filtering parent accounts:", error);
-      }
-    } else {
-      // If no account type selected, fetch all accounts
-      const accounts = await accountService.getAllAccounts();
-      setParentAccounts(accounts);
-    }
-  };
-
   // Calculate total opening balance
   const calculateOpeningBalance = () => {
     const debit = openingBalanceForm.watch("OpeningDebit") || 0;
@@ -341,6 +449,98 @@ const AccountForm = () => {
     navigate("/accounts");
   };
 
+  // Custom render functions for dropdowns
+  const renderCostCenter1Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select
+        onValueChange={(value) => {
+          field.onChange(value);
+          handleCostCenter1Change(value);
+        }}
+        defaultValue={field.value}
+        value={field.value}
+      >
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 1 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {costCenter1Options.map((option) => (
+            <SelectItem key={option.CostCenter1ID} value={option.CostCenter1ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
+  const renderCostCenter2Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select
+        disabled={!accountForm.getValues("CostCenter1ID")}
+        onValueChange={(value) => {
+          field.onChange(value);
+          handleCostCenter2Change(value);
+        }}
+        defaultValue={field.value}
+        value={field.value}
+      >
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 2 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {costCenter2Options.map((option) => (
+            <SelectItem key={option.CostCenter2ID} value={option.CostCenter2ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
+  const renderCostCenter3Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select
+        disabled={!accountForm.getValues("CostCenter2ID")}
+        onValueChange={(value) => {
+          field.onChange(value);
+          handleCostCenter3Change(value);
+        }}
+        defaultValue={field.value}
+        value={field.value}
+      >
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 3 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {costCenter3Options.map((option) => (
+            <SelectItem key={option.CostCenter3ID} value={option.CostCenter3ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
+  const renderCostCenter4Select = ({ field, fieldState }: any) => (
+    <FormControl>
+      <Select disabled={!accountForm.getValues("CostCenter3ID")} onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+        <SelectTrigger className={fieldState.error ? "border-destructive" : ""}>
+          <SelectValue placeholder="Select Level 4 Cost Center" />
+        </SelectTrigger>
+        <SelectContent>
+          {costCenter4Options.map((option) => (
+            <SelectItem key={option.CostCenter4ID} value={option.CostCenter4ID.toString()}>
+              {option.Description}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </FormControl>
+  );
+
   if (initialLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -357,6 +557,19 @@ const AccountForm = () => {
         </Button>
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Account" : "Create Account"}</h1>
       </div>
+
+      {validationErrors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-1">
+              {validationErrors.map((error, index) => (
+                <div key={index}>{error}</div>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Form {...accountForm}>
         <form onSubmit={accountForm.handleSubmit(onSubmitAccount)}>
@@ -415,7 +628,7 @@ const AccountForm = () => {
                       label="Currency"
                       type="select"
                       options={currencies.map((currency) => ({
-                        label: currency.CurrencyName,
+                        label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
                         value: currency.CurrencyID.toString(),
                       }))}
                       placeholder="Select currency"
@@ -423,14 +636,15 @@ const AccountForm = () => {
                     />
                     <FormField
                       form={accountForm}
-                      name="CashFlowCategoryID"
-                      label="Cash Flow Category"
+                      name="CompanyID"
+                      label="Company"
                       type="select"
-                      options={cashFlowCategories.map((category) => ({
-                        label: category.name,
-                        value: category.id.toString(),
+                      options={companies.map((company) => ({
+                        label: company.CompanyName,
+                        value: company.CompanyID.toString(),
                       }))}
-                      placeholder="Select cash flow category (optional)"
+                      placeholder="Select company"
+                      required
                     />
                   </div>
 
@@ -458,71 +672,63 @@ const AccountForm = () => {
 
                   <Separator />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      form={accountForm}
-                      name="CompanyID"
-                      label="Company"
-                      type="select"
-                      options={companies.map((company) => ({
-                        label: company.CompanyName,
-                        value: company.CompanyID.toString(),
-                      }))}
-                      placeholder="Select company"
-                      required
-                    />
-                    <FormField form={accountForm} name="Description" label="Description" placeholder="Enter account description (optional)" type="textarea" />
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Cost Centers</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        form={accountForm}
+                        name="CostCenter1ID"
+                        label="Level 1 Cost Center"
+                        type="select"
+                        options={costCenter1Options.map((cc) => ({
+                          label: cc.Description,
+                          value: cc.CostCenter1ID.toString(),
+                        }))}
+                        placeholder="Select Level 1 Cost Center"
+                        render={renderCostCenter1Select}
+                      />
+                      <FormField
+                        form={accountForm}
+                        name="CostCenter2ID"
+                        label="Level 2 Cost Center"
+                        type="select"
+                        options={costCenter2Options.map((cc) => ({
+                          label: cc.Description,
+                          value: cc.CostCenter2ID.toString(),
+                        }))}
+                        placeholder="Select Level 2 Cost Center"
+                        render={renderCostCenter2Select}
+                      />
+                      <FormField
+                        form={accountForm}
+                        name="CostCenter3ID"
+                        label="Level 3 Cost Center"
+                        type="select"
+                        options={costCenter3Options.map((cc) => ({
+                          label: cc.Description,
+                          value: cc.CostCenter3ID.toString(),
+                        }))}
+                        placeholder="Select Level 3 Cost Center"
+                        render={renderCostCenter3Select}
+                      />
+                      <FormField
+                        form={accountForm}
+                        name="CostCenter4ID"
+                        label="Level 4 Cost Center"
+                        type="select"
+                        options={costCenter4Options.map((cc) => ({
+                          label: cc.Description,
+                          value: cc.CostCenter4ID.toString(),
+                        }))}
+                        placeholder="Select Level 4 Cost Center"
+                        render={renderCostCenter4Select}
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="col-span-4">
-                      <h3 className="text-sm font-medium mb-2">Cost Centers (Optional)</h3>
-                    </div>
-                    <FormField
-                      form={accountForm}
-                      name="CostCenter1ID"
-                      label="Cost Center 1"
-                      type="select"
-                      options={costCenters.map((cc) => ({
-                        label: cc.CostCenterName,
-                        value: cc.CostCenterID.toString(),
-                      }))}
-                      placeholder="Select cost center 1"
-                    />
-                    <FormField
-                      form={accountForm}
-                      name="CostCenter2ID"
-                      label="Cost Center 2"
-                      type="select"
-                      options={costCenters.map((cc) => ({
-                        label: cc.CostCenterName,
-                        value: cc.CostCenterID.toString(),
-                      }))}
-                      placeholder="Select cost center 2"
-                    />
-                    <FormField
-                      form={accountForm}
-                      name="CostCenter3ID"
-                      label="Cost Center 3"
-                      type="select"
-                      options={costCenters.map((cc) => ({
-                        label: cc.CostCenterName,
-                        value: cc.CostCenterID.toString(),
-                      }))}
-                      placeholder="Select cost center 3"
-                    />
-                    <FormField
-                      form={accountForm}
-                      name="CostCenter4ID"
-                      label="Cost Center 4"
-                      type="select"
-                      options={costCenters.map((cc) => ({
-                        label: cc.CostCenterName,
-                        value: cc.CostCenterID.toString(),
-                      }))}
-                      placeholder="Select cost center 4"
-                    />
-                  </div>
+                  <Separator />
+
+                  <FormField form={accountForm} name="Description" label="Description" placeholder="Enter account description (optional)" type="textarea" />
                 </TabsContent>
 
                 {isEdit && (

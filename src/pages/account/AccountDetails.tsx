@@ -205,9 +205,11 @@ export const AccountDetails = () => {
           <Separator className="my-6" />
 
           <Tabs defaultValue="transactions">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="transactions">Transaction History</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="transactions">Transactions</TabsTrigger>
               <TabsTrigger value="openingBalances">Opening Balances</TabsTrigger>
+              <TabsTrigger value="relationships">Relationships</TabsTrigger>
             </TabsList>
             <TabsContent value="transactions" className="mt-6">
               <div className="flex justify-between items-center mb-4">
@@ -289,6 +291,87 @@ export const AccountDetails = () => {
                 </div>
               )}
             </TabsContent>
+            {/* <TabsContent value="relationships" className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Company Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Name:</strong> {account.CompanyName}
+                      </p>
+                      <p>
+                        <strong>Email:</strong> {account.CompanyEmail}
+                      </p>
+                      <p>
+                        <strong>Contact:</strong> {account.CompanyContact}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/companies/${account.CompanyID}`)}>
+                        View Company Details
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Currency Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p>
+                        <strong>Code:</strong> {account.CurrencyCode}
+                      </p>
+                      <p>
+                        <strong>Name:</strong> {account.CurrencyName}
+                      </p>
+                      <p>
+                        <strong>Rate:</strong> {account.ConversionRate?.toFixed(4)}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/currencies/${account.CurrencyID}`)}>
+                        View Currency Details
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Cost Center Hierarchy</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {account.CostCenter1ID && (
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline">Level 1</Badge>
+                          <span>{account.CostCenter1Description}</span>
+                        </div>
+                      )}
+                      {account.CostCenter2ID && (
+                        <div className="flex items-center space-x-2 ml-4">
+                          <Badge variant="outline">Level 2</Badge>
+                          <span>{account.CostCenter2Description}</span>
+                        </div>
+                      )}
+                      {account.CostCenter3ID && (
+                        <div className="flex items-center space-x-2 ml-8">
+                          <Badge variant="outline">Level 3</Badge>
+                          <span>{account.CostCenter3Description}</span>
+                        </div>
+                      )}
+                      {account.CostCenter4ID && (
+                        <div className="flex items-center space-x-2 ml-12">
+                          <Badge variant="outline">Level 4</Badge>
+                          <span>{account.CostCenter4Description}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent> */}
           </Tabs>
         </CardContent>
       </Card>

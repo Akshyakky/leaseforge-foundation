@@ -25,5 +25,6 @@ export * from "./financialPostingService";
 export * from "./leaseInvoiceService";
 export * from "./leaseReceiptService";
 export * from "./accountService";
+export * from "./supplierService";
 
 // Add any new services to this file for easy importing
