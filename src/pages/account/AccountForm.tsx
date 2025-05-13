@@ -115,9 +115,9 @@ const AccountForm = () => {
 
         // Mock data for other dropdowns (in real app, you'd fetch from respective services)
         setCashFlowCategories([
-          { id: 1, name: "Operating Activities" },
-          { id: 2, name: "Investing Activities" },
-          { id: 3, name: "Financing Activities" },
+          { id: 3, name: "Operating Activities" },
+          { id: 4, name: "Investing Activities" },
+          { id: 5, name: "Financing Activities" },
         ]);
 
         setCurrencies([
@@ -127,8 +127,8 @@ const AccountForm = () => {
         ]);
 
         setCompanies([
-          { CompanyID: 1, CompanyName: "Main Company" },
-          { CompanyID: 2, CompanyName: "Subsidiary 1" },
+          { CompanyID: 4, CompanyName: "Main Company" },
+          { CompanyID: 5, CompanyName: "Subsidiary 1" },
           { CompanyID: 3, CompanyName: "Subsidiary 2" },
         ]);
 
