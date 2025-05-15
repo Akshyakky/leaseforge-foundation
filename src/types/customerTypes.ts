@@ -35,13 +35,20 @@ export interface Customer extends BaseCustomer {
   CreateGL?: string;
   GLID?: number;
   Remark?: string;
-
+  
   // Additional fields from joins
   CountryName?: string;
   CityName?: string;
   TypeName?: string;
   AgentName?: string;
   SourceName?: string;
+  GLAccountName?: string; // NEW: GL Account Name
+  
+  // New GL Account Creation Parameters
+  CreateNewAccount?: boolean;
+  AccountTypeID?: number;
+  CurrencyID?: number;
+  CompanyID?: number;
 }
 
 export interface CustomerContact extends BaseCustomer {
@@ -54,7 +61,7 @@ export interface CustomerContact extends BaseCustomer {
   CityID?: number;
   ContactNo?: string;
   Address?: string;
-
+  
   // Additional fields from joins
   ContactTypeName?: string;
   CountryName?: string;
@@ -72,13 +79,39 @@ export interface CustomerAttachment extends BaseCustomer {
   DocIssueDate?: string | Date;
   DocExpiryDate?: string | Date;
   Remark?: string;
-
+  
   // Additional fields from joins
   DocTypeName?: string;
-
+  
   // For UI only - not sent to backend
   file?: File;
   fileUrl?: string; // For displaying preview
+}
+
+// NEW: Customer GL Details interface
+export interface CustomerGLDetails extends BaseCustomer {
+  CustomerGLID: number;
+  CustomerID: number;
+  AccountID: number;
+  AccountCode?: string;
+  AccountName?: string;
+  AccountTypeID?: number;
+  CurrencyID?: number;
+  IsDefault?: boolean;
+  Remarks?: string;
+  
+  // Additional fields from joins
+  GLAccountName?: string;
+  AccountTypeName?: string;
+  CurrencyName?: string;
+}
+
+// NEW: Customer Outstanding Balance interface
+export interface CustomerOutstandingBalance {
+  CustomerID: number;
+  CustomerNo: string;
+  CustomerFullName: string;
+  OutstandingBalance: number;
 }
 
 export interface CustomerType {
@@ -94,6 +127,25 @@ export interface ContactType {
 export interface DocType {
   DocTypeID: number;
   Description: string;
+}
+
+// NEW: Account Type interface
+export interface AccountType {
+  AccountTypeID: number;
+  AccountTypeName: string;
+}
+
+// NEW: Currency interface
+export interface Currency {
+  CurrencyID: number;
+  CurrencyName: string;
+  CurrencyCode?: string;
+}
+
+// NEW: Company interface
+export interface Company {
+  CompanyID: number;
+  CompanyName: string;
 }
 
 export interface CustomerStatistics {
@@ -112,6 +164,19 @@ export interface CustomerRequest {
   Customer: Partial<Customer>;
   Contacts?: Partial<CustomerContact>[];
   Attachments?: Partial<CustomerAttachment>[];
+}
+
+// NEW: Customer GL Details request
+export interface CustomerGLRequest {
+  CustomerID: number;
+  AccountID: number;
+  AccountCode?: string;
+  AccountName?: string;
+  AccountTypeID?: number;
+  CurrencyID?: number;
+  IsDefault?: boolean;
+  Remarks?: string;
+  CustomerGLID?: number; // For updates
 }
 
 // API response

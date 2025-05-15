@@ -13,15 +13,16 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
-import { Customer, CustomerContact, CustomerAttachment, CustomerType, ContactType, DocType } from "@/types/customerTypes";
+import { Customer, CustomerContact, CustomerAttachment, CustomerType, ContactType, DocType, AccountType, Currency, Company } from "@/types/customerTypes";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Country, countryService } from "@/services/countryService";
 import { City, cityService } from "@/services/cityService";
-import { contactTypeService, docTypeService } from "@/services";
+import { accountService, companyService, contactTypeService, currencyService, docTypeService } from "@/services";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: DocType) => void }) => {
   const [description, setDescription] = useState("");
@@ -168,23 +169,42 @@ const CreateContactTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean;
 };
 
 // Create the schema for customer form validation
-const customerSchema = z.object({
-  CustomerNo: z.string().optional(),
-  TypeID: z.string().optional(),
-  FirstName: z.string().min(2, "First name must be at least 2 characters").optional(),
-  LastName: z.string().min(2, "Last name must be at least 2 characters").optional(),
-  CustomerFullName: z.string().min(2, "Customer name must be at least 2 characters"),
-  Gender: z.string().optional(),
-  BirthDate: z.date().optional().nullable(),
-  CountryID: z.string().optional(),
-  CityID: z.string().optional(),
-  Address: z.string().optional(),
-  TaxRegNo: z.string().optional(),
-  CustomerIdentityNo: z.string().optional(),
-  AccountCode: z.string().optional(),
-  AccountName: z.string().optional(),
-  Remark: z.string().optional(),
-});
+const customerSchema = z
+  .object({
+    CustomerNo: z.string().optional(),
+    TypeID: z.string().optional(),
+    FirstName: z.string().min(2, "First name must be at least 2 characters").optional(),
+    LastName: z.string().min(2, "Last name must be at least 2 characters").optional(),
+    CustomerFullName: z.string().min(2, "Customer name must be at least 2 characters"),
+    Gender: z.string().optional(),
+    BirthDate: z.date().optional().nullable(),
+    CountryID: z.string().optional(),
+    CityID: z.string().optional(),
+    Address: z.string().optional(),
+    TaxRegNo: z.string().optional(),
+    CustomerIdentityNo: z.string().optional(),
+    AccountCode: z.string().optional(),
+    AccountName: z.string().optional(),
+    Remark: z.string().optional(),
+    // NEW: GL-related fields
+    CreateNewAccount: z.boolean().optional(),
+    AccountTypeID: z.string().optional(),
+    CurrencyID: z.string().optional(),
+    CompanyID: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If CreateNewAccount is true, require GL fields
+      if (data.CreateNewAccount) {
+        return data.AccountCode && data.AccountName && data.AccountTypeID && data.CurrencyID && data.CompanyID;
+      }
+      return true;
+    },
+    {
+      message: "Account Code, Account Name, Account Type, Currency, and Company are required when creating a new account",
+      path: ["CreateNewAccount"],
+    }
+  );
 
 // Contact form schema
 const contactSchema = z.object({
@@ -237,6 +257,11 @@ const CustomerForm = () => {
   const [cities, setCities] = useState<City[]>([]);
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
+  // NEW: GL-related state
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+
   // State for file upload
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -265,6 +290,11 @@ const CustomerForm = () => {
       AccountCode: "",
       AccountName: "",
       Remark: "",
+      // NEW: GL-related defaults
+      CreateNewAccount: false,
+      AccountTypeID: "",
+      CurrencyID: "",
+      CompanyID: "",
     },
   });
 
@@ -293,22 +323,42 @@ const CustomerForm = () => {
     },
   });
 
+  // Watch CreateNewAccount value to toggle required fields
+  const createNewAccount = customerForm.watch("CreateNewAccount");
+
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [typesData, contactTypesData, docTypesData, countriesData] = await Promise.all([
+        const [
+          typesData,
+          contactTypesData,
+          docTypesData,
+          countriesData,
+          // NEW: Fetch GL-related reference data
+          accountTypesData,
+          currenciesData,
+          companiesData,
+        ] = await Promise.all([
           customerService.getCustomerTypes(),
           contactTypeService.getAllContactTypes(),
           docTypeService.getAllDocTypes(),
           countryService.getCountriesForDropdown(),
+          // NEW: Fetch GL reference data
+          accountService.getAllAccountTypes(),
+          currencyService.getCurrenciesForDropdown(),
+          companyService.getCompaniesForDropdown(),
         ]);
 
         setCustomerTypes(typesData);
         setContactTypes(contactTypesData);
         setDocumentTypes(docTypesData);
         setCountries(countriesData);
+        // NEW: Set GL reference data
+        setAccountTypes(accountTypesData);
+        setCurrencies(currenciesData);
+        setCompanies(companiesData);
 
         // If editing, fetch the customer data
         if (isEdit && id) {
@@ -336,6 +386,11 @@ const CustomerForm = () => {
               AccountCode: customerData.customer.AccountCode || "",
               AccountName: customerData.customer.AccountName || "",
               Remark: customerData.customer.Remark || "",
+              // NEW: Set GL-related values
+              CreateNewAccount: customerData.customer.CreateNewAccount || false,
+              AccountTypeID: customerData.customer.AccountTypeID?.toString() || "",
+              CurrencyID: customerData.customer.CurrencyID?.toString() || "",
+              CompanyID: customerData.customer.CompanyID?.toString() || "",
             });
           } else {
             toast.error("Customer not found");
@@ -413,6 +468,11 @@ const CustomerForm = () => {
         AccountCode: data.AccountCode,
         AccountName: data.AccountName,
         Remark: data.Remark,
+        // NEW: Add GL-related fields
+        CreateNewAccount: data.CreateNewAccount,
+        AccountTypeID: data.AccountTypeID ? parseInt(data.AccountTypeID) : undefined,
+        CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
+        CompanyID: data.CompanyID ? parseInt(data.CompanyID) : undefined,
       };
 
       if (isEdit && customer) {
@@ -758,6 +818,63 @@ const CustomerForm = () => {
                     <FormField form={customerForm} name="TaxRegNo" label="Tax Registration Number" placeholder="Enter tax registration number" />
                     <FormField form={customerForm} name="AccountCode" label="Account Code" placeholder="Enter account code" />
                     <FormField form={customerForm} name="AccountName" label="Account Name" placeholder="Enter account name" />
+                  </div>
+
+                  {/* NEW: GL Account Section */}
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">GL Account Settings</h3>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox id="CreateNewAccount" checked={createNewAccount} onCheckedChange={(checked) => customerForm.setValue("CreateNewAccount", !!checked)} />
+                      <label htmlFor="CreateNewAccount" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                        Create new GL account for this customer
+                      </label>
+                    </div>
+
+                    {createNewAccount && (
+                      <div className="ml-6 space-y-4 p-4 border rounded-lg bg-muted/20">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <FormField
+                            form={customerForm}
+                            name="AccountTypeID"
+                            label="Account Type"
+                            type="select"
+                            options={accountTypes.map((type) => ({
+                              label: type.AccountTypeName,
+                              value: type.AccountTypeID.toString(),
+                            }))}
+                            placeholder="Select account type"
+                            required={createNewAccount}
+                          />
+                          <FormField
+                            form={customerForm}
+                            name="CurrencyID"
+                            label="Currency"
+                            type="select"
+                            options={currencies.map((currency) => ({
+                              label: `${currency.CurrencyName} (${currency.CurrencyCode || "N/A"})`,
+                              value: currency.CurrencyID.toString(),
+                            }))}
+                            placeholder="Select currency"
+                            required={createNewAccount}
+                          />
+                          <FormField
+                            form={customerForm}
+                            name="CompanyID"
+                            label="Company"
+                            type="select"
+                            options={companies.map((company) => ({
+                              label: company.CompanyName,
+                              value: company.CompanyID.toString(),
+                            }))}
+                            placeholder="Select company"
+                            required={createNewAccount}
+                          />
+                        </div>
+                        <p className="text-sm text-muted-foreground">A new GL account will be created automatically with the specified Account Code and Name above.</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-6">

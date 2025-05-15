@@ -1,6 +1,20 @@
 // src/services/customerService.ts
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
-import { Customer, CustomerContact, CustomerAttachment, CustomerType, ContactType, DocType, CustomerStatistics } from "../types/customerTypes";
+import {
+  Customer,
+  CustomerContact,
+  CustomerAttachment,
+  CustomerGLDetails,
+  CustomerOutstandingBalance,
+  CustomerType,
+  ContactType,
+  DocType,
+  AccountType,
+  Currency,
+  Company,
+  CustomerStatistics,
+  CustomerGLRequest,
+} from "../types/customerTypes";
 
 /**
  * Service for customer-related operations
@@ -69,17 +83,18 @@ class CustomerService extends BaseService {
   }
 
   /**
-   * Get a customer by ID (including contacts and attachments)
+   * Get a customer by ID (including contacts, attachments, and GL details)
    * @param customerId - The ID of the customer to fetch
-   * @returns Customer object with contacts and attachments
+   * @returns Customer object with contacts, attachments, and GL details
    */
   async getCustomerById(customerId: number): Promise<{
     customer: Customer | null;
     contacts: CustomerContact[];
     attachments: CustomerAttachment[];
+    glDetails: CustomerGLDetails[]; // NEW: GL Details
   }> {
     const request: BaseRequest = {
-      mode: 4, // Mode 4: Fetch Customer by ID with contacts and attachments
+      mode: 4, // Mode 4: Fetch Customer by ID with contacts, attachments, and GL details
       parameters: {
         CustomerID: customerId,
       },
@@ -101,10 +116,11 @@ class CustomerService extends BaseService {
         customer: response.table1 && response.table1.length > 0 ? response.table1[0] : null,
         contacts: response.table2 || [],
         attachments: attachments,
+        glDetails: response.table4 || [], // NEW: GL Details from table4
       };
     }
 
-    return { customer: null, contacts: [], attachments: [] };
+    return { customer: null, contacts: [], attachments: [], glDetails: [] };
   }
 
   /**
@@ -536,6 +552,109 @@ class CustomerService extends BaseService {
     return response.success ? response.data || [] : [];
   }
 
+  // NEW METHODS FOR GL OPERATIONS
+
+  /**
+   * Add or update customer GL details
+   * @param glData - The GL details data
+   * @returns Response with status and GL ID
+   */
+  async addOrUpdateCustomerGLDetails(glData: CustomerGLRequest): Promise<{
+    success: boolean;
+    message: string;
+    glId?: number;
+  }> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Add/Update Customer GL Details
+      parameters: {
+        ...glData,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess(glData.CustomerGLID ? "GL details updated successfully" : "GL details added successfully");
+      return {
+        success: true,
+        message: response.message || "GL details saved successfully",
+        glId: response.GLID,
+      };
+    }
+
+    return {
+      success: false,
+      message: response.message || "Failed to save GL details",
+    };
+  }
+
+  /**
+   * Get all GL details for a customer
+   * @param customerId - The customer ID
+   * @returns Array of GL details
+   */
+  async getCustomerGLDetails(customerId: number): Promise<CustomerGLDetails[]> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Get Customer GL Details
+      parameters: {
+        CustomerID: customerId,
+      },
+    };
+
+    const response = await this.execute<CustomerGLDetails[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Delete customer GL details
+   * @param glId - The GL detail ID to delete
+   * @returns Response with status
+   */
+  async deleteCustomerGLDetails(glId: number): Promise<{ success: boolean; message: string }> {
+    const request: BaseRequest = {
+      mode: 21, // Mode 21: Delete Customer GL Details
+      parameters: {
+        CustomerGLID: glId,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("GL details deleted successfully");
+      return {
+        success: true,
+        message: response.message || "GL details deleted successfully",
+      };
+    }
+
+    return {
+      success: false,
+      message: response.message || "Failed to delete GL details",
+    };
+  }
+
+  /**
+   * Get customer outstanding balances
+   * @param asOfDate - The date to calculate balances as of
+   * @param customerId - Optional specific customer ID
+   * @returns Array of customer outstanding balances
+   */
+  async getCustomerOutstandingBalances(asOfDate: Date, customerId?: number): Promise<CustomerOutstandingBalance[]> {
+    const request: BaseRequest = {
+      mode: 22, // Mode 22: Get Customer Outstanding Balances
+      parameters: {
+        BalanceAsOfDate: asOfDate.toISOString(),
+        CustomerID: customerId,
+      },
+    };
+
+    const response = await this.execute<CustomerOutstandingBalance[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  // HELPER METHODS FOR DROPDOWNS
+
   /**
    * Get customer types for dropdown
    * @returns Array of customer types
@@ -548,6 +667,51 @@ class CustomerService extends BaseService {
       { TypeID: 2, Description: "Corporate" },
       { TypeID: 3, Description: "Government" },
       { TypeID: 4, Description: "Non-Profit" },
+    ];
+  }
+
+  /**
+   * Get account types for dropdown
+   * @returns Array of account types
+   */
+  async getAccountTypes(): Promise<AccountType[]> {
+    // This would need a corresponding endpoint in the backend
+    // For now, returning mock data
+    return [
+      { AccountTypeID: 1, AccountTypeName: "Assets" },
+      { AccountTypeID: 2, AccountTypeName: "Liabilities" },
+      { AccountTypeID: 3, AccountTypeName: "Equity" },
+      { AccountTypeID: 4, AccountTypeName: "Revenue" },
+      { AccountTypeID: 5, AccountTypeName: "Expenses" },
+    ];
+  }
+
+  /**
+   * Get currencies for dropdown
+   * @returns Array of currencies
+   */
+  async getCurrencies(): Promise<Currency[]> {
+    // This would need a corresponding endpoint in the backend
+    // For now, returning mock data
+    return [
+      { CurrencyID: 1, CurrencyName: "US Dollar", CurrencyCode: "USD" },
+      { CurrencyID: 2, CurrencyName: "Euro", CurrencyCode: "EUR" },
+      { CurrencyID: 3, CurrencyName: "British Pound", CurrencyCode: "GBP" },
+      { CurrencyID: 4, CurrencyName: "Japanese Yen", CurrencyCode: "JPY" },
+    ];
+  }
+
+  /**
+   * Get companies for dropdown
+   * @returns Array of companies
+   */
+  async getCompanies(): Promise<Company[]> {
+    // This would need a corresponding endpoint in the backend
+    // For now, returning mock data
+    return [
+      { CompanyID: 1, CompanyName: "Main Company" },
+      { CompanyID: 2, CompanyName: "Subsidiary 1" },
+      { CompanyID: 3, CompanyName: "Subsidiary 2" },
     ];
   }
 

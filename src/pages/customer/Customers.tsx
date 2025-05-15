@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MoreHorizontal, Search, UserPlus, ChevronDown, FileText, Phone, Mail } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, UserPlus, ChevronDown, FileText, Phone, Mail, DollarSign, TrendingUp, CreditCard, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { customerService } from "@/services/customerService";
-import { Customer, CustomerType } from "@/types/customerTypes";
+import { Customer, CustomerType, CustomerOutstandingBalance } from "@/types/customerTypes";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
 import { toast } from "sonner";
@@ -27,11 +27,14 @@ const Customers = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+  const [outstandingBalances, setOutstandingBalances] = useState<CustomerOutstandingBalance[]>([]);
+  const [showBalanceOnly, setShowBalanceOnly] = useState<boolean>(false);
 
   // Fetch customers and types on component mount
   useEffect(() => {
     fetchCustomers();
     fetchCustomerTypes();
+    fetchOutstandingBalances();
   }, []);
 
   // Fetch all customers
@@ -69,6 +72,44 @@ const Customers = () => {
     }
   };
 
+  // Fetch outstanding balances for all customers
+  const fetchOutstandingBalances = async () => {
+    try {
+      const balances = await customerService.getCustomerOutstandingBalances(new Date());
+      setOutstandingBalances(balances);
+    } catch (error) {
+      console.error("Error fetching outstanding balances:", error);
+      // Don't show error toast as this is supplementary data
+    }
+  };
+
+  // Get outstanding balance for a specific customer
+  const getOutstandingBalance = (customerId: number): number | null => {
+    const balance = outstandingBalances.find((b) => b.CustomerID === customerId);
+    return balance ? balance.OutstandingBalance : null;
+  };
+
+  // Filter customers based on balance visibility
+  const getFilteredCustomers = () => {
+    if (!showBalanceOnly) return customers;
+    return customers.filter((customer) => {
+      const balance = getOutstandingBalance(customer.CustomerID);
+      return balance !== null && balance !== 0;
+    });
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount: number): string => {
+    const formatted = new Intl.NumberFormat("en-US", {
+      style: "decimal",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.abs(amount));
+
+    const sign = amount < 0 ? "-" : "";
+    return `${sign}${formatted}`;
+  };
+
   // Debounced search function
   const debouncedSearch = debounce((value: string) => {
     if (value.length >= 2 || value === "") {
@@ -87,6 +128,11 @@ const Customers = () => {
   const handleTypeChange = (value: string) => {
     setSelectedTypeId(value);
     fetchCustomers(searchTerm, value);
+  };
+
+  // Handle balance filter toggle
+  const handleBalanceFilterToggle = () => {
+    setShowBalanceOnly(!showBalanceOnly);
   };
 
   // Navigation handlers
@@ -154,6 +200,31 @@ const Customers = () => {
     );
   };
 
+  // Render outstanding balance with appropriate styling
+  const renderOutstandingBalance = (customerId: number) => {
+    const balance = getOutstandingBalance(customerId);
+
+    if (balance === null) {
+      return <span className="text-muted-foreground">—</span>;
+    }
+
+    const colorClass = balance >= 0 ? "text-blue-700" : "text-red-700";
+    const bgClass = balance >= 0 ? "bg-blue-50" : "bg-red-50";
+
+    return (
+      <div className="flex items-center">
+        <span className={`font-medium ${colorClass}`}>{formatCurrency(balance)}</span>
+        {balance !== 0 && (
+          <div className={`ml-2 p-1 rounded-full ${bgClass}`}>
+            {balance > 0 ? <TrendingUp className={`h-3 w-3 ${colorClass}`} /> : <AlertCircle className={`h-3 w-3 ${colorClass}`} />}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const filteredCustomers = getFilteredCustomers();
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -189,15 +260,61 @@ const Customers = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Button variant={showBalanceOnly ? "default" : "outline"} onClick={handleBalanceFilterToggle} className="whitespace-nowrap">
+                {showBalanceOnly ? (
+                  <>
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Only Outstanding
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Show All
+                  </>
+                )}
+              </Button>
             </div>
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Total Customers</span>
+                </div>
+                <div className="text-2xl font-bold">{customers.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">With Outstanding Balance</span>
+                </div>
+                <div className="text-2xl font-bold text-blue-600">{outstandingBalances.filter((b) => b.OutstandingBalance > 0).length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm text-muted-foreground">Overdue Accounts</span>
+                </div>
+                <div className="text-2xl font-bold text-red-600">{outstandingBalances.filter((b) => b.OutstandingBalance < 0).length}</div>
+              </CardContent>
+            </Card>
           </div>
 
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : customers.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">{searchTerm || selectedTypeId ? "No customers found matching your criteria." : "No customers found."}</div>
+          ) : filteredCustomers.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              {showBalanceOnly ? "No customers with outstanding balances." : searchTerm || selectedTypeId ? "No customers found matching your criteria." : "No customers found."}
+            </div>
           ) : (
             <div className="border rounded-md">
               <Table>
@@ -207,12 +324,13 @@ const Customers = () => {
                     <TableHead>Type</TableHead>
                     <TableHead>Contact Info</TableHead>
                     <TableHead>Location</TableHead>
-                    <TableHead>Customer ID</TableHead>
+                    <TableHead>GL Account</TableHead>
+                    <TableHead className="text-right">Outstanding Balance</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customers.map((customer) => (
+                  {filteredCustomers.map((customer) => (
                     <TableRow key={customer.CustomerID}>
                       <TableCell>
                         <div className="font-medium">{customer.CustomerFullName}</div>
@@ -245,7 +363,17 @@ const Customers = () => {
                           <span className="text-muted-foreground">Not specified</span>
                         )}
                       </TableCell>
-                      <TableCell>{customer.CustomerIdentityNo || <span className="text-muted-foreground">Not available</span>}</TableCell>
+                      <TableCell>
+                        {customer.GLAccountName || customer.AccountName ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">{customer.GLAccountName || customer.AccountName}</span>
+                            {customer.AccountCode && <span className="text-sm text-muted-foreground">{customer.AccountCode}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">No GL Account</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">{renderOutstandingBalance(customer.CustomerID)}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
