@@ -1,7 +1,20 @@
+
 import { authService as apiAuthService, authService, LoginRequest } from "@/services/authService";
 import { toast } from "sonner";
 import { login as loginAction, logout as logoutAction, checkAuthStatus as checkAuthStatusAction, loginSuccess } from "./authSlice";
 import { AppDispatch, RootState } from "@/lib/store";
+
+// Helper to check if a token is expired (assuming JWT)
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expiry = payload.exp * 1000; // Convert to milliseconds
+    return Date.now() >= expiry;
+  } catch (error) {
+    // If we can't decode the token, consider it expired
+    return true;
+  }
+};
 
 // Wrapper functions for the API service
 export const login = (credentials: LoginRequest) => async (dispatch: AppDispatch) => {
@@ -83,10 +96,37 @@ export const switchUserCompany = (companyId: number) => async (dispatch: AppDisp
 };
 
 export const logoutUser = () => (dispatch: AppDispatch) => {
+  // Clear all auth tokens
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+  localStorage.removeItem("refreshToken");
+  
+  // Dispatch logout action
   dispatch(logoutAction());
   toast.info("Logged out successfully");
 };
 
 export const checkAuth = () => (dispatch: AppDispatch) => {
+  // Check for token in storage
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+  
+  if (!token) {
+    // No token found, dispatch logout
+    dispatch(logoutAction());
+    return;
+  }
+  
+  // Check if token is expired
+  if (isTokenExpired(token)) {
+    // Token is expired, clear storage and dispatch logout
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
+    dispatch(logoutAction());
+    toast.error("Your session has expired. Please log in again.");
+    return;
+  }
+  
+  // Token exists and is not expired, dispatch check auth status
   dispatch(checkAuthStatusAction());
 };
