@@ -23,5 +23,6 @@ export * from "./contractService";
 export * from "./terminationService";
 export * from "./accountService";
 export * from "./supplierService";
-
+export * from "./invoiceService";
+export * from "./receiptService";
 // Add any new services to this file for easy importing
