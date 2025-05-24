@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function isUpdateMode(id: string | number | undefined): boolean {
+  return id !== undefined && id !== null && id !== 0 && id !== "0";
+}
+
 /**
  * Format a date for display
  */
