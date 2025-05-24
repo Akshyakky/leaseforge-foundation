@@ -25,4 +25,5 @@ export * from "./accountService";
 export * from "./supplierService";
 export * from "./invoiceService";
 export * from "./receiptService";
+export * from "./pettyCashService";
 // Add any new services to this file for easy importing

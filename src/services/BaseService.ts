@@ -82,6 +82,22 @@ export class BaseService {
   }
 
   /**
+   * Helper method to get the current user ID
+   * @returns The current user ID
+   */
+  protected getCurrentUserId(): number | undefined {
+    try {
+      const state = (window as any).store?.getState();
+      if (state?.auth?.user) {
+        return state.auth.user.userID;
+      }
+    } catch (error) {
+      console.warn("Error retrieving current user ID from store:", error);
+    }
+    return undefined;
+  }
+
+  /**
    * Execute an API request and handle common response/error patterns
    * @param request - The request object
    * @param showToast - Whether to show toast notifications for errors
