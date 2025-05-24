@@ -22,8 +22,6 @@ import currencyRoutes from "./currencyRoutes";
 import deductionChargesRoutes from "./deductionChargesRoutes";
 import contractRoutes from "./contractRoutes";
 import terminationRoutes from "./terminationRoutes";
-import invoiceRoutes from "./invoiceRoutes";
-import receiptRoutes from "./receiptRoutes";
 import accountRoutes from "./accountRoutes";
 import supplierRoutes from "./supplierRoutes";
 
@@ -93,12 +91,6 @@ const AppRoutes = () => {
 
           {/* Termination Management routes */}
           {terminationRoutes}
-
-          {/* Lease Invoice routes */}
-          {invoiceRoutes}
-
-          {/* Lease Receipt routes */}
-          {receiptRoutes}
 
           {/* Account Management routes */}
           {accountRoutes}
