@@ -1,9 +1,9 @@
 // src/routes/invoiceRoutes.tsx
 import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
-import LeaseInvoiceList from "@/pages/invoice/InvoiceList";
-import LeaseInvoiceForm from "@/pages/invoice/InvoiceForm";
-import LeaseInvoiceDetails from "@/pages/invoice/InvoiceDetails";
+import InvoiceList from "@/pages/invoice/InvoiceList";
+import InvoiceForm from "@/pages/invoice/InvoiceForm";
+import InvoiceDetails from "@/pages/invoice/InvoiceDetails";
 
 const invoiceRoutes = (
   <>
@@ -11,23 +11,23 @@ const invoiceRoutes = (
       path="invoices"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <LeaseInvoiceList />
+          <InvoiceList />
         </ProtectedRoute>
       }
     />
     <Route
       path="invoices/new"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <LeaseInvoiceForm />
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
+          <InvoiceForm />
         </ProtectedRoute>
       }
     />
     <Route
       path="invoices/edit/:id"
       element={
-        <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <LeaseInvoiceForm />
+        <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
+          <InvoiceForm />
         </ProtectedRoute>
       }
     />
@@ -35,7 +35,7 @@ const invoiceRoutes = (
       path="invoices/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <LeaseInvoiceDetails />
+          <InvoiceDetails />
         </ProtectedRoute>
       }
     />
