@@ -9,28 +9,24 @@ import Navbar from "./Navbar";
 import Breadcrumbs from "@/components/navigation/Breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import useLanguageSync from "@/hooks/use-language-sync";
-import Sidebar from "./Sidebar";
+import LoadingPage from "@/components/common/LoadingPage";
 
 const MainLayout = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, isLoading, user } = useAppSelector((state) => state.auth);
   const { sidebarOpen } = useAppSelector((state) => state.ui);
 
   // Sync language between i18n and Redux
   useLanguageSync();
 
+  // Check authentication on mount
   useEffect(() => {
     dispatch(checkAuth());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate("/login");
-    }
-  }, [isAuthenticated, navigate]);
-
+  // Control sidebar state based on screen size
   useEffect(() => {
     if (isMobile) {
       dispatch(setSidebarState(false));
@@ -39,8 +35,19 @@ const MainLayout = () => {
     }
   }, [isMobile, dispatch]);
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  if (isLoading) {
+    return <LoadingPage />;
+  }
+
   if (!isAuthenticated) {
-    return null;
+    return null; // Don't render anything while redirecting
   }
 
   return (

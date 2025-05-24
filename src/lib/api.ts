@@ -1,5 +1,8 @@
+
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
 import { toast } from "sonner";
+import { store } from "./store";
+import { logoutAction } from "@/features/auth/authSlice";
 
 // Create axios instance
 const api = axios.create({
@@ -13,7 +16,7 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = sessionStorage.getItem("token");
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
@@ -34,9 +37,20 @@ api.interceptors.response.use(
       const status = error.response.status;
 
       if (status === 401) {
+        // Clear tokens
         localStorage.removeItem("token");
-        window.location.href = "/login";
-        toast.error("Your session has expired. Please log in again.");
+        sessionStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        
+        // Dispatch logout action to update Redux state
+        store.dispatch(logoutAction());
+        
+        // Only redirect if we're not already on the login page
+        const currentPath = window.location.pathname;
+        if (!currentPath.includes('/login')) {
+          window.location.href = "/login";
+          toast.error("Your session has expired. Please log in again.");
+        }
       } else if (status === 403) {
         toast.error("You do not have permission to perform this action.");
       } else if (status === 404) {
