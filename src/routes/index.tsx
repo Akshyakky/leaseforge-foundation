@@ -24,6 +24,7 @@ import contractRoutes from "./contractRoutes";
 import terminationRoutes from "./terminationRoutes";
 import accountRoutes from "./accountRoutes";
 import supplierRoutes from "./supplierRoutes";
+import invoiceRoutes from "./invoiceRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -97,6 +98,9 @@ const AppRoutes = () => {
 
           {/* Supplier Management routes */}
           {supplierRoutes}
+
+          {/* Invoice Management routes */}
+          {invoiceRoutes}
         </Route>
 
         {/* Catch-all route */}

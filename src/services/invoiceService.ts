@@ -36,7 +36,7 @@ export type {
 class InvoiceService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/LeaseManagement/invoice");
+    super("/Master/invoice");
   }
 
   /**

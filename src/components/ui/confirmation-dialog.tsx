@@ -23,6 +23,7 @@ interface ConfirmationDialogProps {
   confirmText?: string;
   type?: ConfirmationDialogType;
   confirmDisabled?: boolean;
+  loading?: boolean;
 }
 
 const iconMap: Record<ConfirmationDialogType, React.ReactNode> = {
@@ -49,6 +50,7 @@ export const ConfirmationDialog = ({
   confirmText = "Confirm",
   type = "info",
   confirmDisabled = false,
+  loading = false,
 }: ConfirmationDialogProps) => {
   const handleConfirm = () => {
     onConfirm();
@@ -66,9 +68,9 @@ export const ConfirmationDialog = ({
           <AlertDialogDescription className="text-base">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4">
-          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
-          <AlertDialogAction className={typeClasses[type]} onClick={handleConfirm} disabled={confirmDisabled}>
-            {confirmText}
+          <AlertDialogCancel disabled={loading}>{cancelText}</AlertDialogCancel>
+          <AlertDialogAction className={typeClasses[type]} onClick={handleConfirm} disabled={confirmDisabled || loading}>
+            {loading ? "Loading..." : confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

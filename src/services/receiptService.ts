@@ -37,7 +37,7 @@ export { PaymentType, PaymentStatus };
 class ReceiptService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/LeaseManagement/receipt");
+    super("/Master/receipt");
   }
 
   /**

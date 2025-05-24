@@ -714,7 +714,7 @@ const InvoiceForm: React.FC = () => {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="">No Tax</SelectItem>
+                              <SelectItem value="0">No Tax</SelectItem>
                               {taxes.map((tax) => (
                                 <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
                                   {tax.TaxName} ({tax.TaxRate}%)

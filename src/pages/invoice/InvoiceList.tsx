@@ -340,7 +340,7 @@ const InvoiceList: React.FC = () => {
                   <SelectValue placeholder="All Customers" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Customers</SelectItem>
+                  <SelectItem value="0">All Customers</SelectItem>
                   {customers.map((customer) => (
                     <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
                       {customer.CustomerFullName}
@@ -354,7 +354,7 @@ const InvoiceList: React.FC = () => {
                   <SelectValue placeholder="All Contracts" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Contracts</SelectItem>
+                  <SelectItem value="0">All Contracts</SelectItem>
                   {contracts.map((contract) => (
                     <SelectItem key={contract.ContractID} value={contract.ContractID.toString()}>
                       {contract.ContractNo}
@@ -368,7 +368,7 @@ const InvoiceList: React.FC = () => {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="0">All Statuses</SelectItem>
                   {invoiceStatusOptions.map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
@@ -382,7 +382,7 @@ const InvoiceList: React.FC = () => {
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="0">All Types</SelectItem>
                   {invoiceTypeOptions.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
