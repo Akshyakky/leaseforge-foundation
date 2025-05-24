@@ -38,10 +38,11 @@ export const BalanceSheet: React.FC = () => {
 
         // Set default company if available
         if (companiesData.length > 0) {
-          const defaultCompany = companiesData.find((c) => c.IsDefault);
-          if (defaultCompany) {
-            setSelectedCompanyId(defaultCompany.CompanyID.toString());
-          } else {
+          // const defaultCompany = companiesData.find((c) => c.IsDefault);
+          // if (defaultCompany) {
+          //   setSelectedCompanyId(defaultCompany.CompanyID.toString());
+          // } else
+          {
             setSelectedCompanyId(companiesData[0].CompanyID.toString());
           }
         }
