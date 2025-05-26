@@ -1,4 +1,4 @@
-// src/pages/invoice/InvoiceForm.tsx
+// src/pages/invoice/InvoiceForm.tsx - Fixed Version
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -7,7 +7,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Calculator } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, Calculator, AlertCircle } from "lucide-react";
 import { invoiceService, LeaseInvoice } from "@/services/invoiceService";
 import { customerService } from "@/services/customerService";
 import { contractService } from "@/services/contractService";
@@ -22,9 +22,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, addDays } from "date-fns";
 
-// Create schema for invoice form validation
+// Updated schema - Made FiscalYearID optional since it's not in the form
 const invoiceSchema = z.object({
   InvoiceNo: z.string().optional(),
   InvoiceDate: z.date().default(() => new Date()),
@@ -35,7 +36,7 @@ const invoiceSchema = z.object({
   ContractUnitID: z.string().min(1, "Contract unit is required"),
   CustomerID: z.string().min(1, "Customer is required"),
   CompanyID: z.string().min(1, "Company is required"),
-  FiscalYearID: z.string().min(1, "Fiscal year is required"),
+  FiscalYearID: z.string().optional(), // Made optional since there's no form field
   InvoiceType: z.string().min(1, "Invoice type is required"),
   InvoiceStatus: z.string().default("Draft"),
   PeriodFromDate: z.date().optional().nullable(),
@@ -70,6 +71,7 @@ const InvoiceForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [invoice, setInvoice] = useState<LeaseInvoice | null>(null);
+  const [formError, setFormError] = useState<string>("");
 
   // Reference data
   const [customers, setCustomers] = useState<any[]>([]);
@@ -88,6 +90,7 @@ const InvoiceForm: React.FC = () => {
   // Initialize form
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceSchema),
+    mode: "onChange", // Enable real-time validation
     defaultValues: {
       InvoiceNo: "",
       InvoiceDate: new Date(),
@@ -96,7 +99,7 @@ const InvoiceForm: React.FC = () => {
       ContractUnitID: "",
       CustomerID: "",
       CompanyID: "",
-      FiscalYearID: "",
+      FiscalYearID: "1", // Set a default value
       InvoiceType: "Regular",
       InvoiceStatus: "Draft",
       PeriodFromDate: null,
@@ -120,6 +123,14 @@ const InvoiceForm: React.FC = () => {
     },
   });
 
+  // Debug form state
+  const watchedValues = form.watch();
+  const formState = form.formState;
+
+  console.log("Form Errors:", formState.errors);
+  console.log("Form Valid:", formState.isValid);
+  console.log("Form Values:", watchedValues);
+
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
@@ -138,6 +149,12 @@ const InvoiceForm: React.FC = () => {
         setCompanies(companiesData);
         setCurrencies(currenciesData);
         setTaxes(taxesData);
+
+        // Set mock fiscal years data since the service call is missing
+        setFiscalYears([
+          { FiscalYearID: 1, FYDescription: "2024-2025" },
+          { FiscalYearID: 2, FYDescription: "2023-2024" },
+        ]);
 
         // Set default company and currency if available
         const defaultCompany = companiesData.find((c) => c.IsActive);
@@ -170,7 +187,7 @@ const InvoiceForm: React.FC = () => {
               ContractUnitID: invoiceData.ContractUnitID?.toString() || "",
               CustomerID: invoiceData.CustomerID?.toString() || "",
               CompanyID: invoiceData.CompanyID?.toString() || "",
-              FiscalYearID: invoiceData.FiscalYearID?.toString() || "",
+              FiscalYearID: invoiceData.FiscalYearID?.toString() || "1",
               CurrencyID: invoiceData.CurrencyID?.toString() || "",
               PaymentTermID: invoiceData.PaymentTermID?.toString() || "",
               SalesPersonID: invoiceData.SalesPersonID?.toString() || "",
@@ -187,6 +204,7 @@ const InvoiceForm: React.FC = () => {
       } catch (error) {
         console.error("Error initializing form:", error);
         toast.error("Error loading form data");
+        setFormError("Failed to load form data. Please refresh the page.");
       } finally {
         setInitialLoading(false);
       }
@@ -280,7 +298,11 @@ const InvoiceForm: React.FC = () => {
 
   // Handle form submission
   const onSubmit = async (data: InvoiceFormValues) => {
+    console.log("onSubmit called with data:", data);
+    setFormError("");
+
     if (!user) {
+      setFormError("User information not available");
       toast.error("User information not available");
       return;
     }
@@ -298,7 +320,7 @@ const InvoiceForm: React.FC = () => {
           ContractUnitID: parseInt(data.ContractUnitID),
           CustomerID: parseInt(data.CustomerID),
           CompanyID: parseInt(data.CompanyID),
-          FiscalYearID: parseInt(data.FiscalYearID),
+          FiscalYearID: data.FiscalYearID ? parseInt(data.FiscalYearID) : 1, // Default to 1 if not provided
           InvoiceType: data.InvoiceType,
           InvoiceStatus: data.InvoiceStatus,
           PeriodFromDate: data.PeriodFromDate,
@@ -322,6 +344,8 @@ const InvoiceForm: React.FC = () => {
         },
       };
 
+      console.log("Sending invoice data:", invoiceData);
+
       if (isEdit && invoice) {
         // Update existing invoice
         const response = await invoiceService.updateInvoice({
@@ -335,6 +359,7 @@ const InvoiceForm: React.FC = () => {
           toast.success("Invoice updated successfully");
           navigate(`/invoices/${invoice.LeaseInvoiceID}`);
         } else {
+          setFormError(response.Message || "Failed to update invoice");
           toast.error(response.Message || "Failed to update invoice");
         }
       } else {
@@ -345,19 +370,30 @@ const InvoiceForm: React.FC = () => {
           toast.success("Invoice created successfully");
           navigate(`/invoices/${response.NewInvoiceID}`);
         } else {
+          setFormError(response.Message || "Failed to create invoice");
           toast.error(response.Message || "Failed to create invoice");
         }
       }
     } catch (error) {
       console.error("Error saving invoice:", error);
-      toast.error("Failed to save invoice");
+      const errorMessage = "Failed to save invoice";
+      setFormError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle form errors
+  const onError = (errors: any) => {
+    console.log("Form validation errors:", errors);
+    setFormError("Please fix the validation errors before submitting");
+    toast.error("Please fix the validation errors before submitting");
+  };
+
   // Reset form
   const handleReset = () => {
+    setFormError("");
     if (isEdit && invoice) {
       form.reset();
     } else {
@@ -369,7 +405,7 @@ const InvoiceForm: React.FC = () => {
         ContractUnitID: "",
         CustomerID: "",
         CompanyID: "",
-        FiscalYearID: "",
+        FiscalYearID: "1",
         InvoiceType: "Regular",
         InvoiceStatus: "Draft",
         PeriodFromDate: null,
@@ -422,8 +458,15 @@ const InvoiceForm: React.FC = () => {
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Invoice" : "Create Invoice"}</h1>
       </div>
 
+      {formError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
+      )}
+
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
+        <form onSubmit={form.handleSubmit(onSubmit, onError)}>
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -517,7 +560,7 @@ const InvoiceForm: React.FC = () => {
                     name="ContractID"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contract</FormLabel>
+                        <FormLabel>Contract *</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
@@ -542,7 +585,7 @@ const InvoiceForm: React.FC = () => {
                     name="ContractUnitID"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Contract Unit</FormLabel>
+                        <FormLabel>Contract Unit *</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange} disabled={!form.watch("ContractID")}>
                           <FormControl>
                             <SelectTrigger>
@@ -568,7 +611,7 @@ const InvoiceForm: React.FC = () => {
                   name="CustomerID"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Customer</FormLabel>
+                      <FormLabel>Customer *</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
@@ -594,7 +637,7 @@ const InvoiceForm: React.FC = () => {
                     name="InvoiceType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Invoice Type</FormLabel>
+                        <FormLabel>Invoice Type *</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
@@ -619,7 +662,7 @@ const InvoiceForm: React.FC = () => {
                     name="CompanyID"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Company</FormLabel>
+                        <FormLabel>Company *</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
@@ -692,7 +735,7 @@ const InvoiceForm: React.FC = () => {
                       name="SubTotal"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Subtotal</FormLabel>
+                          <FormLabel>Subtotal *</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)} />
                           </FormControl>
@@ -909,6 +952,28 @@ const InvoiceForm: React.FC = () => {
               </CardContent>
             </Card>
 
+            {/* Debug Information (remove in production) */}
+            {process.env.NODE_ENV === "development" && (
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardHeader>
+                  <CardTitle className="text-sm">Debug Information</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs">
+                  <div className="space-y-2">
+                    <div>Form Valid: {formState.isValid ? "Yes" : "No"}</div>
+                    <div>Form Dirty: {formState.isDirty ? "Yes" : "No"}</div>
+                    <div>Error Count: {Object.keys(formState.errors).length}</div>
+                    {Object.keys(formState.errors).length > 0 && (
+                      <div>
+                        <div className="font-medium">Errors:</div>
+                        <pre className="text-xs">{JSON.stringify(formState.errors, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex justify-between">
               <div className="flex space-x-2">
                 <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
@@ -919,7 +984,7 @@ const InvoiceForm: React.FC = () => {
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || !formState.isValid}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

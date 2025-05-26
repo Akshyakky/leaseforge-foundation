@@ -6,7 +6,7 @@ import { lazyLoad } from "@/lib/performance";
 
 // Import Petty Cash module components
 const PettyCashList = lazyLoad(() => import("@/pages/pettyCash/PettyCashList"));
-const PettyCashForm = lazyLoad(() => import("@/pages/pettyCash/PettyCashForm"));
+//const PettyCashForm = lazyLoad(() => import("@/pages/pettyCash/PettyCashForm"));
 const PettyCashDetails = lazyLoad(() => import("@/pages/pettyCash/PettyCashDetails"));
 
 const pettyCashRoutes = (
@@ -19,6 +19,7 @@ const pettyCashRoutes = (
         </ProtectedRoute>
       }
     />
+    {/*
     <Route
       path="petty-cash/new"
       element={
@@ -35,6 +36,7 @@ const pettyCashRoutes = (
         </ProtectedRoute>
       }
     />
+    */}
     <Route
       path="petty-cash/:id"
       element={
