@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { DescriptionItem } from "@/components/data-display/DescriptionItem";
 
 export const PettyCashDetails: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>(); // 'id' will now be the VoucherNo
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -28,18 +28,20 @@ export const PettyCashDetails: React.FC = () => {
   const [reversalReason, setReversalReason] = useState("");
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  const postingId = id ? parseInt(id) : undefined;
+  // The 'id' param from the URL is now the VoucherNo string
+  const voucherNo = id;
 
   useEffect(() => {
-    if (postingId) {
-      fetchPettyCashDetails(postingId);
+    if (voucherNo) {
+      fetchPettyCashDetails(voucherNo);
     }
-  }, [postingId]);
+  }, [voucherNo]); // Depend on voucherNo
 
-  const fetchPettyCashDetails = async (id: number) => {
+  const fetchPettyCashDetails = async (VoucherNo: string) => {
+    // Changed parameter to VoucherNo
     setIsLoading(true);
     try {
-      const data = await pettyCashService.getPettyCashVoucherById(id);
+      const data = await pettyCashService.getPettyCashVoucherByVoucherNo(VoucherNo); // Call the updated service method
       if (data.voucher) {
         setVoucher(data.voucher);
         setPostingLines(data.postingLines);
@@ -56,12 +58,20 @@ export const PettyCashDetails: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!postingId) return;
+    if (!voucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error(t("pettyCash.voucherNoMissing"));
+      return;
+    }
     setIsProcessingAction(true);
     try {
-      await pettyCashService.deletePettyCashVoucher(postingId);
-      toast.success(t("pettyCash.deleteSuccess"));
-      navigate("/petty-cash");
+      const response = await pettyCashService.deletePettyCashVoucher(voucher.VoucherNo); // Pass VoucherNo
+      if (response.Status === 1) {
+        toast.success(t("pettyCash.deleteSuccess"));
+        navigate("/petty-cash");
+      } else {
+        toast.error(response.Message || t("pettyCash.deleteError"));
+      }
     } catch (error) {
       console.error("Failed to delete petty cash voucher:", error);
       toast.error(t("pettyCash.deleteError"));
@@ -72,12 +82,20 @@ export const PettyCashDetails: React.FC = () => {
   };
 
   const handlePost = async () => {
-    if (!postingId) return;
+    if (!voucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error(t("pettyCash.voucherNoMissing"));
+      return;
+    }
     setIsProcessingAction(true);
     try {
-      await pettyCashService.postPettyCashVoucher(postingId);
-      toast.success(t("pettyCash.postSuccess"));
-      fetchPettyCashDetails(postingId); // Refresh data
+      const response = await pettyCashService.postPettyCashVoucher(voucher.VoucherNo); // Pass VoucherNo
+      if (response.Status === 1) {
+        toast.success(t("pettyCash.postSuccess"));
+        fetchPettyCashDetails(voucher.VoucherNo); // Refresh data using VoucherNo
+      } else {
+        toast.error(response.Message || t("pettyCash.postError"));
+      }
     } catch (error) {
       console.error("Failed to post petty cash voucher:", error);
       toast.error(t("pettyCash.postError"));
@@ -88,16 +106,24 @@ export const PettyCashDetails: React.FC = () => {
   };
 
   const handleReverse = async () => {
-    if (!postingId) return;
+    if (!voucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error(t("pettyCash.voucherNoMissing"));
+      return;
+    }
     if (!reversalReason.trim()) {
       toast.error(t("pettyCash.reversalReasonRequired"));
       return;
     }
     setIsProcessingAction(true);
     try {
-      await pettyCashService.reversePettyCashVoucher({ PostingID: postingId, reversalReason });
-      toast.success(t("pettyCash.reverseSuccess"));
-      fetchPettyCashDetails(postingId); // Refresh data
+      const response = await pettyCashService.reversePettyCashVoucher({ VoucherNo: voucher.VoucherNo, reversalReason }); // Pass VoucherNo
+      if (response.Status === 1) {
+        toast.success(t("pettyCash.reverseSuccess"));
+        fetchPettyCashDetails(voucher.VoucherNo); // Refresh data using VoucherNo
+      } else {
+        toast.error(response.Message || t("pettyCash.reverseError"));
+      }
     } catch (error) {
       console.error("Failed to reverse petty cash voucher:", error);
       toast.error(t("pettyCash.reverseError"));
@@ -124,12 +150,12 @@ export const PettyCashDetails: React.FC = () => {
     {
       header: t("pettyCash.debitAmount"),
       accessorKey: "DebitAmount",
-      cell: ({ row }) => <div className="text-right">{row.TransactionType === "Debit" ? row.DebitAmount?.toFixed(2) : "0.00"}</div>,
+      cell: ({ row }) => <div className="text-right">{row.DebitAmount?.toFixed(2) || "0.00"}</div>, // Simplified, as DebitAmount is already 0 if not debit
     },
     {
       header: t("pettyCash.creditAmount"),
       accessorKey: "CreditAmount",
-      cell: ({ row }) => <div className="text-right">{row.TransactionType === "Credit" ? row.CreditAmount?.toFixed(2) : "0.00"}</div>,
+      cell: ({ row }) => <div className="text-right">{row.CreditAmount?.toFixed(2) || "0.00"}</div>, // Simplified, as CreditAmount is already 0 if not credit
     },
     {
       header: t("pettyCash.costCenter1"),
@@ -151,6 +177,16 @@ export const PettyCashDetails: React.FC = () => {
       accessorKey: "CostCenter4Name",
       cell: ({ row }) => row.CostCenter4Name || "-",
     },
+    {
+      header: t("pettyCash.lineDescription"), // Added for line-specific description
+      accessorKey: "LineDescription",
+      cell: ({ row }) => row.LineDescription || voucher?.Description || "-", // Fallback to header description
+    },
+    {
+      header: t("pettyCash.lineNarration"), // Added for line-specific narration
+      accessorKey: "LineNarration",
+      cell: ({ row }) => row.LineNarration || voucher?.Narration || "-", // Fallback to header narration
+    },
   ];
 
   if (isLoading) {
@@ -165,22 +201,54 @@ export const PettyCashDetails: React.FC = () => {
     return <div className="text-center">{t("pettyCash.voucherNotFound")}</div>;
   }
 
+  // Determine badge variant based on PostingStatus
+  const getStatusBadgeVariant = (status?: string) => {
+    switch (status) {
+      case "Posted":
+        return "default"; // Often a primary color for posted
+      case "Draft":
+        return "secondary"; // For items in draft
+      case "Reversed":
+        return "destructive"; // For reversed/cancelled items
+      default:
+        return "outline"; // Default or unknown status
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-2xl font-bold">{t("pettyCash.detailsTitle")}</CardTitle>
+          <CardTitle className="text-2xl font-bold">
+            {t("pettyCash.detailsTitle")} - {voucher.VoucherNo}
+          </CardTitle>
           <div className="flex space-x-2">
-            <Button variant="outline" onClick={() => navigate(`/petty-cash/edit/${voucher.PostingID}`)} disabled={voucher.PostingStatus !== "Draft" || isProcessingAction}>
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/petty-cash/edit/${voucher.VoucherNo}`)} // Pass VoucherNo for editing
+              disabled={voucher.PostingStatus !== "Draft" || isProcessingAction} // Only Draft can be edited
+            >
               {t("common.edit")}
             </Button>
-            <Button variant="outline" onClick={() => setShowPostConfirm(true)} disabled={voucher.PostingStatus !== "Draft" || isProcessingAction}>
+            <Button
+              variant="outline"
+              onClick={() => setShowPostConfirm(true)}
+              disabled={voucher.PostingStatus !== "Draft" || isProcessingAction} // Only Draft can be posted
+            >
               {t("common.post")}
             </Button>
-            <Button variant="outline" onClick={() => setShowReverseConfirm(true)} disabled={voucher.PostingStatus !== "Posted" || isProcessingAction}>
+            <Button
+              variant="outline"
+              onClick={() => setShowReverseConfirm(true)}
+              disabled={voucher.PostingStatus !== "Posted" || isProcessingAction} // Only Posted can be reversed
+            >
               {t("common.reverse")}
             </Button>
-            <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} disabled={voucher.PostingStatus !== "Draft" || isProcessingAction}>
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={voucher.PostingStatus !== "Draft" || isProcessingAction} // Only Draft can be deleted
+            >
               {t("common.delete")}
             </Button>
           </div>
@@ -192,18 +260,16 @@ export const PettyCashDetails: React.FC = () => {
             <DescriptionItem label={t("pettyCash.postingDate")} value={voucher.PostingDate ? format(new Date(voucher.PostingDate), "PPP") : "-"} />
             <DescriptionItem label={t("pettyCash.company")} value={voucher.CompanyName} />
             <DescriptionItem label={t("pettyCash.fiscalYear")} value={voucher.FYDescription} />
-            <DescriptionItem label={t("pettyCash.amount")} value={`${voucher.Amount?.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+            {/* Display TotalAmount now as it's the sum of debits/credits */}
+            <DescriptionItem label={t("pettyCash.totalAmount")} value={`${voucher.TotalAmount?.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+            <DescriptionItem label={t("pettyCash.currency")} value={voucher.CurrencyName} />
             <DescriptionItem label={t("pettyCash.exchangeRate")} value={voucher.ExchangeRate?.toFixed(4)} />
-            <DescriptionItem label={t("pettyCash.expenseAccount")} value={voucher.ExpenseAccount} />
+            {/* Removed ExpenseAccount, ReceivedBy, ExpenseCategory as they are not top-level properties on the voucher anymore */}
+            {/* <DescriptionItem label={t("pettyCash.expenseAccount")} value={voucher.ExpenseAccount} />
             <DescriptionItem label={t("pettyCash.receivedBy")} value={voucher.ReceivedBy} />
-            <DescriptionItem label={t("pettyCash.expenseCategory")} value={voucher.ExpenseCategory} />
+            <DescriptionItem label={t("pettyCash.expenseCategory")} value={voucher.ExpenseCategory} /> */}
             <DescriptionItem label={t("pettyCash.receiptNo")} value={voucher.ReceiptNo} />
-            <DescriptionItem
-              label={t("pettyCash.postingStatus")}
-              value={
-                <Badge variant={voucher.PostingStatus === "Posted" ? "secondary" : voucher.PostingStatus === "Draft" ? "default" : "destructive"}>{voucher.PostingStatus}</Badge>
-              }
-            />
+            <DescriptionItem label={t("pettyCash.postingStatus")} value={<Badge variant={getStatusBadgeVariant(voucher.PostingStatus)}>{voucher.PostingStatus}</Badge>} />
             <DescriptionItem label={t("pettyCash.description")} value={voucher.Description} className="col-span-full" />
             <DescriptionItem label={t("pettyCash.narration")} value={voucher.Narration} className="col-span-full" />
           </div>

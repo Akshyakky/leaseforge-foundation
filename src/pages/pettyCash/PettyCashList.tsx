@@ -1,5 +1,5 @@
 // src/pages/pettyCash/PettyCashList.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,86 +31,101 @@ const PettyCashList: React.FC = () => {
   const [activeTab, setActiveTab] = useState("all");
 
   // Filters
-  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string>("");
+  // Removed selectedExpenseCategory as it's no longer a direct filter in SP search.
+  // Instead, the SP now has filterAccountID. You'll need to decide how to map categories to accounts.
+  // For now, I'm removing it to align with the SP, but you might want to reintroduce a way to filter by account.
   const [selectedPostingStatus, setSelectedPostingStatus] = useState<string>("");
   const [fromDate, setFromDate] = useState<Date | null>(null);
   const [toDate, setToDate] = useState<Date | null>(null);
 
-  // Fetch data on component mount
-  useEffect(() => {
-    fetchVouchers();
-  }, []);
+  // Fetch all vouchers - now uses PettyCashSearchParams correctly
+  const fetchVouchers = useCallback(
+    async (search?: string, filters?: PettyCashSearchParams) => {
+      try {
+        setLoading(true);
+        let vouchersData: PettyCashVoucher[] = [];
 
-  // Fetch all vouchers
-  const fetchVouchers = async (search?: string, filters?: PettyCashSearchParams) => {
-    try {
-      setLoading(true);
-      let vouchersData: PettyCashVoucher[] = [];
-
-      if (activeTab === "posted") {
-        vouchersData = await pettyCashService.searchPettyCashVouchers({ filterPostingStatus: "Posted" });
-      } else if (activeTab === "unposted") {
-        vouchersData = await pettyCashService.searchPettyCashVouchers({ filterPostingStatus: "Unposted" });
-      } else {
-        vouchersData = await pettyCashService.searchPettyCashVouchers({
+        const searchParams: PettyCashSearchParams = {
           searchText: search,
-          filterExpenseCategory: filters?.filterExpenseCategory,
           filterPostingStatus: filters?.filterPostingStatus,
           filterFromDate: filters?.filterFromDate,
           filterToDate: filters?.filterToDate,
-        });
-      }
+          filterCompanyID: filters?.filterCompanyID, // Add if you plan to filter by Company
+          filterFiscalYearID: filters?.filterFiscalYearID, // Add if you plan to filter by Fiscal Year
+          filterAccountID: filters?.filterAccountID, // Add if you plan to filter by Account ID
+        };
 
-      setVouchers(vouchersData);
-    } catch (error) {
-      console.error("Error fetching petty cash vouchers:", error);
-      toast.error("Failed to load petty cash vouchers");
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (activeTab === "posted") {
+          searchParams.filterPostingStatus = "Posted";
+        } else if (activeTab === "unposted") {
+          searchParams.filterPostingStatus = "Draft"; // Changed 'Unposted' to 'Draft' to match SP
+        } else {
+          // For 'all' tab, include all status unless specifically filtered by user
+          if (selectedPostingStatus && selectedPostingStatus !== "0") {
+            searchParams.filterPostingStatus = selectedPostingStatus;
+          } else {
+            searchParams.filterPostingStatus = undefined; // Do not send a status filter for 'all' unless user selected one
+          }
+        }
+
+        // If a specific search term is provided, ensure it's passed regardless of tab
+        if (search) {
+          searchParams.searchText = search;
+        }
+
+        vouchersData = await pettyCashService.searchPettyCashVouchers(searchParams);
+        setVouchers(vouchersData);
+      } catch (error) {
+        console.error("Error fetching petty cash vouchers:", error);
+        toast.error("Failed to load petty cash vouchers");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeTab, selectedPostingStatus, fromDate, toDate]
+  ); // Added dependencies for useCallback
 
   // Apply filters
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     const filters: PettyCashSearchParams = {
-      filterExpenseCategory: selectedExpenseCategory || undefined,
-      filterPostingStatus: selectedPostingStatus || undefined,
+      // Removed filterExpenseCategory
+      filterPostingStatus: selectedPostingStatus === "0" ? undefined : selectedPostingStatus,
       filterFromDate: fromDate,
       filterToDate: toDate,
+      // Add other filters here as needed, e.g., filterCompanyID, filterFiscalYearID, filterAccountID
     };
     fetchVouchers(searchTerm, filters);
-  };
+  }, [searchTerm, selectedPostingStatus, fromDate, toDate, fetchVouchers]);
 
   // Debounced search function
   const debouncedSearch = _.debounce((value: string) => {
-    if (value.length >= 2 || value === "") {
-      setSearchTerm(value);
-      applyFilters();
-    }
+    setSearchTerm(value); // Update searchTerm immediately
+    applyFilters(); // Apply filters which will trigger fetchVouchers
   }, 500);
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    debouncedSearch(value);
+    debouncedSearch(e.target.value);
   };
 
-  // Handle filter changes
+  // Handle filter changes (trigger applyFilters)
   useEffect(() => {
     applyFilters();
-  }, [selectedExpenseCategory, selectedPostingStatus, fromDate, toDate, activeTab]);
+  }, [applyFilters]); // Dependency on applyFilters
 
   // Navigation handlers
   const handleAddVoucher = () => {
     navigate("/petty-cash/new");
   };
 
-  const handleEditVoucher = (postingId: number) => {
-    navigate(`/petty-cash/edit/${postingId}`);
+  const handleEditVoucher = (voucherNo: string) => {
+    // Changed to voucherNo
+    navigate(`/petty-cash/edit/${voucherNo}`);
   };
 
-  const handleViewVoucher = (postingId: number) => {
-    navigate(`/petty-cash/${postingId}`);
+  const handleViewVoucher = (voucherNo: string) => {
+    // Changed to voucherNo
+    navigate(`/petty-cash/${voucherNo}`);
   };
 
   // Delete voucher handlers
@@ -125,14 +140,18 @@ const PettyCashList: React.FC = () => {
   };
 
   const handleDeleteVoucher = async () => {
-    if (!selectedVoucher) return;
+    if (!selectedVoucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error("Voucher number is missing for deletion.");
+      return;
+    }
 
     try {
       setActionLoading(true);
-      const response = await pettyCashService.deletePettyCashVoucher(selectedVoucher.PostingID);
+      const response = await pettyCashService.deletePettyCashVoucher(selectedVoucher.VoucherNo); // Pass VoucherNo
 
       if (response.Status === 1) {
-        setVouchers(vouchers.filter((v) => v.PostingID !== selectedVoucher.PostingID));
+        setVouchers(vouchers.filter((v) => v.VoucherNo !== selectedVoucher.VoucherNo)); // Filter by VoucherNo
         toast.success("Petty cash voucher deleted successfully");
       } else {
         toast.error(response.Message || "Failed to delete petty cash voucher");
@@ -158,15 +177,19 @@ const PettyCashList: React.FC = () => {
   };
 
   const handlePostToGL = async () => {
-    if (!selectedVoucher) return;
+    if (!selectedVoucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error("Voucher number is missing for posting.");
+      return;
+    }
 
     try {
       setActionLoading(true);
-      const response = await pettyCashService.postPettyCashVoucher(selectedVoucher.PostingID);
+      const response = await pettyCashService.postPettyCashVoucher(selectedVoucher.VoucherNo); // Pass VoucherNo
 
       if (response.Status === 1) {
         // Update voucher in list
-        setVouchers(vouchers.map((v) => (v.PostingID === selectedVoucher.PostingID ? { ...v, PostingStatus: "Posted" } : v)));
+        setVouchers(vouchers.map((v) => (v.VoucherNo === selectedVoucher.VoucherNo ? { ...v, PostingStatus: "Posted" } : v)));
         toast.success("Petty cash voucher posted successfully");
       } else {
         toast.error(response.Message || "Failed to post petty cash voucher");
@@ -192,18 +215,22 @@ const PettyCashList: React.FC = () => {
   };
 
   const handleReverseVoucher = async () => {
-    if (!selectedVoucher) return;
+    if (!selectedVoucher?.VoucherNo) {
+      // Check for VoucherNo
+      toast.error("Voucher number is missing for reversal.");
+      return;
+    }
 
     try {
       setActionLoading(true);
       const response = await pettyCashService.reversePettyCashVoucher({
-        PostingID: selectedVoucher.PostingID,
-        reversalReason: "Reversal requested",
+        VoucherNo: selectedVoucher.VoucherNo, // Pass VoucherNo
+        reversalReason: "Reversal requested by user from Petty Cash List", // Provide a more descriptive reason
       });
 
       if (response.Status === 1) {
-        // Refresh the list
-        fetchVouchers();
+        // Refresh the list to show the new reversal entry and updated status
+        fetchVouchers(); // Re-fetch all vouchers after a successful reversal
         toast.success("Petty cash voucher reversed successfully");
       } else {
         toast.error(response.Message || "Failed to reverse petty cash voucher");
@@ -238,11 +265,12 @@ const PettyCashList: React.FC = () => {
   };
 
   // Get posting status color
-  const getPostingStatusColor = (status: string) => {
+  const getPostingStatusColor = (status?: string) => {
+    // Status can be undefined
     switch (status) {
       case "Posted":
         return "default";
-      case "Unposted":
+      case "Draft": // Assuming 'Unposted' is now 'Draft' based on SP default
         return "secondary";
       case "Reversed":
         return "destructive";
@@ -252,11 +280,12 @@ const PettyCashList: React.FC = () => {
   };
 
   // Get posting status icon
-  const getPostingStatusIcon = (status: string) => {
+  const getPostingStatusIcon = (status?: string) => {
+    // Status can be undefined
     switch (status) {
       case "Posted":
         return <CheckCircle className="h-3 w-3" />;
-      case "Unposted":
+      case "Draft": // Assuming 'Unposted' is now 'Draft' based on SP default
         return <Clock className="h-3 w-3" />;
       case "Reversed":
         return <RefreshCw className="h-3 w-3" />;
@@ -266,13 +295,13 @@ const PettyCashList: React.FC = () => {
   };
 
   // Get tab counts
-  const getTabCounts = () => {
+  const getTabCounts = useCallback(() => {
     return {
       all: vouchers.length,
       posted: vouchers.filter((v) => v.PostingStatus === "Posted").length,
-      unposted: vouchers.filter((v) => v.PostingStatus === "Unposted").length,
+      unposted: vouchers.filter((v) => v.PostingStatus === "Draft").length, // Adjusted to 'Draft'
     };
-  };
+  }, [vouchers]);
 
   const tabCounts = getTabCounts();
 
@@ -296,7 +325,7 @@ const PettyCashList: React.FC = () => {
             <TabsList className="grid grid-cols-3 w-full mb-6">
               <TabsTrigger value="all">All ({tabCounts.all})</TabsTrigger>
               <TabsTrigger value="posted">Posted ({tabCounts.posted})</TabsTrigger>
-              <TabsTrigger value="unposted">Unposted ({tabCounts.unposted})</TabsTrigger>
+              <TabsTrigger value="unposted">Draft ({tabCounts.unposted})</TabsTrigger> {/* Adjusted tab name */}
             </TabsList>
 
             <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -305,7 +334,9 @@ const PettyCashList: React.FC = () => {
                 <Input type="text" placeholder="Search vouchers..." className="pl-9" onChange={handleSearchChange} />
               </div>
 
-              <Select value={selectedExpenseCategory} onValueChange={setSelectedExpenseCategory}>
+              {/* Removed Expense Category filter, as it's not directly supported by SP's search params */}
+              {/* If you need this, you'll have to adjust your SP or fetch all and filter client-side. */}
+              {/* <Select value={selectedExpenseCategory} onValueChange={setSelectedExpenseCategory}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Expense Category" />
                 </SelectTrigger>
@@ -317,7 +348,7 @@ const PettyCashList: React.FC = () => {
                   <SelectItem value="Maintenance">Maintenance</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select> */}
 
               <Select value={selectedPostingStatus} onValueChange={setSelectedPostingStatus}>
                 <SelectTrigger className="w-[150px]">
@@ -326,7 +357,7 @@ const PettyCashList: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="0">All Statuses</SelectItem>
                   <SelectItem value="Posted">Posted</SelectItem>
-                  <SelectItem value="Unposted">Unposted</SelectItem>
+                  <SelectItem value="Draft">Draft</SelectItem> {/* Changed 'Unposted' to 'Draft' */}
                   <SelectItem value="Reversed">Reversed</SelectItem>
                 </SelectContent>
               </Select>
@@ -336,7 +367,7 @@ const PettyCashList: React.FC = () => {
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="h-9 border-dashed">
                       <Calendar className="mr-2 h-4 w-4" />
-                      {fromDate ? fromDate.toLocaleDateString() : "From Date"}
+                      {fromDate ? formatDate(fromDate) : "From Date"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -348,7 +379,7 @@ const PettyCashList: React.FC = () => {
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="h-9 border-dashed">
                       <Calendar className="mr-2 h-4 w-4" />
-                      {toDate ? toDate.toLocaleDateString() : "To Date"}
+                      {toDate ? formatDate(toDate) : "To Date"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -356,15 +387,14 @@ const PettyCashList: React.FC = () => {
                   </PopoverContent>
                 </Popover>
 
-                {(fromDate || toDate || selectedExpenseCategory || selectedPostingStatus) && (
+                {(fromDate || toDate || selectedPostingStatus !== "0") && ( // Check for selectedPostingStatus value
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setFromDate(null);
                       setToDate(null);
-                      setSelectedExpenseCategory("");
-                      setSelectedPostingStatus("");
+                      setSelectedPostingStatus("0"); // Reset to "0" for all statuses
                     }}
                   >
                     Reset Filters
@@ -380,7 +410,7 @@ const PettyCashList: React.FC = () => {
                 </div>
               ) : vouchers.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground">
-                  {searchTerm || selectedExpenseCategory || selectedPostingStatus || fromDate || toDate
+                  {searchTerm || selectedPostingStatus !== "0" || fromDate || toDate
                     ? "No petty cash vouchers found matching your criteria."
                     : "No petty cash vouchers have been created yet."}
                 </div>
@@ -394,8 +424,9 @@ const PettyCashList: React.FC = () => {
                           <th className="text-left p-4 font-medium">Transaction Date</th>
                           <th className="text-left p-4 font-medium">Posting Date</th>
                           <th className="text-left p-4 font-medium">Amount</th>
-                          <th className="text-left p-4 font-medium">Category</th>
-                          <th className="text-left p-4 font-medium">Received By</th>
+                          {/* Removed Category and Received By columns as they are no longer direct properties of PettyCashVoucher */}
+                          {/* <th className="text-left p-4 font-medium">Category</th> */}
+                          {/* <th className="text-left p-4 font-medium">Received By</th> */}
                           <th className="text-left p-4 font-medium">Status</th>
                           <th className="text-left p-4 font-medium">Description</th>
                           <th className="text-left p-4 font-medium w-[100px]">Actions</th>
@@ -403,7 +434,8 @@ const PettyCashList: React.FC = () => {
                       </thead>
                       <tbody>
                         {vouchers.map((voucher, index) => (
-                          <tr key={voucher.PostingID} className={index % 2 === 0 ? "bg-background" : "bg-muted/25"}>
+                          <tr key={voucher.VoucherNo} className={index % 2 === 0 ? "bg-background" : "bg-muted/25"}>
+                            {/* Changed key to VoucherNo */}
                             <td className="p-4">
                               <div className="font-medium">{voucher.VoucherNo}</div>
                               {voucher.ReceiptNo && <div className="text-xs text-muted-foreground">Receipt: {voucher.ReceiptNo}</div>}
@@ -411,11 +443,12 @@ const PettyCashList: React.FC = () => {
                             <td className="p-4">{formatDate(voucher.TransactionDate)}</td>
                             <td className="p-4">{formatDate(voucher.PostingDate)}</td>
                             <td className="p-4">
-                              <div className="font-medium">{formatCurrency(voucher.Amount)}</div>
+                              <div className="font-medium">{formatCurrency(voucher.TotalAmount)}</div> {/* Use TotalAmount */}
                               {voucher.CurrencyName && voucher.CurrencyName !== "USD" && <div className="text-xs text-muted-foreground">{voucher.CurrencyName}</div>}
                             </td>
-                            <td className="p-4">{voucher.ExpenseCategory || "N/A"}</td>
-                            <td className="p-4">{voucher.ReceivedBy || "N/A"}</td>
+                            {/* Removed Category and Received By display */}
+                            {/* <td className="p-4">{voucher.ExpenseCategory || "N/A"}</td> */}
+                            {/* <td className="p-4">{voucher.ReceivedBy || "N/A"}</td> */}
                             <td className="p-4">
                               <Badge variant={getPostingStatusColor(voucher.PostingStatus)} className="flex items-center gap-1 w-fit">
                                 {getPostingStatusIcon(voucher.PostingStatus)}
@@ -435,22 +468,31 @@ const PettyCashList: React.FC = () => {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewVoucher(voucher.PostingID)}>
+                                  <DropdownMenuItem onClick={() => handleViewVoucher(voucher.VoucherNo!)}>
+                                    {" "}
+                                    {/* Pass VoucherNo */}
                                     <Eye className="h-4 w-4 mr-2" />
                                     View details
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleEditVoucher(voucher.PostingID)} disabled={voucher.PostingStatus === "Posted"}>
+                                  <DropdownMenuItem
+                                    onClick={() => handleEditVoucher(voucher.VoucherNo!)}
+                                    disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}
+                                  >
+                                    {" "}
+                                    {/* Pass VoucherNo, disable if Reversed */}
                                     Edit
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator />
 
-                                  <DropdownMenuItem onClick={() => openPostDialog(voucher)} disabled={voucher.PostingStatus === "Posted"}>
+                                  <DropdownMenuItem onClick={() => openPostDialog(voucher)} disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}>
+                                    {" "}
+                                    {/* Disable if Reversed */}
                                     <DollarSign className="h-4 w-4 mr-2" />
                                     Post to GL
                                   </DropdownMenuItem>
 
-                                  {voucher.PostingStatus === "Posted" && (
+                                  {voucher.PostingStatus === "Posted" && ( // Only show reverse if status is 'Posted'
                                     <DropdownMenuItem onClick={() => openReverseDialog(voucher)}>
                                       <RefreshCw className="h-4 w-4 mr-2" />
                                       Reverse
@@ -459,7 +501,13 @@ const PettyCashList: React.FC = () => {
 
                                   <DropdownMenuSeparator />
 
-                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(voucher)} disabled={voucher.PostingStatus === "Posted"}>
+                                  <DropdownMenuItem
+                                    className="text-red-500"
+                                    onClick={() => openDeleteDialog(voucher)}
+                                    disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}
+                                  >
+                                    {" "}
+                                    {/* Disable if Posted or Reversed */}
                                     Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>

@@ -1,17 +1,17 @@
-// src/services/pettyCashService.ts
-import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
+import { BaseService, BaseRequest } from "./BaseService"; // Assuming BaseResponse is part of BaseService or not strictly needed
 import {
   PettyCashVoucher,
   PettyCashVoucherPostingLine,
   PettyCashSearchParams,
-  PettyCashRequest,
-  PettyCashUpdateRequest,
+  PettyCashCreateRequest, // Use specific create request
+  PettyCashUpdateRequest, // Use specific update request
   PettyCashReverseRequest,
   ApiResponse,
+  PettyCashEntry, // Import new type
 } from "../types/pettyCashTypes";
 
 // Re-export types for convenience
-export type { PettyCashVoucher, PettyCashVoucherPostingLine, PettyCashSearchParams, PettyCashRequest, PettyCashUpdateRequest, PettyCashReverseRequest };
+export type { PettyCashVoucher, PettyCashVoucherPostingLine, PettyCashSearchParams, PettyCashCreateRequest, PettyCashUpdateRequest, PettyCashReverseRequest, PettyCashEntry };
 
 /**
  * Service for petty cash voucher management operations
@@ -27,7 +27,7 @@ class PettyCashService extends BaseService {
    * @param data - The petty cash voucher data to create
    * @returns Response with status and newly created posting ID
    */
-  async createPettyCashVoucher(data: PettyCashRequest): Promise<ApiResponse> {
+  async createPettyCashVoucher(data: PettyCashCreateRequest): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Petty Cash Voucher
       parameters: {
@@ -36,21 +36,16 @@ class PettyCashService extends BaseService {
         PostingDate: data.voucher.PostingDate,
         CompanyID: data.voucher.CompanyID,
         FiscalYearID: data.voucher.FiscalYearID,
-        Amount: data.voucher.Amount,
+        // TotalAmount is calculated by the SP based on entries
         CurrencyID: data.voucher.CurrencyID,
         ExchangeRate: data.voucher.ExchangeRate,
-        ExpenseAccountID: data.voucher.ExpenseAccountID,
-        PettyCashAccountID: data.voucher.PettyCashAccountID,
-        ReceivedBy: data.voucher.ReceivedBy,
-        ExpenseCategory: data.voucher.ExpenseCategory,
         Description: data.voucher.Description,
         Narration: data.voucher.Narration,
         PostingStatus: data.voucher.PostingStatus,
         ReceiptNo: data.voucher.ReceiptNo,
-        CostCenter1ID: data.voucher.CostCenter1ID,
-        CostCenter2ID: data.voucher.CostCenter2ID,
-        CostCenter3ID: data.voucher.CostCenter3ID,
-        CostCenter4ID: data.voucher.CostCenter4ID,
+        // Debit/Credit entries are now JSON strings
+        DebitEntriesJSON: JSON.stringify(data.debitEntries),
+        CreditEntriesJSON: JSON.stringify(data.creditEntries),
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -63,7 +58,7 @@ class PettyCashService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Petty Cash Voucher created successfully",
-        PostingID: response.PostingID,
+        NewPostingID: response.NewPostingID, // Corrected to NewPostingID as per SP output
         VoucherNo: response.VoucherNo,
       };
     }
@@ -83,12 +78,19 @@ class PettyCashService extends BaseService {
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Petty Cash Voucher
       parameters: {
-        PostingID: data.voucher.PostingID,
+        VoucherNo: data.voucher.VoucherNo, // Update uses VoucherNo to identify the record
         TransactionDate: data.voucher.TransactionDate,
         PostingDate: data.voucher.PostingDate,
+        CompanyID: data.voucher.CompanyID, // CompanyID and FiscalYearID are crucial for context
+        FiscalYearID: data.voucher.FiscalYearID,
+        CurrencyID: data.voucher.CurrencyID,
+        ExchangeRate: data.voucher.ExchangeRate,
         Description: data.voucher.Description,
         Narration: data.voucher.Narration,
+        PostingStatus: data.voucher.PostingStatus,
         ReceiptNo: data.voucher.ReceiptNo,
+        DebitEntriesJSON: JSON.stringify(data.debitEntries),
+        CreditEntriesJSON: JSON.stringify(data.creditEntries),
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -121,28 +123,30 @@ class PettyCashService extends BaseService {
     };
 
     const response = await this.execute<PettyCashVoucher[]>(request);
-    return response.success ? response.table1 || [] : []; // Stored procedure returns data in table1
+    // Mode 3 returns a single result set of aggregated voucher data
+    return response.success ? response.table1 || [] : [];
   }
 
   /**
-   * Get a petty cash voucher by ID (including posting lines)
-   * @param postingId - The ID of the petty cash voucher to fetch
+   * Get a petty cash voucher by VoucherNo (including posting lines)
+   * @param voucherNo - The VoucherNo of the petty cash voucher to fetch
    * @returns PettyCashVoucher object with posting lines
    */
-  async getPettyCashVoucherById(postingId: number): Promise<{
+  async getPettyCashVoucherByVoucherNo(voucherNo: string): Promise<{
     voucher: PettyCashVoucher | null;
     postingLines: PettyCashVoucherPostingLine[];
   }> {
     const request: BaseRequest = {
-      mode: 4, // Mode 4: Fetch Petty Cash Voucher by ID
+      mode: 4, // Mode 4: Fetch Petty Cash Voucher by VoucherNo
       parameters: {
-        PostingID: postingId,
+        VoucherNo: voucherNo, // Fetch by VoucherNo
       },
     };
 
     const response = await this.execute(request);
 
     if (response.success) {
+      // Mode 4 returns two tables: table1 for header, table2 for lines
       return {
         voucher: response.table1 && response.table1.length > 0 ? response.table1[0] : null,
         postingLines: response.table2 || [],
@@ -154,14 +158,14 @@ class PettyCashService extends BaseService {
 
   /**
    * Delete a petty cash voucher
-   * @param postingId - The ID of the petty cash voucher to delete
+   * @param voucherNo - The VoucherNo of the petty cash voucher to delete
    * @returns Response with status
    */
-  async deletePettyCashVoucher(postingId: number): Promise<ApiResponse> {
+  async deletePettyCashVoucher(voucherNo: string): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Soft Delete Petty Cash Voucher
       parameters: {
-        PostingID: postingId,
+        VoucherNo: voucherNo, // Delete by VoucherNo
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -195,28 +199,28 @@ class PettyCashService extends BaseService {
         SearchText: params.searchText,
         FilterFromDate: params.filterFromDate,
         FilterToDate: params.filterToDate,
-        FilterExpenseCategory: params.filterExpenseCategory,
+        // Removed FilterExpenseCategory as it's not in the SP
         FilterPostingStatus: params.filterPostingStatus,
         FilterCompanyID: params.filterCompanyID,
         FilterFiscalYearID: params.filterFiscalYearID,
-        FilterExpenseAccountID: params.filterExpenseAccountID,
+        FilterAccountID: params.filterAccountID, // Changed to FilterAccountID
       },
     };
 
     const response = await this.execute<PettyCashVoucher[]>(request);
-    return response.success ? response.table1 || [] : []; // Assuming table1 holds the search results
+    return response.success ? response.table1 || [] : [];
   }
 
   /**
    * Post petty cash voucher to General Ledger
-   * @param postingId - The ID of the petty cash voucher to post
+   * @param voucherNo - The VoucherNo of the petty cash voucher to post
    * @returns Response with status
    */
-  async postPettyCashVoucher(postingId: number): Promise<ApiResponse> {
+  async postPettyCashVoucher(voucherNo: string): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 7, // Mode 7: Post Petty Cash Voucher
       parameters: {
-        PostingID: postingId,
+        VoucherNo: voucherNo, // Post by VoucherNo
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -240,14 +244,14 @@ class PettyCashService extends BaseService {
 
   /**
    * Reverse a petty cash voucher
-   * @param data - Reversal data including posting ID and reason
+   * @param data - Reversal data including VoucherNo and reason
    * @returns Response with status and reversal voucher number
    */
   async reversePettyCashVoucher(data: PettyCashReverseRequest): Promise<ApiResponse> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Reverse Petty Cash Voucher
       parameters: {
-        PostingID: data.PostingID,
+        VoucherNo: data.VoucherNo, // Reverse by VoucherNo
         ReversalReason: data.reversalReason,
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
