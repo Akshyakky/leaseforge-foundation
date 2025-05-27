@@ -27,4 +27,5 @@ export * from "./invoiceService";
 export * from "./receiptService";
 export * from "./pettyCashService";
 export * from "./fiscalYearService";
+export * from "./generalLedgerService";
 // Add any new services to this file for easy importing
