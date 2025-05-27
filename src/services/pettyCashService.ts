@@ -19,7 +19,7 @@ export type { PettyCashVoucher, PettyCashVoucherPostingLine, PettyCashSearchPara
 class PettyCashService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/PettyCash"); // Assuming a similar endpoint structure
+    super("/Master/pettyCash");
   }
 
   /**

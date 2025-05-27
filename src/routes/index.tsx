@@ -1,3 +1,4 @@
+// src/routes/index.tsx
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoadingPage from "@/components/common/LoadingPage";
@@ -27,6 +28,7 @@ import supplierRoutes from "./supplierRoutes";
 import invoiceRoutes from "./invoiceRoutes";
 import receiptRoutes from "./receiptRoutes";
 import pettyCashRoutes from "./pettyCashRoutes";
+import fiscalYearRoutes from "./fiscalYearRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -109,6 +111,9 @@ const AppRoutes = () => {
 
           {/* Petty Cash Management routes */}
           {pettyCashRoutes}
+
+          {/* Fiscal Year Management routes */}
+          {fiscalYearRoutes}
         </Route>
 
         {/* Catch-all route */}
