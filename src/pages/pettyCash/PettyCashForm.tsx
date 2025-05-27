@@ -242,11 +242,34 @@ export const PettyCashForm: React.FC = () => {
         ReceiptNo: values.ReceiptNo,
       };
 
+      // Map debit and credit entries to ensure strict typing
+      const mappedDebitEntries: PettyCashEntry[] = values.DebitEntries.map((entry) => ({
+        AccountID: entry.AccountID,
+        Amount: entry.Amount,
+        Description: entry.Description,
+        Narration: entry.Narration,
+        CostCenter1ID: entry.CostCenter1ID,
+        CostCenter2ID: entry.CostCenter2ID,
+        CostCenter3ID: entry.CostCenter3ID,
+        CostCenter4ID: entry.CostCenter4ID,
+      }));
+
+      const mappedCreditEntries: PettyCashEntry[] = values.CreditEntries.map((entry) => ({
+        AccountID: entry.AccountID,
+        Amount: entry.Amount,
+        Description: entry.Description,
+        Narration: entry.Narration,
+        CostCenter1ID: entry.CostCenter1ID,
+        CostCenter2ID: entry.CostCenter2ID,
+        CostCenter3ID: entry.CostCenter3ID,
+        CostCenter4ID: entry.CostCenter4ID,
+      }));
+
       if (isEditMode) {
         const updateRequest = {
           voucher: voucherData,
-          debitEntries: values.DebitEntries,
-          creditEntries: values.CreditEntries,
+          debitEntries: mappedDebitEntries, // Use mapped entries
+          creditEntries: mappedCreditEntries, // Use mapped entries
         };
         const response = await pettyCashService.updatePettyCashVoucher(updateRequest);
         if (response.Status === 1) {
@@ -258,8 +281,8 @@ export const PettyCashForm: React.FC = () => {
       } else {
         const createRequest = {
           voucher: voucherData,
-          debitEntries: values.DebitEntries,
-          creditEntries: values.CreditEntries,
+          debitEntries: mappedDebitEntries, // Use mapped entries
+          creditEntries: mappedCreditEntries, // Use mapped entries
         };
         const response = await pettyCashService.createPettyCashVoucher(createRequest);
         if (response.Status === 1) {
@@ -286,7 +309,7 @@ export const PettyCashForm: React.FC = () => {
   }
 
   // Get errors for TotalAmountMismatch from Zod schema
-  const totalAmountMismatchError = form.formState.errors.TotalAmountMismatch;
+  const totalAmountMismatchError = form.formState.errors.root?.TotalAmountMismatch;
   const isFormDisabled = form.formState.errors.PostingStatus?.type === "manual";
 
   return (
