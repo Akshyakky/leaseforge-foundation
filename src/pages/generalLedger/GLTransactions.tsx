@@ -336,7 +336,7 @@ const GLTransactions = () => {
                   <SelectValue placeholder="Select Fiscal Year" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Fiscal Years</SelectItem>
+                  <SelectItem value="0">All Fiscal Years</SelectItem>
                   {getFilteredFiscalYears().map((fy) => (
                     <SelectItem key={fy.FiscalYearID} value={fy.FiscalYearID.toString()}>
                       {fy.FYCode} - {fy.FYDescription}
@@ -365,7 +365,7 @@ const GLTransactions = () => {
                   <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Accounts</SelectItem>
+                  <SelectItem value="0">All Accounts</SelectItem>
                   {accounts.map((account) => (
                     <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
                       {account.AccountCode} - {account.AccountName}
@@ -382,7 +382,7 @@ const GLTransactions = () => {
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="0">All Types</SelectItem>
                   {getVoucherTypes().map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
@@ -399,7 +399,7 @@ const GLTransactions = () => {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  0<SelectItem value="0">All Statuses</SelectItem>
                   {getPostingStatuses().map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
@@ -418,7 +418,7 @@ const GLTransactions = () => {
                 <SelectContent>
                   <SelectItem value="false">Hide Reversed</SelectItem>
                   <SelectItem value="true">Show Only Reversed</SelectItem>
-                  <SelectItem value="">Show All</SelectItem>
+                  <SelectItem value="0">Show All</SelectItem>
                 </SelectContent>
               </Select>
             </div>

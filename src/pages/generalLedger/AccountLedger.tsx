@@ -339,7 +339,7 @@ const AccountLedger = () => {
                   <SelectValue placeholder="All Voucher Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Voucher Types</SelectItem>
+                  <SelectItem value="0">All Voucher Types</SelectItem>
                   {getVoucherTypes().map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}

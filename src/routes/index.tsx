@@ -29,6 +29,7 @@ import invoiceRoutes from "./invoiceRoutes";
 import receiptRoutes from "./receiptRoutes";
 import pettyCashRoutes from "./pettyCashRoutes";
 import fiscalYearRoutes from "./fiscalYearRoutes";
+import generalLedgerRoutes from "./generalLedgerRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -114,6 +115,9 @@ const AppRoutes = () => {
 
           {/* Fiscal Year Management routes */}
           {fiscalYearRoutes}
+
+          {/* General Ledger routes */}
+          {generalLedgerRoutes}
         </Route>
 
         {/* Catch-all route */}
