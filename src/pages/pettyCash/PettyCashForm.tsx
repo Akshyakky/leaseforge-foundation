@@ -171,8 +171,8 @@ export const PettyCashForm: React.FC = () => {
                 .map((line) => ({
                   AccountID: line.AccountID,
                   Amount: line.DebitAmount,
-                  Description: line.LineDescription, // Use LineDescription
-                  Narration: line.LineNarration, // Use LineNarration
+                  Description: line.LineDescription,
+                  Narration: line.LineNarration,
                   CostCenter1ID: line.CostCenter1ID,
                   CostCenter2ID: line.CostCenter2ID,
                   CostCenter3ID: line.CostCenter3ID,
@@ -183,8 +183,8 @@ export const PettyCashForm: React.FC = () => {
                 .map((line) => ({
                   AccountID: line.AccountID,
                   Amount: line.CreditAmount,
-                  Description: line.LineDescription, // Use LineDescription
-                  Narration: line.LineNarration, // Use LineNarration
+                  Description: line.LineDescription,
+                  Narration: line.LineNarration,
                   CostCenter1ID: line.CostCenter1ID,
                   CostCenter2ID: line.CostCenter2ID,
                   CostCenter3ID: line.CostCenter3ID,
@@ -197,7 +197,7 @@ export const PettyCashForm: React.FC = () => {
                 type: "manual",
                 message: "This voucher is not in Draft status and cannot be edited.",
               });
-              form.setFocus("VoucherNo"); // Focus on a field to show error
+              form.setFocus("VoucherNo");
             }
           } else {
             toast.error(t("pettyCash.voucherNotFound"));
@@ -207,7 +207,7 @@ export const PettyCashForm: React.FC = () => {
       } catch (error) {
         console.error("Error fetching initial data:", error);
         toast.error(t("common.errorLoadingData"));
-        navigate("/petty-cash"); // Redirect on critical error
+        navigate("/petty-cash");
       } finally {
         setLoading(false);
       }
@@ -242,7 +242,6 @@ export const PettyCashForm: React.FC = () => {
         ReceiptNo: values.ReceiptNo,
       };
 
-      // Map debit and credit entries to ensure strict typing
       const mappedDebitEntries: PettyCashEntry[] = values.DebitEntries.map((entry) => ({
         AccountID: entry.AccountID,
         Amount: entry.Amount,
@@ -268,26 +267,26 @@ export const PettyCashForm: React.FC = () => {
       if (isEditMode) {
         const updateRequest = {
           voucher: voucherData,
-          debitEntries: mappedDebitEntries, // Use mapped entries
-          creditEntries: mappedCreditEntries, // Use mapped entries
+          debitEntries: mappedDebitEntries,
+          creditEntries: mappedCreditEntries,
         };
         const response = await pettyCashService.updatePettyCashVoucher(updateRequest);
         if (response.Status === 1) {
           toast.success(t("pettyCash.updateSuccess"));
-          navigate(`/petty-cash/${values.VoucherNo}`); // Navigate to details page
+          navigate(`/petty-cash/${values.VoucherNo}`);
         } else {
           toast.error(response.Message || t("pettyCash.updateError"));
         }
       } else {
         const createRequest = {
           voucher: voucherData,
-          debitEntries: mappedDebitEntries, // Use mapped entries
-          creditEntries: mappedCreditEntries, // Use mapped entries
+          debitEntries: mappedDebitEntries,
+          creditEntries: mappedCreditEntries,
         };
         const response = await pettyCashService.createPettyCashVoucher(createRequest);
         if (response.Status === 1) {
           toast.success(t("pettyCash.createSuccess"));
-          navigate(`/petty-cash/${response.VoucherNo}`); // Navigate to new details page
+          navigate(`/petty-cash/${response.VoucherNo}`);
         } else {
           toast.error(response.Message || t("pettyCash.createError"));
         }
@@ -308,7 +307,6 @@ export const PettyCashForm: React.FC = () => {
     );
   }
 
-  // Get errors for TotalAmountMismatch from Zod schema
   const totalAmountMismatchError = form.formState.errors.root?.TotalAmountMismatch;
   const isFormDisabled = form.formState.errors.PostingStatus?.type === "manual";
 
@@ -342,9 +340,9 @@ export const PettyCashForm: React.FC = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t("pettyCash.transactionDate")}</FormLabel>
-                      <FormControl>
+                      <div>
                         <DatePicker value={field.value} onChange={field.onChange} disabled={isFormDisabled} />
-                      </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -355,9 +353,9 @@ export const PettyCashForm: React.FC = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t("pettyCash.postingDate")}</FormLabel>
-                      <FormControl>
+                      <div>
                         <DatePicker value={field.value} onChange={field.onChange} disabled={isFormDisabled} />
-                      </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -467,7 +465,7 @@ export const PettyCashForm: React.FC = () => {
                     <FormItem>
                       <FormLabel>{t("pettyCash.postingStatus")}</FormLabel>
                       <FormControl>
-                        <Input {...field} value={field.value || ""} disabled readOnly /> {/* Status is read-only */}
+                        <Input {...field} value={field.value || ""} disabled readOnly />
                       </FormControl>
                       {form.formState.errors.PostingStatus && <FormMessage>{form.formState.errors.PostingStatus.message}</FormMessage>}
                     </FormItem>
@@ -565,7 +563,7 @@ export const PettyCashForm: React.FC = () => {
                           </FormItem>
                         )}
                       />
-                      {/* Cost Center Fields */}
+                      {/* Cost Center Fields for Debit Entries */}
                       <FormField
                         control={form.control}
                         name={`DebitEntries.${index}.CostCenter1ID`}
@@ -733,7 +731,7 @@ export const PettyCashForm: React.FC = () => {
                           </FormItem>
                         )}
                       />
-                      {/* Cost Center Fields */}
+                      {/* Cost Center Fields for Credit Entries */}
                       <FormField
                         control={form.control}
                         name={`CreditEntries.${index}.CostCenter1ID`}

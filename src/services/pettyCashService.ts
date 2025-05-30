@@ -208,7 +208,7 @@ class PettyCashService extends BaseService {
     };
 
     const response = await this.execute<PettyCashVoucher[]>(request);
-    return response.success ? response.table1 || [] : [];
+    return response.success ? response.data || [] : [];
   }
 
   /**
