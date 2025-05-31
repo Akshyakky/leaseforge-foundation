@@ -1,13 +1,13 @@
-// src/types/receiptTypes.ts
+// src/types/receiptTypes.ts - Updated to match stored procedure
 export interface BaseReceipt {
   CreatedBy?: string;
-  CreatedOn?: string;
+  CreatedOn?: string | Date;
   CreatedID?: number;
   UpdatedBy?: string;
-  UpdatedOn?: string;
+  UpdatedOn?: string | Date;
   UpdatedID?: number;
   DeletedBy?: string;
-  DeletedOn?: string;
+  DeletedOn?: string | Date;
   DeletedID?: number;
   RecordStatus?: number;
 }
@@ -38,9 +38,9 @@ export interface LeaseReceipt extends BaseReceipt {
   PenaltyAmount?: number;
   DiscountAmount?: number;
   ReceivedByUserID?: number;
-  AccountID?: number;
+  AccountID?: number; // Cash/Bank account for the receipt
   IsPosted: boolean;
-  PostingID?: number;
+  PostingID?: number; // Main posting ID (DR leg)
   Notes?: string;
 
   // Joined fields from related tables
@@ -50,7 +50,7 @@ export interface LeaseReceipt extends BaseReceipt {
   BankName?: string;
   DepositedBankName?: string;
   ReceivedByUser?: string;
-  AccountName?: string;
+  CashBankAccountName?: string; // Account name for AccountID
   CompanyName?: string;
   FYDescription?: string;
 }
@@ -79,10 +79,16 @@ export interface UnpostedReceipt {
 }
 
 export interface ReceiptPosting {
-  PostingID?: number;
-  VoucherNo?: string;
+  MainPostingID?: number;
+  GLVoucherNo?: string;
   CustomerGLAccountID?: number;
   CashBankAccountID?: number;
+}
+
+export interface ReceiptReversal {
+  ReversalGLVoucherNo?: string;
+  OriginalVoucherNo?: string;
+  ReversalReason: string;
 }
 
 // Search parameters
@@ -101,7 +107,36 @@ export interface ReceiptSearchParams {
 
 // Request parameters for receipt operations
 export interface ReceiptRequest {
-  receipt: Partial<LeaseReceipt>;
+  receipt: {
+    ReceiptNo?: string;
+    ReceiptDate: string | Date;
+    LeaseInvoiceID?: number;
+    CustomerID: number;
+    CompanyID: number;
+    FiscalYearID: number;
+    PaymentType: string;
+    PaymentStatus?: string;
+    ReceivedAmount: number;
+    CurrencyID?: number;
+    ExchangeRate?: number;
+    BankID?: number;
+    BankAccountNo?: string;
+    ChequeNo?: string;
+    ChequeDate?: string | Date;
+    TransactionReference?: string;
+    DepositedBankID?: number;
+    DepositDate?: string | Date;
+    ClearanceDate?: string | Date;
+    IsAdvancePayment?: boolean;
+    SecurityDepositAmount?: number;
+    PenaltyAmount?: number;
+    DiscountAmount?: number;
+    ReceivedByUserID?: number;
+    AccountID?: number; // Cash/Bank account
+    IsPosted?: boolean;
+    PostingID?: number;
+    Notes?: string;
+  };
 }
 
 export interface ReceiptUpdateRequest {
@@ -110,8 +145,13 @@ export interface ReceiptUpdateRequest {
 
 export interface ReceiptPostingRequest {
   LeaseReceiptID: number;
-  reversePosting?: boolean;
-  reversalReason?: string;
+  ReversePosting?: boolean;
+  ReversalReason?: string;
+}
+
+export interface ReceiptReversalRequest {
+  LeaseReceiptID: number;
+  ReversalReason: string;
 }
 
 export interface ReceiptStatisticsParams {
@@ -131,7 +171,7 @@ export enum PaymentType {
   BANK_DRAFT = "Bank Draft",
 }
 
-// Payment status enum
+// Payment status enum - Updated to match stored procedure
 export enum PaymentStatus {
   RECEIVED = "Received",
   PENDING = "Pending",
@@ -139,15 +179,90 @@ export enum PaymentStatus {
   BOUNCED = "Bounced",
   CANCELLED = "Cancelled",
   DEPOSITED = "Deposited",
+  PENDING_CLEARANCE = "Pending Clearance",
+  REVERSED = "Reversed", // New status for reversed receipts
 }
 
-// API response
+// API response interface
 export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
   NewReceiptID?: number;
+  MainPostingID?: number;
   PostingID?: number;
+  GLVoucherNo?: string;
+  ReversalGLVoucherNo?: string;
   VoucherNo?: string;
   [key: string]: any;
   data?: T;
 }
+
+// Receipt posting status constants
+export const RECEIPT_POSTING_STATUS = {
+  PENDING: false,
+  POSTED: true,
+} as const;
+
+// Receipt validation rules
+export interface ReceiptValidation {
+  requiresBank: boolean;
+  requiresChequeDetails: boolean;
+  requiresTransactionRef: boolean;
+  allowsAdvancePayment: boolean;
+}
+
+// Receipt type configurations
+export const PAYMENT_TYPE_CONFIG: Record<PaymentType, ReceiptValidation> = {
+  [PaymentType.CASH]: {
+    requiresBank: false,
+    requiresChequeDetails: false,
+    requiresTransactionRef: false,
+    allowsAdvancePayment: true,
+  },
+  [PaymentType.CHEQUE]: {
+    requiresBank: true,
+    requiresChequeDetails: true,
+    requiresTransactionRef: false,
+    allowsAdvancePayment: true,
+  },
+  [PaymentType.BANK_TRANSFER]: {
+    requiresBank: true,
+    requiresChequeDetails: false,
+    requiresTransactionRef: true,
+    allowsAdvancePayment: true,
+  },
+  [PaymentType.CREDIT_CARD]: {
+    requiresBank: false,
+    requiresChequeDetails: false,
+    requiresTransactionRef: true,
+    allowsAdvancePayment: true,
+  },
+  [PaymentType.ONLINE_PAYMENT]: {
+    requiresBank: false,
+    requiresChequeDetails: false,
+    requiresTransactionRef: true,
+    allowsAdvancePayment: true,
+  },
+  [PaymentType.BANK_DRAFT]: {
+    requiresBank: true,
+    requiresChequeDetails: true,
+    requiresTransactionRef: false,
+    allowsAdvancePayment: true,
+  },
+};
+
+// Status transitions allowed for receipts
+export const ALLOWED_STATUS_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
+  [PaymentStatus.RECEIVED]: [PaymentStatus.DEPOSITED, PaymentStatus.CLEARED, PaymentStatus.BOUNCED, PaymentStatus.CANCELLED],
+  [PaymentStatus.PENDING]: [PaymentStatus.RECEIVED, PaymentStatus.CANCELLED],
+  [PaymentStatus.DEPOSITED]: [PaymentStatus.CLEARED, PaymentStatus.BOUNCED, PaymentStatus.PENDING_CLEARANCE],
+  [PaymentStatus.PENDING_CLEARANCE]: [PaymentStatus.CLEARED, PaymentStatus.BOUNCED],
+  [PaymentStatus.CLEARED]: [
+    PaymentStatus.BOUNCED, // In case of later discovery
+  ],
+  [PaymentStatus.BOUNCED]: [
+    PaymentStatus.RECEIVED, // If re-submitted
+  ],
+  [PaymentStatus.CANCELLED]: [], // Terminal status
+  [PaymentStatus.REVERSED]: [], // Terminal status
+};

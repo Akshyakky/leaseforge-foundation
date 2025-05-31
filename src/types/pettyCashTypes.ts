@@ -32,10 +32,12 @@ export interface PettyCashVoucher {
   CurrencyName?: string;
 }
 
-// New interfaces for JSON arrays passed to the stored procedure
+// Updated interfaces for JSON arrays passed to the stored procedure with tax support
 export interface PettyCashEntry {
   AccountID: number;
-  Amount: number;
+  InputAmount: number; // Amount from JSON (to be interpreted as base or gross based on IsTaxInclusive)
+  TaxID?: number;
+  IsTaxInclusive?: boolean;
   Description?: string;
   Narration?: string;
   CostCenter1ID?: number;
@@ -50,6 +52,16 @@ export interface PettyCashVoucherPostingLine {
   TransactionType: "Debit" | "Credit";
   DebitAmount: number;
   CreditAmount: number;
+
+  // Tax-related fields from the updated SP
+  BaseAmount?: number;
+  TaxID?: number;
+  TaxCode?: string;
+  TaxName?: string;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  IsTaxInclusive?: boolean;
+
   CostCenter1ID?: number;
   CostCenter2ID?: number;
   CostCenter3ID?: number;

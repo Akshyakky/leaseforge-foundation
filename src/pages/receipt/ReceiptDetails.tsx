@@ -1,10 +1,13 @@
-// src/pages/receipt/ReceiptDetails.tsx
+// src/pages/receipt/ReceiptDetails.tsx - Updated for stored procedure alignment
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Loader2,
@@ -26,11 +29,14 @@ import {
   Eye,
   Banknote,
   RefreshCw,
+  Undo2,
+  AlertCircle,
 } from "lucide-react";
 import { receiptService, LeaseReceipt, PaymentType, PaymentStatus } from "@/services/receiptService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
 
 interface ReceiptDetailsProps {}
 
@@ -44,8 +50,10 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
+  const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [reversalReason, setReversalReason] = useState<string>("");
 
   // Payment status options for status changes
   const paymentStatusOptions = Object.values(PaymentStatus);
@@ -201,15 +209,51 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
     }
   };
 
+  // Reverse GL posting handlers
+  const openReverseDialog = () => {
+    setReversalReason("");
+    setIsReverseDialogOpen(true);
+  };
+
+  const closeReverseDialog = () => {
+    setIsReverseDialogOpen(false);
+    setReversalReason("");
+  };
+
+  const handleReverseGLPosting = async () => {
+    if (!receipt || !reversalReason.trim()) {
+      toast.error("Reversal reason is required");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await receiptService.reverseReceiptGLPosting({
+        LeaseReceiptID: receipt.LeaseReceiptID,
+        ReversalReason: reversalReason.trim(),
+      });
+
+      if (response.Status === 1) {
+        toast.success("Receipt GL posting reversed successfully");
+        // Refresh receipt data
+        fetchReceiptDetails();
+      } else {
+        toast.error(response.Message || "Failed to reverse receipt GL posting");
+      }
+    } catch (error) {
+      console.error("Error reversing receipt GL posting:", error);
+      toast.error("Failed to reverse receipt GL posting");
+    } finally {
+      setActionLoading(false);
+      closeReverseDialog();
+    }
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
     try {
-      return new Date(date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-      });
+      return format(new Date(date), "dd MMM yyyy");
     } catch (error) {
       return "Invalid date";
     }
@@ -229,12 +273,14 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
       case PaymentStatus.RECEIVED:
         return "secondary";
       case PaymentStatus.PENDING:
+      case PaymentStatus.PENDING_CLEARANCE:
         return "outline";
       case PaymentStatus.DEPOSITED:
         return "default";
       case PaymentStatus.BOUNCED:
-        return "destructive";
       case PaymentStatus.CANCELLED:
+        return "destructive";
+      case PaymentStatus.REVERSED:
         return "destructive";
       default:
         return "outline";
@@ -263,13 +309,29 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
       case PaymentStatus.CLEARED:
         return <CheckCircle className="h-4 w-4" />;
       case PaymentStatus.BOUNCED:
+      case PaymentStatus.CANCELLED:
         return <AlertTriangle className="h-4 w-4" />;
       case PaymentStatus.PENDING:
+      case PaymentStatus.PENDING_CLEARANCE:
         return <Clock className="h-4 w-4" />;
+      case PaymentStatus.REVERSED:
+        return <Undo2 className="h-4 w-4" />;
       default:
         return <FileText className="h-4 w-4" />;
     }
   };
+
+  // Check if receipt can be edited
+  const canEdit = receipt && !receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED;
+
+  // Check if receipt can be deleted
+  const canDelete = receipt && !receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED;
+
+  // Check if receipt can be posted
+  const canPost = receipt && !receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED && receipt.PaymentStatus !== PaymentStatus.CANCELLED;
+
+  // Check if receipt GL posting can be reversed
+  const canReverse = receipt && receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED;
 
   if (loading) {
     return (
@@ -330,7 +392,7 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
             Download
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleEdit} disabled={receipt.IsPosted}>
+          <Button variant="outline" size="sm" onClick={handleEdit} disabled={!canEdit}>
             <Edit className="h-4 w-4 mr-2" />
             Edit
           </Button>
@@ -349,21 +411,30 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
               {paymentStatusOptions
                 .filter((status) => status !== receipt.PaymentStatus)
                 .map((status) => (
-                  <DropdownMenuItem key={status} onClick={() => openStatusChangeDialog(status)}>
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => openStatusChangeDialog(status)}
+                    disabled={receipt.IsPosted && status !== PaymentStatus.CLEARED && status !== PaymentStatus.BOUNCED}
+                  >
                     Set as {status}
                   </DropdownMenuItem>
                 ))}
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem onClick={openPostDialog} disabled={receipt.IsPosted}>
+              <DropdownMenuItem onClick={openPostDialog} disabled={!canPost}>
                 <DollarSign className="h-4 w-4 mr-2" />
                 Post to GL
               </DropdownMenuItem>
 
+              <DropdownMenuItem onClick={openReverseDialog} disabled={!canReverse}>
+                <Undo2 className="h-4 w-4 mr-2" />
+                Reverse GL Posting
+              </DropdownMenuItem>
+
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem className="text-red-500" onClick={openDeleteDialog} disabled={receipt.IsPosted}>
+              <DropdownMenuItem className="text-red-500" onClick={openDeleteDialog} disabled={!canDelete}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </DropdownMenuItem>
@@ -372,13 +443,16 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
         </div>
       </div>
 
-      {/* Payment Status Warning for Bounced/Cancelled */}
-      {(receipt.PaymentStatus === PaymentStatus.BOUNCED || receipt.PaymentStatus === PaymentStatus.CANCELLED) && (
+      {/* Payment Status Warning */}
+      {(receipt.PaymentStatus === PaymentStatus.BOUNCED || receipt.PaymentStatus === PaymentStatus.CANCELLED || receipt.PaymentStatus === PaymentStatus.REVERSED) && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span className="font-medium">This payment has been {receipt.PaymentStatus.toLowerCase()}</span>
+              <span className="font-medium">
+                This payment has been {receipt.PaymentStatus.toLowerCase()}
+                {receipt.PaymentStatus === PaymentStatus.REVERSED && " - GL posting has been reversed"}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -424,6 +498,16 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
                   <div className="flex items-center space-x-2 text-blue-600">
                     <Receipt className="h-5 w-5" />
                     <span className="font-medium">This is an advance payment</span>
+                  </div>
+                </>
+              )}
+
+              {receipt.CashBankAccountName && (
+                <>
+                  <Separator />
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Cash/Bank Account</label>
+                    <p className="font-medium">{receipt.CashBankAccountName}</p>
                   </div>
                 </>
               )}
@@ -499,6 +583,7 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Deposit Date</label>
                         <p>{formatDate(receipt.DepositDate)}</p>
+                        {receipt.DepositedBankName && <p className="text-sm text-muted-foreground">at {receipt.DepositedBankName}</p>}
                       </div>
                     )}
                     {receipt.ClearanceDate && (
@@ -628,6 +713,8 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
                     <p>Posting ID: {receipt.PostingID}</p>
                   </div>
                 )}
+
+                {receipt.PaymentStatus === PaymentStatus.REVERSED && <div className="text-sm text-red-600 font-medium">GL posting has been reversed</div>}
               </div>
             </CardContent>
           </Card>
@@ -638,10 +725,17 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {!receipt.IsPosted && (
+              {canPost && (
                 <Button variant="outline" className="w-full justify-start" onClick={openPostDialog}>
                   <DollarSign className="h-4 w-4 mr-2" />
                   Post to GL
+                </Button>
+              )}
+
+              {canReverse && (
+                <Button variant="outline" className="w-full justify-start" onClick={openReverseDialog}>
+                  <Undo2 className="h-4 w-4 mr-2" />
+                  Reverse GL Posting
                 </Button>
               )}
 
@@ -711,6 +805,33 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
         cancelText="Cancel"
         confirmText="Post to GL"
         type="warning"
+        loading={actionLoading}
+      />
+
+      {/* Reverse GL Posting Dialog */}
+      <ConfirmationDialog
+        isOpen={isReverseDialogOpen}
+        onClose={closeReverseDialog}
+        onConfirm={handleReverseGLPosting}
+        title="Reverse GL Posting"
+        description={
+          <div className="space-y-4">
+            <p>Are you sure you want to reverse the GL posting for receipt "{receipt.ReceiptNo}"? This action cannot be undone.</p>
+            <div className="space-y-2">
+              <Label htmlFor="reversalReason">Reversal Reason *</Label>
+              <Textarea
+                id="reversalReason"
+                value={reversalReason}
+                onChange={(e) => setReversalReason(e.target.value)}
+                placeholder="Enter reason for reversal..."
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+        }
+        cancelText="Cancel"
+        confirmText="Reverse Posting"
+        type="danger"
         loading={actionLoading}
       />
     </div>

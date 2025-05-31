@@ -1,4 +1,4 @@
-// src/pages/invoice/InvoiceDetails.tsx
+// src/pages/invoice/InvoiceDetails.tsx - Updated for enhanced receipt integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft,
   Loader2,
@@ -26,8 +27,12 @@ import {
   CreditCard,
   Receipt,
   Eye,
+  Plus,
+  History,
+  RefreshCw,
 } from "lucide-react";
 import { invoiceService, LeaseInvoice } from "@/services/invoiceService";
+import { receiptService, LeaseReceipt, PaymentStatus } from "@/services/receiptService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -38,7 +43,9 @@ const InvoiceDetails: React.FC = () => {
 
   // State variables
   const [invoice, setInvoice] = useState<LeaseInvoice | null>(null);
+  const [receipts, setReceipts] = useState<LeaseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
@@ -47,10 +54,11 @@ const InvoiceDetails: React.FC = () => {
   // Invoice status and type options
   const invoiceStatusOptions = ["Draft", "Pending", "Sent", "Partial", "Paid", "Overdue", "Cancelled"];
 
-  // Fetch invoice data
+  // Fetch invoice data and related receipts
   useEffect(() => {
     if (id) {
       fetchInvoiceDetails();
+      fetchInvoiceReceipts();
     }
   }, [id]);
 
@@ -76,6 +84,20 @@ const InvoiceDetails: React.FC = () => {
     }
   };
 
+  const fetchInvoiceReceipts = async () => {
+    if (!id) return;
+
+    try {
+      setReceiptsLoading(true);
+      const receiptsData = await receiptService.getReceiptsByInvoice(parseInt(id));
+      setReceipts(receiptsData);
+    } catch (error) {
+      console.error("Error fetching invoice receipts:", error);
+    } finally {
+      setReceiptsLoading(false);
+    }
+  };
+
   // Navigation handlers
   const handleBack = () => {
     navigate("/invoices");
@@ -88,17 +110,14 @@ const InvoiceDetails: React.FC = () => {
   };
 
   const handlePrint = () => {
-    // Implementation for printing invoice
     window.print();
   };
 
   const handleDownload = () => {
-    // Implementation for downloading invoice as PDF
     toast.info("Download functionality will be implemented");
   };
 
   const handleSend = () => {
-    // Implementation for sending invoice via email
     toast.info("Send functionality will be implemented");
   };
 
@@ -189,6 +208,22 @@ const InvoiceDetails: React.FC = () => {
     }
   };
 
+  // Receipt handlers
+  const handleCreateReceipt = () => {
+    if (invoice) {
+      navigate(`/receipts/new?invoiceId=${invoice.LeaseInvoiceID}`);
+    }
+  };
+
+  const handleViewReceipt = (receiptId: number) => {
+    navigate(`/receipts/${receiptId}`);
+  };
+
+  const handleRefreshReceipts = () => {
+    fetchInvoiceReceipts();
+    fetchInvoiceDetails(); // Also refresh invoice to get updated amounts
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
@@ -239,6 +274,44 @@ const InvoiceDetails: React.FC = () => {
         return <FileText className="h-4 w-4" />;
     }
   };
+
+  // Get receipt status color
+  const getReceiptStatusColor = (status: string) => {
+    switch (status) {
+      case PaymentStatus.CLEARED:
+        return "default";
+      case PaymentStatus.RECEIVED:
+        return "secondary";
+      case PaymentStatus.DEPOSITED:
+        return "outline";
+      case PaymentStatus.BOUNCED:
+      case PaymentStatus.CANCELLED:
+      case PaymentStatus.REVERSED:
+        return "destructive";
+      default:
+        return "outline";
+    }
+  };
+
+  // Calculate payment summary
+  const getPaymentSummary = () => {
+    const validReceipts = receipts.filter(
+      (r) => r.PaymentStatus !== PaymentStatus.CANCELLED && r.PaymentStatus !== PaymentStatus.BOUNCED && r.PaymentStatus !== PaymentStatus.REVERSED
+    );
+
+    const totalPaid = validReceipts.reduce((sum, receipt) => sum + receipt.ReceivedAmount, 0);
+    const pendingReceipts = receipts.filter((r) => r.PaymentStatus === PaymentStatus.RECEIVED || r.PaymentStatus === PaymentStatus.DEPOSITED);
+    const pendingAmount = pendingReceipts.reduce((sum, receipt) => sum + receipt.ReceivedAmount, 0);
+
+    return {
+      totalPaid,
+      pendingAmount,
+      receiptCount: validReceipts.length,
+      pendingCount: pendingReceipts.length,
+    };
+  };
+
+  const paymentSummary = getPaymentSummary();
 
   if (loading) {
     return (
@@ -447,6 +520,108 @@ const InvoiceDetails: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Payment History */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center">
+                    <Receipt className="h-5 w-5 mr-2" />
+                    Payment History
+                  </CardTitle>
+                  <CardDescription>Receipts and payments against this invoice</CardDescription>
+                </div>
+                <div className="flex space-x-2">
+                  <Button variant="outline" size="sm" onClick={handleRefreshReceipts} disabled={receiptsLoading}>
+                    <RefreshCw className={`h-4 w-4 mr-2 ${receiptsLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleCreateReceipt} disabled={invoice.BalanceAmount <= 0}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Receipt
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {receiptsLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : receipts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No payments recorded for this invoice</p>
+                  <Button variant="outline" className="mt-4" onClick={handleCreateReceipt}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Record First Payment
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Payment Summary */}
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-sm text-muted-foreground">Total Receipts</div>
+                      <div className="text-lg font-semibold">{paymentSummary.receiptCount}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-muted-foreground">Amount Paid</div>
+                      <div className="text-lg font-semibold text-green-600">{formatCurrency(paymentSummary.totalPaid)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-muted-foreground">Pending</div>
+                      <div className="text-lg font-semibold text-orange-600">{formatCurrency(paymentSummary.pendingAmount)}</div>
+                    </div>
+                  </div>
+
+                  {/* Receipts Table */}
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Receipt #</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {receipts.map((receipt) => (
+                          <TableRow key={receipt.LeaseReceiptID}>
+                            <TableCell>
+                              <div className="font-medium">{receipt.ReceiptNo}</div>
+                              {receipt.IsAdvancePayment && <div className="text-xs text-blue-600">Advance</div>}
+                            </TableCell>
+                            <TableCell>{formatDate(receipt.ReceiptDate)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{receipt.PaymentType}</Badge>
+                              {receipt.ChequeNo && <div className="text-xs text-muted-foreground mt-1">Cheque: {receipt.ChequeNo}</div>}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{formatCurrency(receipt.ReceivedAmount)}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={getReceiptStatusColor(receipt.PaymentStatus)}>{receipt.PaymentStatus}</Badge>
+                              {receipt.PaymentStatus === PaymentStatus.REVERSED && <div className="text-xs text-red-600 mt-1">GL Reversed</div>}
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" onClick={() => handleViewReceipt(receipt.LeaseReceiptID)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Notes */}
           {(invoice.Notes || invoice.InternalNotes) && (
             <Card>
@@ -568,6 +743,25 @@ const InvoiceDetails: React.FC = () => {
                 )}
 
                 {invoice.OverdueDays && invoice.OverdueDays > 0 && <div className="text-red-600 text-sm font-medium">{invoice.OverdueDays} days overdue</div>}
+
+                {/* Payment Summary */}
+                {receipts.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total Receipts</span>
+                        <span>{paymentSummary.receiptCount}</span>
+                      </div>
+                      {paymentSummary.pendingCount > 0 && (
+                        <div className="flex justify-between text-orange-600">
+                          <span>Pending Clearance</span>
+                          <span>{paymentSummary.pendingCount}</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -578,19 +772,24 @@ const InvoiceDetails: React.FC = () => {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/receipts/new?invoiceId=${invoice.LeaseInvoiceID}`)}>
+              <Button variant="outline" className="w-full justify-start" onClick={handleCreateReceipt} disabled={invoice.BalanceAmount <= 0}>
                 <Receipt className="h-4 w-4 mr-2" />
                 Record Payment
               </Button>
 
               <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/receipts?invoiceId=${invoice.LeaseInvoiceID}`)}>
-                <Eye className="h-4 w-4 mr-2" />
-                View Payments
+                <History className="h-4 w-4 mr-2" />
+                View Payment History
               </Button>
 
               <Button variant="outline" className="w-full justify-start" onClick={handleSend}>
                 <Send className="h-4 w-4 mr-2" />
                 Send to Customer
+              </Button>
+
+              <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/invoices?customerId=${invoice.CustomerID}`)}>
+                <User className="h-4 w-4 mr-2" />
+                View Customer Invoices
               </Button>
             </CardContent>
           </Card>

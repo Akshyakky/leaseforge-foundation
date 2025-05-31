@@ -28,6 +28,33 @@ class PettyCashService extends BaseService {
    * @returns Response with status and newly created posting ID
    */
   async createPettyCashVoucher(data: PettyCashCreateRequest): Promise<ApiResponse> {
+    // Map entries to include InputAmount instead of Amount for SP compatibility
+    const mappedDebitEntries = data.debitEntries.map((entry) => ({
+      AccountID: entry.AccountID,
+      InputAmount: entry.InputAmount,
+      TaxID: entry.TaxID,
+      IsTaxInclusive: entry.IsTaxInclusive || false,
+      Description: entry.Description,
+      Narration: entry.Narration,
+      CostCenter1ID: entry.CostCenter1ID,
+      CostCenter2ID: entry.CostCenter2ID,
+      CostCenter3ID: entry.CostCenter3ID,
+      CostCenter4ID: entry.CostCenter4ID,
+    }));
+
+    const mappedCreditEntries = data.creditEntries.map((entry) => ({
+      AccountID: entry.AccountID,
+      InputAmount: entry.InputAmount,
+      TaxID: entry.TaxID,
+      IsTaxInclusive: entry.IsTaxInclusive || false,
+      Description: entry.Description,
+      Narration: entry.Narration,
+      CostCenter1ID: entry.CostCenter1ID,
+      CostCenter2ID: entry.CostCenter2ID,
+      CostCenter3ID: entry.CostCenter3ID,
+      CostCenter4ID: entry.CostCenter4ID,
+    }));
+
     const request: BaseRequest = {
       mode: 1, // Mode 1: Insert New Petty Cash Voucher
       parameters: {
@@ -43,9 +70,9 @@ class PettyCashService extends BaseService {
         Narration: data.voucher.Narration,
         PostingStatus: data.voucher.PostingStatus,
         ReceiptNo: data.voucher.ReceiptNo,
-        // Debit/Credit entries are now JSON strings
-        DebitEntriesJSON: JSON.stringify(data.debitEntries),
-        CreditEntriesJSON: JSON.stringify(data.creditEntries),
+        // Debit/Credit entries are now JSON strings with tax information
+        DebitEntriesJSON: JSON.stringify(mappedDebitEntries),
+        CreditEntriesJSON: JSON.stringify(mappedCreditEntries),
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -75,6 +102,33 @@ class PettyCashService extends BaseService {
    * @returns Response with status
    */
   async updatePettyCashVoucher(data: PettyCashUpdateRequest): Promise<ApiResponse> {
+    // Map entries to include InputAmount and tax fields for SP compatibility
+    const mappedDebitEntries = data.debitEntries.map((entry) => ({
+      AccountID: entry.AccountID,
+      InputAmount: entry.InputAmount,
+      TaxID: entry.TaxID,
+      IsTaxInclusive: entry.IsTaxInclusive || false,
+      Description: entry.Description,
+      Narration: entry.Narration,
+      CostCenter1ID: entry.CostCenter1ID,
+      CostCenter2ID: entry.CostCenter2ID,
+      CostCenter3ID: entry.CostCenter3ID,
+      CostCenter4ID: entry.CostCenter4ID,
+    }));
+
+    const mappedCreditEntries = data.creditEntries.map((entry) => ({
+      AccountID: entry.AccountID,
+      InputAmount: entry.InputAmount,
+      TaxID: entry.TaxID,
+      IsTaxInclusive: entry.IsTaxInclusive || false,
+      Description: entry.Description,
+      Narration: entry.Narration,
+      CostCenter1ID: entry.CostCenter1ID,
+      CostCenter2ID: entry.CostCenter2ID,
+      CostCenter3ID: entry.CostCenter3ID,
+      CostCenter4ID: entry.CostCenter4ID,
+    }));
+
     const request: BaseRequest = {
       mode: 2, // Mode 2: Update Petty Cash Voucher
       parameters: {
@@ -89,8 +143,8 @@ class PettyCashService extends BaseService {
         Narration: data.voucher.Narration,
         PostingStatus: data.voucher.PostingStatus,
         ReceiptNo: data.voucher.ReceiptNo,
-        DebitEntriesJSON: JSON.stringify(data.debitEntries),
-        CreditEntriesJSON: JSON.stringify(data.creditEntries),
+        DebitEntriesJSON: JSON.stringify(mappedDebitEntries),
+        CreditEntriesJSON: JSON.stringify(mappedCreditEntries),
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },

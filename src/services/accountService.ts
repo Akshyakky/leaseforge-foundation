@@ -295,19 +295,29 @@ class AccountService extends BaseService {
       Message: response.message || "Failed to set opening balance",
     };
   }
-
   /**
-   * Get account transactions
+   * Get account transactions with enhanced filtering options
    * @param accountId - The account ID
-   * @param asOfDate - Optional date to get balance as of
+   * @param options - Optional filtering parameters
    * @returns Array of account transactions
    */
-  async getAccountTransactions(accountId: number, asOfDate?: Date | string): Promise<AccountTransaction[]> {
+  async getAccountTransactions(
+    accountId: number,
+    options?: {
+      asOfDate?: Date | string;
+      fromDate?: Date | string;
+      toDate?: Date | string;
+      fiscalYearId?: number;
+    }
+  ): Promise<AccountTransaction[]> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Account Transactions
       parameters: {
         AccountID: accountId,
-        BalanceAsOfDate: asOfDate,
+        BalanceAsOfDate: options?.asOfDate,
+        FilterFromDate: options?.fromDate,
+        FilterToDate: options?.toDate,
+        FiscalYearID: options?.fiscalYearId,
       },
     };
 

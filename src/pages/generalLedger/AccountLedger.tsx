@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, BookOpen } from "lucide-react";
+import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, BookOpen, Info } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { generalLedgerService } from "@/services/generalLedgerService";
 import { fiscalYearService } from "@/services/fiscalYearService";
 import { companyService } from "@/services/companyService";
@@ -35,6 +36,7 @@ const AccountLedger = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<AccountLedgerTransaction[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showTaxColumns, setShowTaxColumns] = useState(false);
 
   // Form state
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -60,11 +62,21 @@ const AccountLedger = () => {
           transaction.Description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           transaction.Narration?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           transaction.CustomerFullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          transaction.SupplierName?.toLowerCase().includes(searchTerm.toLowerCase())
+          transaction.SupplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          transaction.TaxCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          transaction.TaxName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredTransactions(filtered);
     }
   }, [searchTerm, accountLedger]);
+
+  // Check if any transactions have tax information
+  useEffect(() => {
+    if (accountLedger) {
+      const hasTaxData = accountLedger.transactions.some((transaction) => transaction.TaxID || transaction.TaxCode || transaction.BaseAmount || transaction.LineTaxAmount);
+      setShowTaxColumns(hasTaxData);
+    }
+  }, [accountLedger]);
 
   const initializeComponent = async () => {
     try {
@@ -208,6 +220,11 @@ const AccountLedger = () => {
       currency: "USD",
       minimumFractionDigits: 2,
     }).format(amount);
+  };
+
+  const formatPercentage = (percentage?: number): string => {
+    if (!percentage) return "-";
+    return `${percentage.toFixed(2)}%`;
   };
 
   const getFilteredFiscalYears = () => {
@@ -360,6 +377,13 @@ const AccountLedger = () => {
               <Switch id="includeClosing" checked={includeClosingBalances} onCheckedChange={setIncludeClosingBalances} />
               <Label htmlFor="includeClosing">Include Closing Balance</Label>
             </div>
+
+            {showTaxColumns && (
+              <div className="flex items-center space-x-2">
+                <Switch id="showTaxColumns" checked={showTaxColumns} onCheckedChange={setShowTaxColumns} />
+                <Label htmlFor="showTaxColumns">Show Tax Columns</Label>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -416,6 +440,12 @@ const AccountLedger = () => {
             <Badge variant="outline">
               {filteredTransactions.length} of {accountLedger.transactions.length} transactions
             </Badge>
+            {showTaxColumns && (
+              <Badge variant="secondary">
+                <Info className="mr-1 h-3 w-3" />
+                Tax Details Available
+              </Badge>
+            )}
           </div>
 
           {/* Account Summary */}
@@ -458,7 +488,7 @@ const AccountLedger = () => {
             <CardDescription>Detailed transaction listing with running balance for {selectedAccount?.AccountName}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-md">
+            <div className="border rounded-md overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -467,6 +497,13 @@ const AccountLedger = () => {
                     <TableHead className="w-[100px]">Type</TableHead>
                     <TableHead className="min-w-[200px]">Description</TableHead>
                     <TableHead>Reference</TableHead>
+                    {showTaxColumns && (
+                      <>
+                        <TableHead className="text-right">Base Amount</TableHead>
+                        <TableHead>Tax</TableHead>
+                        <TableHead className="text-right">Tax Amount</TableHead>
+                      </>
+                    )}
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
@@ -500,6 +537,23 @@ const AccountLedger = () => {
                         )}
                         {transaction.ChequeNo && <div className="text-xs text-muted-foreground">Cheque: {transaction.ChequeNo}</div>}
                       </TableCell>
+                      {showTaxColumns && (
+                        <>
+                          <TableCell className="text-right text-sm">{transaction.BaseAmount ? formatCurrency(transaction.BaseAmount) : "-"}</TableCell>
+                          <TableCell className="text-sm">
+                            {transaction.TaxCode && (
+                              <div>
+                                <div className="font-medium">{transaction.TaxCode}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatPercentage(transaction.TaxPercentage)}
+                                  {transaction.IsTaxInclusive && " (Incl.)"}
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">{transaction.LineTaxAmount ? formatCurrency(transaction.LineTaxAmount) : "-"}</TableCell>
+                        </>
+                      )}
                       <TableCell className="text-right font-medium text-green-600">{transaction.DebitAmount ? formatCurrency(transaction.DebitAmount) : "-"}</TableCell>
                       <TableCell className="text-right font-medium text-red-600">{transaction.CreditAmount ? formatCurrency(transaction.CreditAmount) : "-"}</TableCell>
                       <TableCell className="text-right font-bold">{formatCurrency(transaction.RunningBalance)}</TableCell>

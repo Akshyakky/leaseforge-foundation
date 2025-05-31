@@ -72,7 +72,6 @@ export interface AccountOpeningBalance extends BaseAccount {
 }
 
 export interface AccountTransaction {
-  PostingDetailID: number;
   PostingID: number;
   PostingNo: string;
   PostingType: string;
@@ -80,15 +79,31 @@ export interface AccountTransaction {
   ReferenceNo?: string;
   DebitAmount?: number;
   CreditAmount?: number;
+
+  // ****** NEW TAX-RELATED FIELDS ******
+  BaseAmount?: number;
+  TaxID?: number;
+  TaxCode?: string;
+  TaxName?: string;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  IsTaxInclusive?: boolean;
+  // ****** END TAX FIELDS ******
+
   RunningBalance?: number;
   Narration?: string;
   SourceType?: string;
   SourceID?: number;
   CustomerID?: number;
+  SupplierID?: number; // ****** NEW FIELD ******
+  PostingDescription?: string; // ****** NEW FIELD ******
+
+  // Legacy fields (keeping for backward compatibility)
+  PostingDetailID?: number; // This might not be returned from the new SP
   ContractID?: number;
   UnitID?: number;
 
-  // Joined fields
+  // Joined fields (these might not be returned from the updated SP)
   CustomerFullName?: string;
   ContractNo?: string;
   UnitNo?: string;

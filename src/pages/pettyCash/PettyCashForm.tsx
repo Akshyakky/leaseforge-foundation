@@ -13,19 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PlusCircle, Trash2, Loader2, Save, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { pettyCashService, PettyCashEntry, PettyCashVoucher } from "@/services/pettyCashService";
 import { Company } from "@/types/customerTypes";
 import { accountService, companyService, costCenterService, Currency, currencyService, fiscalYearService } from "@/services";
+import { taxService, Tax } from "@/services/taxService";
 import { Account } from "@/types/accountTypes";
 import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 import { FiscalYear } from "@/types/fiscalYearTypes";
 
-// Define the Zod schema for a single PettyCashEntry (debit/credit line)
+// Define the Zod schema for a single PettyCashEntry (debit/credit line) with tax support
 const pettyCashEntrySchema = z.object({
   AccountID: z.number().min(1, "Account is required."),
-  Amount: z.number().min(0.01, "Amount must be greater than 0."),
+  InputAmount: z.number().min(0.01, "Amount must be greater than 0."), // Changed from Amount to InputAmount
+  TaxID: z.number().nullable().optional(),
+  IsTaxInclusive: z.boolean().default(false),
   Description: z.string().max(500, "Description cannot exceed 500 characters.").nullable().optional(),
   Narration: z.string().max(1000, "Narration cannot exceed 1000 characters.").nullable().optional(),
   CostCenter1ID: z.number().nullable().optional(),
@@ -54,8 +58,8 @@ const pettyCashFormSchema = z
   })
   .refine(
     (data) => {
-      const totalDebits = data.DebitEntries.reduce((sum, entry) => sum + entry.Amount, 0);
-      const totalCredits = data.CreditEntries.reduce((sum, entry) => sum + entry.Amount, 0);
+      const totalDebits = data.DebitEntries.reduce((sum, entry) => sum + entry.InputAmount, 0);
+      const totalCredits = data.CreditEntries.reduce((sum, entry) => sum + entry.InputAmount, 0);
       return Math.abs(totalDebits - totalCredits) < 0.0001; // Allow for floating point inaccuracies
     },
     {
@@ -80,6 +84,7 @@ export const PettyCashForm: React.FC = () => {
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [taxes, setTaxes] = useState<Tax[]>([]);
   const [costCenters1, setCostCenters1] = useState<CostCenter1[]>([]);
   const [costCenters2, setCostCenters2] = useState<CostCenter2[]>([]);
   const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
@@ -121,11 +126,12 @@ export const PettyCashForm: React.FC = () => {
       try {
         setLoading(true);
         // Fetch lookup data in parallel
-        const [companiesData, fiscalYearsData, currenciesData, accountsData, cc1Data, cc2Data, cc3Data, cc4Data] = await Promise.all([
+        const [companiesData, fiscalYearsData, currenciesData, accountsData, taxesData, cc1Data, cc2Data, cc3Data, cc4Data] = await Promise.all([
           companyService.getAllCompanies(),
           fiscalYearService.getFiscalYearsForDropdown(),
           currencyService.getAllCurrencies(),
           accountService.getAllAccounts(),
+          taxService.getAllTaxes(), // Fetch taxes for dropdown
           costCenterService.getCostCentersByLevel(1),
           costCenterService.getCostCentersByLevel(2),
           costCenterService.getCostCentersByLevel(3),
@@ -136,6 +142,7 @@ export const PettyCashForm: React.FC = () => {
         setFiscalYears(fiscalYearsData);
         setCurrencies(currenciesData);
         setAccounts(accountsData);
+        setTaxes(taxesData);
         setCostCenters1(cc1Data);
         setCostCenters2(cc2Data as CostCenter2[]);
         setCostCenters3(cc3Data as CostCenter3[]);
@@ -170,7 +177,9 @@ export const PettyCashForm: React.FC = () => {
                 .filter((line) => line.TransactionType === "Debit")
                 .map((line) => ({
                   AccountID: line.AccountID,
-                  Amount: line.DebitAmount,
+                  InputAmount: line.BaseAmount || line.DebitAmount, // Use BaseAmount if available, fallback to DebitAmount
+                  TaxID: line.TaxID,
+                  IsTaxInclusive: line.IsTaxInclusive || false,
                   Description: line.LineDescription,
                   Narration: line.LineNarration,
                   CostCenter1ID: line.CostCenter1ID,
@@ -182,7 +191,9 @@ export const PettyCashForm: React.FC = () => {
                 .filter((line) => line.TransactionType === "Credit")
                 .map((line) => ({
                   AccountID: line.AccountID,
-                  Amount: line.CreditAmount,
+                  InputAmount: line.BaseAmount || line.CreditAmount, // Use BaseAmount if available, fallback to CreditAmount
+                  TaxID: line.TaxID,
+                  IsTaxInclusive: line.IsTaxInclusive || false,
                   Description: line.LineDescription,
                   Narration: line.LineNarration,
                   CostCenter1ID: line.CostCenter1ID,
@@ -218,11 +229,11 @@ export const PettyCashForm: React.FC = () => {
 
   // Calculate total debits and credits for display
   const totalDebits = useMemo(() => {
-    return form.watch("DebitEntries")?.reduce((sum, entry) => sum + (entry.Amount || 0), 0) || 0;
+    return form.watch("DebitEntries")?.reduce((sum, entry) => sum + (entry.InputAmount || 0), 0) || 0;
   }, [form.watch("DebitEntries")]);
 
   const totalCredits = useMemo(() => {
-    return form.watch("CreditEntries")?.reduce((sum, entry) => sum + (entry.Amount || 0), 0) || 0;
+    return form.watch("CreditEntries")?.reduce((sum, entry) => sum + (entry.InputAmount || 0), 0) || 0;
   }, [form.watch("CreditEntries")]);
 
   const onSubmit = async (values: PettyCashFormValues) => {
@@ -244,7 +255,9 @@ export const PettyCashForm: React.FC = () => {
 
       const mappedDebitEntries: PettyCashEntry[] = values.DebitEntries.map((entry) => ({
         AccountID: entry.AccountID,
-        Amount: entry.Amount,
+        InputAmount: entry.InputAmount, // Use InputAmount for compatibility with SP
+        TaxID: entry.TaxID,
+        IsTaxInclusive: entry.IsTaxInclusive,
         Description: entry.Description,
         Narration: entry.Narration,
         CostCenter1ID: entry.CostCenter1ID,
@@ -255,7 +268,9 @@ export const PettyCashForm: React.FC = () => {
 
       const mappedCreditEntries: PettyCashEntry[] = values.CreditEntries.map((entry) => ({
         AccountID: entry.AccountID,
-        Amount: entry.Amount,
+        InputAmount: entry.InputAmount, // Use InputAmount for compatibility with SP
+        TaxID: entry.TaxID,
+        IsTaxInclusive: entry.IsTaxInclusive,
         Description: entry.Description,
         Narration: entry.Narration,
         CostCenter1ID: entry.CostCenter1ID,
@@ -539,7 +554,7 @@ export const PettyCashForm: React.FC = () => {
                       />
                       <FormField
                         control={form.control}
-                        name={`DebitEntries.${index}.Amount`}
+                        name={`DebitEntries.${index}.InputAmount`}
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.amount")}</FormLabel>
@@ -547,6 +562,49 @@ export const PettyCashForm: React.FC = () => {
                               <Input type="number" step="0.01" {...entryField} onChange={(e) => entryField.onChange(parseFloat(e.target.value))} disabled={isFormDisabled} />
                             </FormControl>
                             <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`DebitEntries.${index}.TaxID`}
+                        render={({ field: entryField }) => (
+                          <FormItem>
+                            <FormLabel>{t("pettyCash.tax")}</FormLabel>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("pettyCash.selectTax")} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0">No Tax</SelectItem>
+                                {taxes.map((tax) => (
+                                  <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
+                                    {tax.TaxCode} - {tax.TaxName} ({tax.TaxRate}%)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`DebitEntries.${index}.IsTaxInclusive`}
+                        render={({ field: entryField }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox checked={entryField.value} onCheckedChange={entryField.onChange} disabled={isFormDisabled} />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>{t("pettyCash.taxInclusive")}</FormLabel>
+                            </div>
                           </FormItem>
                         )}
                       />
@@ -563,6 +621,19 @@ export const PettyCashForm: React.FC = () => {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name={`DebitEntries.${index}.Narration`}
+                        render={({ field: entryField }) => (
+                          <FormItem>
+                            <FormLabel>{t("pettyCash.lineNarration")}</FormLabel>
+                            <FormControl>
+                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       {/* Cost Center Fields for Debit Entries */}
                       <FormField
                         control={form.control}
@@ -570,13 +641,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter1")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters1.map((cc) => (
                                   <SelectItem key={cc.CostCenter1ID} value={cc.CostCenter1ID.toString()}>
                                     {cc.Description}
@@ -594,13 +670,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter2")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters2.map((cc) => (
                                   <SelectItem key={cc.CostCenter2ID} value={cc.CostCenter2ID.toString()}>
                                     {cc.Description}
@@ -618,13 +699,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter3")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters3.map((cc) => (
                                   <SelectItem key={cc.CostCenter3ID} value={cc.CostCenter3ID.toString()}>
                                     {cc.Description}
@@ -642,13 +728,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter4")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters4.map((cc) => (
                                   <SelectItem key={cc.CostCenter4ID} value={cc.CostCenter4ID.toString()}>
                                     {cc.Description}
@@ -663,7 +754,12 @@ export const PettyCashForm: React.FC = () => {
                     </div>
                   </Card>
                 ))}
-                <Button type="button" variant="outline" onClick={() => appendDebit({ AccountID: 0, Amount: 0, Description: "", Narration: "" })} disabled={isFormDisabled}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => appendDebit({ AccountID: 0, InputAmount: 0, TaxID: undefined, IsTaxInclusive: false, Description: "", Narration: "" })}
+                  disabled={isFormDisabled}
+                >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Debit Entry
                 </Button>
               </div>
@@ -707,7 +803,7 @@ export const PettyCashForm: React.FC = () => {
                       />
                       <FormField
                         control={form.control}
-                        name={`CreditEntries.${index}.Amount`}
+                        name={`CreditEntries.${index}.InputAmount`}
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.amount")}</FormLabel>
@@ -715,6 +811,49 @@ export const PettyCashForm: React.FC = () => {
                               <Input type="number" step="0.01" {...entryField} onChange={(e) => entryField.onChange(parseFloat(e.target.value))} disabled={isFormDisabled} />
                             </FormControl>
                             <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`CreditEntries.${index}.TaxID`}
+                        render={({ field: entryField }) => (
+                          <FormItem>
+                            <FormLabel>{t("pettyCash.tax")}</FormLabel>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("pettyCash.selectTax")} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0">No Tax</SelectItem>
+                                {taxes.map((tax) => (
+                                  <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
+                                    {tax.TaxCode} - {tax.TaxName} ({tax.TaxRate}%)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`CreditEntries.${index}.IsTaxInclusive`}
+                        render={({ field: entryField }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox checked={entryField.value} onCheckedChange={entryField.onChange} disabled={isFormDisabled} />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>{t("pettyCash.taxInclusive")}</FormLabel>
+                            </div>
                           </FormItem>
                         )}
                       />
@@ -731,6 +870,19 @@ export const PettyCashForm: React.FC = () => {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name={`CreditEntries.${index}.Narration`}
+                        render={({ field: entryField }) => (
+                          <FormItem>
+                            <FormLabel>{t("pettyCash.lineNarration")}</FormLabel>
+                            <FormControl>
+                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       {/* Cost Center Fields for Credit Entries */}
                       <FormField
                         control={form.control}
@@ -738,13 +890,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter1")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters1.map((cc) => (
                                   <SelectItem key={cc.CostCenter1ID} value={cc.CostCenter1ID.toString()}>
                                     {cc.Description}
@@ -762,13 +919,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter2")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters2.map((cc) => (
                                   <SelectItem key={cc.CostCenter2ID} value={cc.CostCenter2ID.toString()}>
                                     {cc.Description}
@@ -786,13 +948,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter3")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters3.map((cc) => (
                                   <SelectItem key={cc.CostCenter3ID} value={cc.CostCenter3ID.toString()}>
                                     {cc.Description}
@@ -810,13 +977,18 @@ export const PettyCashForm: React.FC = () => {
                         render={({ field: entryField }) => (
                           <FormItem>
                             <FormLabel>{t("pettyCash.costCenter4")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
+                            <Select
+                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
+                              value={entryField.value?.toString()}
+                              disabled={isFormDisabled}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="0">None</SelectItem>
                                 {costCenters4.map((cc) => (
                                   <SelectItem key={cc.CostCenter4ID} value={cc.CostCenter4ID.toString()}>
                                     {cc.Description}
@@ -831,7 +1003,12 @@ export const PettyCashForm: React.FC = () => {
                     </div>
                   </Card>
                 ))}
-                <Button type="button" variant="outline" onClick={() => appendCredit({ AccountID: 0, Amount: 0, Description: "", Narration: "" })} disabled={isFormDisabled}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => appendCredit({ AccountID: 0, InputAmount: 0, TaxID: undefined, IsTaxInclusive: false, Description: "", Narration: "" })}
+                  disabled={isFormDisabled}
+                >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Credit Entry
                 </Button>
               </div>

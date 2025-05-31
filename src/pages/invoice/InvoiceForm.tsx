@@ -1,4 +1,4 @@
-// src/pages/invoice/InvoiceForm.tsx - Fixed Version
+// src/pages/invoice/InvoiceForm.tsx - Updated for stored procedure alignment
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -7,7 +7,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Calculator, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, Calculator, AlertCircle, CheckCircle } from "lucide-react";
 import { invoiceService, LeaseInvoice } from "@/services/invoiceService";
 import { customerService } from "@/services/customerService";
 import { contractService } from "@/services/contractService";
@@ -23,41 +23,68 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format, addDays } from "date-fns";
+import { INVOICE_STATUS, INVOICE_TYPE, RECURRENCE_PATTERN } from "@/types/invoiceTypes";
 
-// Updated schema - Made FiscalYearID optional since it's not in the form
-const invoiceSchema = z.object({
-  InvoiceNo: z.string().optional(),
-  InvoiceDate: z.date().default(() => new Date()),
-  DueDate: z.date({
-    required_error: "Due date is required",
-  }),
-  ContractID: z.string().min(1, "Contract is required"),
-  ContractUnitID: z.string().min(1, "Contract unit is required"),
-  CustomerID: z.string().min(1, "Customer is required"),
-  CompanyID: z.string().min(1, "Company is required"),
-  FiscalYearID: z.string().optional(), // Made optional since there's no form field
-  InvoiceType: z.string().min(1, "Invoice type is required"),
-  InvoiceStatus: z.string().default("Draft"),
-  PeriodFromDate: z.date().optional().nullable(),
-  PeriodToDate: z.date().optional().nullable(),
-  SubTotal: z.number().min(0, "Subtotal must be positive"),
-  TaxAmount: z.number().min(0, "Tax amount must be positive").default(0),
-  DiscountAmount: z.number().min(0, "Discount amount must be positive").default(0),
-  TotalAmount: z.number().min(0, "Total amount must be positive"),
-  PaidAmount: z.number().min(0, "Paid amount must be positive").default(0),
-  BalanceAmount: z.number().min(0, "Balance amount must be positive"),
-  CurrencyID: z.string().optional(),
-  ExchangeRate: z.number().min(0, "Exchange rate must be positive").default(1),
-  PaymentTermID: z.string().optional(),
-  SalesPersonID: z.string().optional(),
-  TaxID: z.string().optional(),
-  IsRecurring: z.boolean().default(false),
-  RecurrencePattern: z.string().optional(),
-  NextInvoiceDate: z.date().optional().nullable(),
-  Notes: z.string().optional(),
-  InternalNotes: z.string().optional(),
-});
+// Updated schema to match stored procedure requirements
+const invoiceSchema = z
+  .object({
+    InvoiceNo: z.string().optional(),
+    InvoiceDate: z.date().default(() => new Date()),
+    DueDate: z.date({
+      required_error: "Due date is required",
+    }),
+    ContractID: z.string().min(1, "Contract is required"),
+    ContractUnitID: z.string().min(1, "Contract unit is required"),
+    CustomerID: z.string().min(1, "Customer is required"),
+    CompanyID: z.string().min(1, "Company is required"),
+    FiscalYearID: z.string().optional(),
+    InvoiceType: z.string().min(1, "Invoice type is required"),
+    InvoiceStatus: z.string().default("Draft"),
+    PeriodFromDate: z.date().optional().nullable(),
+    PeriodToDate: z.date().optional().nullable(),
+    SubTotal: z.number().min(0, "Subtotal must be positive"),
+    TaxAmount: z.number().min(0, "Tax amount must be positive").default(0),
+    DiscountAmount: z.number().min(0, "Discount amount must be positive").default(0),
+    TotalAmount: z.number().min(0, "Total amount must be positive"),
+    PaidAmount: z.number().min(0, "Paid amount must be positive").default(0),
+    BalanceAmount: z.number().min(0, "Balance amount must be positive"),
+    CurrencyID: z.string().optional(),
+    ExchangeRate: z.number().min(0, "Exchange rate must be positive").default(1),
+    PaymentTermID: z.string().optional(),
+    SalesPersonID: z.string().optional(),
+    TaxID: z.string().optional(),
+    IsRecurring: z.boolean().default(false),
+    RecurrencePattern: z.string().optional(),
+    NextInvoiceDate: z.date().optional().nullable(),
+    Notes: z.string().optional(),
+    InternalNotes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.PeriodFromDate && data.PeriodToDate) {
+        return data.PeriodToDate >= data.PeriodFromDate;
+      }
+      return true;
+    },
+    {
+      message: "Period To Date must be after Period From Date",
+      path: ["PeriodToDate"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.IsRecurring) {
+        return data.RecurrencePattern && data.NextInvoiceDate;
+      }
+      return true;
+    },
+    {
+      message: "Recurrence pattern and next invoice date are required for recurring invoices",
+      path: ["RecurrencePattern"],
+    }
+  );
 
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
@@ -72,6 +99,7 @@ const InvoiceForm: React.FC = () => {
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [invoice, setInvoice] = useState<LeaseInvoice | null>(null);
   const [formError, setFormError] = useState<string>("");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Reference data
   const [customers, setCustomers] = useState<any[]>([]);
@@ -80,17 +108,17 @@ const InvoiceForm: React.FC = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [currencies, setCurrencies] = useState<any[]>([]);
   const [taxes, setTaxes] = useState<any[]>([]);
-  const [fiscalYears, setFiscalYears] = useState<any[]>([]);
+  const [paymentTerms, setPaymentTerms] = useState<any[]>([]);
 
-  // Invoice type and status options
-  const invoiceTypeOptions = ["Regular", "Advance", "Security Deposit", "Penalty", "Adjustment"];
-  const invoiceStatusOptions = ["Draft", "Pending", "Sent", "Partial", "Paid", "Overdue", "Cancelled"];
-  const recurrencePatternOptions = ["Monthly", "Quarterly", "Semi-Annually", "Annually"];
+  // Available options based on stored procedure
+  const invoiceTypeOptions = Object.values(INVOICE_TYPE);
+  const invoiceStatusOptions = Object.values(INVOICE_STATUS);
+  const recurrencePatternOptions = Object.values(RECURRENCE_PATTERN);
 
   // Initialize form
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceSchema),
-    mode: "onChange", // Enable real-time validation
+    mode: "onChange",
     defaultValues: {
       InvoiceNo: "",
       InvoiceDate: new Date(),
@@ -99,9 +127,9 @@ const InvoiceForm: React.FC = () => {
       ContractUnitID: "",
       CustomerID: "",
       CompanyID: "",
-      FiscalYearID: "1", // Set a default value
-      InvoiceType: "Regular",
-      InvoiceStatus: "Draft",
+      FiscalYearID: "1",
+      InvoiceType: INVOICE_TYPE.REGULAR,
+      InvoiceStatus: INVOICE_STATUS.DRAFT,
       PeriodFromDate: null,
       PeriodToDate: null,
       SubTotal: 0,
@@ -123,18 +151,12 @@ const InvoiceForm: React.FC = () => {
     },
   });
 
-  // Debug form state
-  const watchedValues = form.watch();
-  const formState = form.formState;
-
-  console.log("Form Errors:", formState.errors);
-  console.log("Form Valid:", formState.isValid);
-  console.log("Form Values:", watchedValues);
-
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
       try {
+        setValidationErrors([]);
+
         // Fetch reference data in parallel
         const [customersData, contractsData, companiesData, currenciesData, taxesData] = await Promise.all([
           customerService.getAllCustomers(),
@@ -150,14 +172,16 @@ const InvoiceForm: React.FC = () => {
         setCurrencies(currenciesData);
         setTaxes(taxesData);
 
-        // Set mock fiscal years data since the service call is missing
-        setFiscalYears([
-          { FiscalYearID: 1, FYDescription: "2024-2025" },
-          { FiscalYearID: 2, FYDescription: "2023-2024" },
+        // Mock payment terms data (add proper service call when available)
+        setPaymentTerms([
+          { PaymentTermID: 1, TermName: "Net 30", DaysCount: 30 },
+          { PaymentTermID: 2, TermName: "Net 15", DaysCount: 15 },
+          { PaymentTermID: 3, TermName: "Net 60", DaysCount: 60 },
+          { PaymentTermID: 4, TermName: "Due on Receipt", DaysCount: 0 },
         ]);
 
         // Set default company and currency if available
-        const defaultCompany = companiesData.find((c) => c.IsActive);
+        const defaultCompany = companiesData.find((c) => c.IsActive); //c.IsDefault ||
         const defaultCurrency = currenciesData.find((c) => c.IsDefault);
 
         if (defaultCompany) {
@@ -174,6 +198,11 @@ const InvoiceForm: React.FC = () => {
 
           if (invoiceData) {
             setInvoice(invoiceData);
+
+            // Check if invoice can be edited
+            if (invoiceData.InvoiceStatus === "Paid" || invoiceData.InvoiceStatus === "Cancelled") {
+              setValidationErrors([`Cannot edit invoice with status "${invoiceData.InvoiceStatus}"`]);
+            }
 
             // Format data for form
             const formattedInvoice = {
@@ -196,6 +225,11 @@ const InvoiceForm: React.FC = () => {
 
             // Set form values
             form.reset(formattedInvoice);
+
+            // Load contract units for the selected contract
+            if (invoiceData.ContractID) {
+              await loadContractUnits(invoiceData.ContractID);
+            }
           } else {
             toast.error("Invoice not found");
             navigate("/invoices");
@@ -213,7 +247,7 @@ const InvoiceForm: React.FC = () => {
     initializeForm();
   }, [id, isEdit, navigate, form]);
 
-  // Effect to auto-calculate totals
+  // Effect to auto-calculate totals and handle dependencies
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       // Auto-calculate total amount when subtotal, tax, or discount changes
@@ -224,21 +258,21 @@ const InvoiceForm: React.FC = () => {
         const totalAmount = subTotal + taxAmount - discountAmount;
         const paidAmount = form.getValues("PaidAmount") || 0;
 
-        form.setValue("TotalAmount", totalAmount);
-        form.setValue("BalanceAmount", totalAmount - paidAmount);
+        form.setValue("TotalAmount", Math.max(0, totalAmount));
+        form.setValue("BalanceAmount", Math.max(0, totalAmount - paidAmount));
       }
 
       // Auto-calculate balance amount when total or paid amount changes
       if (name && (name.includes("TotalAmount") || name.includes("PaidAmount"))) {
         const totalAmount = form.getValues("TotalAmount") || 0;
         const paidAmount = form.getValues("PaidAmount") || 0;
-        form.setValue("BalanceAmount", totalAmount - paidAmount);
+        form.setValue("BalanceAmount", Math.max(0, totalAmount - paidAmount));
       }
 
       // Auto-calculate tax amount when tax is selected
       if (name && name.includes("TaxID")) {
         const taxId = form.getValues("TaxID");
-        if (taxId) {
+        if (taxId && taxId !== "0") {
           const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
           if (selectedTax) {
             const subTotal = form.getValues("SubTotal") || 0;
@@ -253,7 +287,7 @@ const InvoiceForm: React.FC = () => {
       // Auto-calculate tax amount when subtotal changes and tax is selected
       if (name && name.includes("SubTotal")) {
         const taxId = form.getValues("TaxID");
-        if (taxId) {
+        if (taxId && taxId !== "0") {
           const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
           if (selectedTax) {
             const subTotal = form.getValues("SubTotal") || 0;
@@ -263,22 +297,48 @@ const InvoiceForm: React.FC = () => {
         }
       }
 
-      // Load contract units when contract is selected
+      // Load contract units and set customer when contract is selected
       if (name && name.includes("ContractID")) {
         const contractId = form.getValues("ContractID");
-        if (contractId) {
+        if (contractId && contractId !== "0") {
           loadContractUnits(parseInt(contractId));
           // Auto-set customer from contract
           const selectedContract = contracts.find((c) => c.ContractID.toString() === contractId);
           if (selectedContract) {
             form.setValue("CustomerID", selectedContract.CustomerID.toString());
           }
+        } else {
+          setContractUnits([]);
+          form.setValue("ContractUnitID", "");
+        }
+      }
+
+      // Auto-calculate due date when payment terms change
+      if (name && name.includes("PaymentTermID")) {
+        const paymentTermId = form.getValues("PaymentTermID");
+        const invoiceDate = form.getValues("InvoiceDate");
+
+        if (paymentTermId && paymentTermId !== "0" && invoiceDate) {
+          const selectedTerm = paymentTerms.find((term) => term.PaymentTermID.toString() === paymentTermId);
+          if (selectedTerm) {
+            const dueDate = addDays(invoiceDate, selectedTerm.DaysCount);
+            form.setValue("DueDate", dueDate);
+          }
+        }
+      }
+
+      // Handle recurring invoice fields
+      if (name && name.includes("IsRecurring")) {
+        const isRecurring = form.getValues("IsRecurring");
+        if (!isRecurring) {
+          form.setValue("RecurrencePattern", "");
+          form.setValue("NextInvoiceDate", null);
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form, taxes, contracts]);
+  }, [form, taxes, contracts, paymentTerms]);
 
   // Load contract units for selected contract
   const loadContractUnits = async (contractId: number) => {
@@ -293,13 +353,14 @@ const InvoiceForm: React.FC = () => {
       }
     } catch (error) {
       console.error("Error loading contract units:", error);
+      toast.error("Failed to load contract units");
     }
   };
 
   // Handle form submission
   const onSubmit = async (data: InvoiceFormValues) => {
-    console.log("onSubmit called with data:", data);
     setFormError("");
+    setValidationErrors([]);
 
     if (!user) {
       setFormError("User information not available");
@@ -310,17 +371,17 @@ const InvoiceForm: React.FC = () => {
     setLoading(true);
 
     try {
-      // Prepare invoice data
+      // Prepare invoice data according to stored procedure requirements
       const invoiceData = {
         invoice: {
-          InvoiceNo: data.InvoiceNo,
+          InvoiceNo: data.InvoiceNo || undefined, // Let stored procedure auto-generate if empty
           InvoiceDate: data.InvoiceDate,
           DueDate: data.DueDate,
           ContractID: parseInt(data.ContractID),
           ContractUnitID: parseInt(data.ContractUnitID),
           CustomerID: parseInt(data.CustomerID),
           CompanyID: parseInt(data.CompanyID),
-          FiscalYearID: data.FiscalYearID ? parseInt(data.FiscalYearID) : 1, // Default to 1 if not provided
+          FiscalYearID: data.FiscalYearID ? parseInt(data.FiscalYearID) : undefined,
           InvoiceType: data.InvoiceType,
           InvoiceStatus: data.InvoiceStatus,
           PeriodFromDate: data.PeriodFromDate,
@@ -331,20 +392,18 @@ const InvoiceForm: React.FC = () => {
           TotalAmount: data.TotalAmount,
           PaidAmount: data.PaidAmount,
           BalanceAmount: data.BalanceAmount,
-          CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
+          CurrencyID: data.CurrencyID && data.CurrencyID !== "0" ? parseInt(data.CurrencyID) : undefined,
           ExchangeRate: data.ExchangeRate,
-          PaymentTermID: data.PaymentTermID ? parseInt(data.PaymentTermID) : undefined,
-          SalesPersonID: data.SalesPersonID ? parseInt(data.SalesPersonID) : undefined,
-          TaxID: data.TaxID ? parseInt(data.TaxID) : undefined,
+          PaymentTermID: data.PaymentTermID && data.PaymentTermID !== "0" ? parseInt(data.PaymentTermID) : undefined,
+          SalesPersonID: data.SalesPersonID && data.SalesPersonID !== "0" ? parseInt(data.SalesPersonID) : undefined,
+          TaxID: data.TaxID && data.TaxID !== "0" ? parseInt(data.TaxID) : undefined,
           IsRecurring: data.IsRecurring,
-          RecurrencePattern: data.RecurrencePattern,
+          RecurrencePattern: data.RecurrencePattern || undefined,
           NextInvoiceDate: data.NextInvoiceDate,
           Notes: data.Notes,
           InternalNotes: data.InternalNotes,
         },
       };
-
-      console.log("Sending invoice data:", invoiceData);
 
       if (isEdit && invoice) {
         // Update existing invoice
@@ -387,6 +446,10 @@ const InvoiceForm: React.FC = () => {
   // Handle form errors
   const onError = (errors: any) => {
     console.log("Form validation errors:", errors);
+    const errorMessages = Object.values(errors)
+      .map((error: any) => error.message)
+      .filter(Boolean);
+    setValidationErrors(errorMessages);
     setFormError("Please fix the validation errors before submitting");
     toast.error("Please fix the validation errors before submitting");
   };
@@ -394,6 +457,7 @@ const InvoiceForm: React.FC = () => {
   // Reset form
   const handleReset = () => {
     setFormError("");
+    setValidationErrors([]);
     if (isEdit && invoice) {
       form.reset();
     } else {
@@ -406,8 +470,8 @@ const InvoiceForm: React.FC = () => {
         CustomerID: "",
         CompanyID: "",
         FiscalYearID: "1",
-        InvoiceType: "Regular",
-        InvoiceStatus: "Draft",
+        InvoiceType: INVOICE_TYPE.REGULAR,
+        InvoiceStatus: INVOICE_STATUS.DRAFT,
         PeriodFromDate: null,
         PeriodToDate: null,
         SubTotal: 0,
@@ -428,11 +492,6 @@ const InvoiceForm: React.FC = () => {
         InternalNotes: "",
       });
     }
-  };
-
-  // Cancel and go back
-  const handleCancel = () => {
-    navigate("/invoices");
   };
 
   // Format currency
@@ -456,9 +515,29 @@ const InvoiceForm: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Invoice" : "Create Invoice"}</h1>
+        {invoice && (
+          <Badge variant="outline" className="ml-4">
+            {invoice.InvoiceNo}
+          </Badge>
+        )}
       </div>
 
-      {formError && (
+      {/* Validation Errors */}
+      {validationErrors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-1">
+              {validationErrors.map((error, index) => (
+                <div key={index}>{error}</div>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Form Error */}
+      {formError && !validationErrors.length && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{formError}</AlertDescription>
@@ -471,10 +550,14 @@ const InvoiceForm: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>{isEdit ? "Edit Invoice" : "Create New Invoice"}</CardTitle>
-                <CardDescription>{isEdit ? "Update invoice information" : "Enter invoice details"}</CardDescription>
+                <CardDescription>
+                  {isEdit ? "Update invoice information" : "Enter invoice details"}
+                  {!isEdit && " - Invoice number will be auto-generated if left empty"}
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-6">
+                {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -496,7 +579,7 @@ const InvoiceForm: React.FC = () => {
                     name="InvoiceStatus"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
+                        <FormLabel>Status *</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
@@ -517,15 +600,16 @@ const InvoiceForm: React.FC = () => {
                   />
                 </div>
 
+                {/* Dates */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
                     name="InvoiceDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Invoice Date</FormLabel>
+                        <FormLabel>Invoice Date *</FormLabel>
                         <FormControl>
-                          <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                          <DatePicker value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -537,7 +621,7 @@ const InvoiceForm: React.FC = () => {
                     name="DueDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Due Date</FormLabel>
+                        <FormLabel>Due Date *</FormLabel>
                         <FormControl>
                           <DatePicker
                             value={field.value}
@@ -554,6 +638,7 @@ const InvoiceForm: React.FC = () => {
                   />
                 </div>
 
+                {/* Contract and Customer */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -631,32 +716,8 @@ const InvoiceForm: React.FC = () => {
                   )}
                 />
 
+                {/* Company and Type */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="InvoiceType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Invoice Type *</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select invoice type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {invoiceTypeOptions.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
                   <FormField
                     control={form.control}
                     name="CompanyID"
@@ -681,10 +742,36 @@ const InvoiceForm: React.FC = () => {
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="InvoiceType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Invoice Type *</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select invoice type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {invoiceTypeOptions.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
                 <Separator />
 
+                {/* Billing Period */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Billing Period</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -695,7 +782,7 @@ const InvoiceForm: React.FC = () => {
                         <FormItem className="flex flex-col">
                           <FormLabel>Period From</FormLabel>
                           <FormControl>
-                            <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                            <DatePicker value={field.value} onChange={field.onChange} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -727,6 +814,7 @@ const InvoiceForm: React.FC = () => {
 
                 <Separator />
 
+                {/* Amount Details */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Amount Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -781,6 +869,7 @@ const InvoiceForm: React.FC = () => {
                           <FormControl>
                             <Input type="number" step="0.01" placeholder="0.00" {...field} disabled />
                           </FormControl>
+                          <FormDescription>Calculated automatically based on selected tax</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -811,6 +900,7 @@ const InvoiceForm: React.FC = () => {
                           <FormControl>
                             <Input type="number" step="0.01" placeholder="0.00" {...field} disabled className="font-semibold" />
                           </FormControl>
+                          <FormDescription>Calculated automatically</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -839,6 +929,7 @@ const InvoiceForm: React.FC = () => {
                           <FormControl>
                             <Input type="number" step="0.01" placeholder="0.00" {...field} disabled className="font-semibold" />
                           </FormControl>
+                          <FormDescription>Calculated automatically</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -848,9 +939,37 @@ const InvoiceForm: React.FC = () => {
 
                 <Separator />
 
+                {/* Payment and Currency */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Additional Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <h3 className="text-lg font-medium">Payment & Currency</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="PaymentTermID"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Terms</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select payment terms" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="0">No Payment Terms</SelectItem>
+                              {paymentTerms.map((term) => (
+                                <SelectItem key={term.PaymentTermID} value={term.PaymentTermID.toString()}>
+                                  {term.TermName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>Will auto-calculate due date</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     <FormField
                       control={form.control}
                       name="CurrencyID"
@@ -892,6 +1011,80 @@ const InvoiceForm: React.FC = () => {
                   </div>
                 </div>
 
+                <Separator />
+
+                {/* Recurring Invoice */}
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="IsRecurring"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Recurring Invoice</FormLabel>
+                          <FormDescription>Enable automatic recurring billing for this invoice</FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("IsRecurring") && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-muted">
+                      <FormField
+                        control={form.control}
+                        name="RecurrencePattern"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Recurrence Pattern *</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select pattern" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {recurrencePatternOptions.map((pattern) => (
+                                  <SelectItem key={pattern} value={pattern}>
+                                    {pattern}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="NextInvoiceDate"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Next Invoice Date *</FormLabel>
+                            <FormControl>
+                              <DatePicker
+                                value={field.value}
+                                onChange={field.onChange}
+                                disabled={(date) => {
+                                  const invoiceDate = form.watch("InvoiceDate");
+                                  return invoiceDate ? date <= invoiceDate : false;
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Notes */}
                 <div className="space-y-4">
                   <FormField
                     control={form.control}
@@ -902,6 +1095,7 @@ const InvoiceForm: React.FC = () => {
                         <FormControl>
                           <Textarea placeholder="Enter notes for the customer" className="min-h-[100px]" {...field} />
                         </FormControl>
+                        <FormDescription>These notes will be visible to the customer</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -923,6 +1117,7 @@ const InvoiceForm: React.FC = () => {
                   />
                 </div>
 
+                {/* Invoice Summary */}
                 <Card className="bg-muted/50">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center">
@@ -930,7 +1125,7 @@ const InvoiceForm: React.FC = () => {
                       Invoice Summary
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-4 gap-4">
+                  <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-sm font-medium text-muted-foreground">Subtotal</div>
                       <div className="text-xl font-bold">{formatCurrency(form.watch("SubTotal"))}</div>
@@ -945,38 +1140,19 @@ const InvoiceForm: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-sm font-medium text-muted-foreground">Balance Due</div>
-                      <div className="text-2xl font-bold text-red-600">{formatCurrency(form.watch("BalanceAmount"))}</div>
+                      <div className={`text-2xl font-bold ${form.watch("BalanceAmount") > 0 ? "text-red-600" : "text-green-600"}`}>
+                        {formatCurrency(form.watch("BalanceAmount"))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               </CardContent>
             </Card>
 
-            {/* Debug Information (remove in production) */}
-            {process.env.NODE_ENV === "development" && (
-              <Card className="bg-yellow-50 border-yellow-200">
-                <CardHeader>
-                  <CardTitle className="text-sm">Debug Information</CardTitle>
-                </CardHeader>
-                <CardContent className="text-xs">
-                  <div className="space-y-2">
-                    <div>Form Valid: {formState.isValid ? "Yes" : "No"}</div>
-                    <div>Form Dirty: {formState.isDirty ? "Yes" : "No"}</div>
-                    <div>Error Count: {Object.keys(formState.errors).length}</div>
-                    {Object.keys(formState.errors).length > 0 && (
-                      <div>
-                        <div className="font-medium">Errors:</div>
-                        <pre className="text-xs">{JSON.stringify(formState.errors, null, 2)}</pre>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
+            {/* Action Buttons */}
             <div className="flex justify-between">
               <div className="flex space-x-2">
-                <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
+                <Button type="button" variant="outline" onClick={() => navigate("/invoices")} disabled={loading}>
                   Cancel
                 </Button>
                 <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
@@ -984,7 +1160,7 @@ const InvoiceForm: React.FC = () => {
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading || !formState.isValid}>
+              <Button type="submit" disabled={loading || !form.formState.isValid}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

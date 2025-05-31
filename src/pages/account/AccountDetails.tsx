@@ -1,11 +1,10 @@
-// src/pages/account/AccountDetails.tsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { accountService } from "@/services/accountService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, Activity } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, Activity, Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -15,8 +14,10 @@ import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
-export const AccountDetails = () => {
+const AccountDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [account, setAccount] = useState<Account | null>(null);
@@ -26,7 +27,11 @@ export const AccountDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [asOfDate, setAsOfDate] = useState<Date | null>(new Date());
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(false);
+  const [showTaxColumns, setShowTaxColumns] = useState<boolean>(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchAccountData = async () => {
@@ -42,7 +47,7 @@ export const AccountDetails = () => {
           setOpeningBalances(data.openingBalances || []);
 
           // Fetch initial transactions
-          await fetchTransactions(data.account.AccountID, asOfDate);
+          await fetchTransactions(data.account.AccountID);
         } else {
           setError("Account not found");
           toast.error("Account not found");
@@ -59,11 +64,29 @@ export const AccountDetails = () => {
     fetchAccountData();
   }, [id]);
 
-  const fetchTransactions = async (accountId: number, date: Date | null) => {
+  const fetchTransactions = async (accountId: number) => {
     setTransactionsLoading(true);
     try {
-      const transactionsData = await accountService.getAccountTransactions(accountId, date ? format(date, "yyyy-MM-dd") : undefined);
+      const options: any = {};
+
+      if (asOfDate) {
+        options.asOfDate = format(asOfDate, "yyyy-MM-dd");
+      }
+
+      if (fromDate) {
+        options.fromDate = format(fromDate, "yyyy-MM-dd");
+      }
+
+      if (toDate) {
+        options.toDate = format(toDate, "yyyy-MM-dd");
+      }
+
+      const transactionsData = await accountService.getAccountTransactions(accountId, options);
       setTransactions(transactionsData);
+
+      // Auto-detect if any transactions have tax information
+      const hasTaxInfo = transactionsData.some((t) => t.TaxID || t.TaxCode || t.BaseAmount || t.LineTaxAmount);
+      setShowTaxColumns(hasTaxInfo);
     } catch (err) {
       console.error("Error fetching transactions:", err);
       toast.error("Failed to load transactions");
@@ -72,10 +95,18 @@ export const AccountDetails = () => {
     }
   };
 
-  const handleDateChange = (date: Date | null) => {
-    setAsOfDate(date);
+  const handleFilterChange = () => {
     if (account) {
-      fetchTransactions(account.AccountID, date);
+      fetchTransactions(account.AccountID);
+    }
+  };
+
+  const clearFilters = () => {
+    setAsOfDate(new Date());
+    setFromDate(null);
+    setToDate(null);
+    if (account) {
+      fetchTransactions(account.AccountID);
     }
   };
 
@@ -211,51 +242,113 @@ export const AccountDetails = () => {
               <TabsTrigger value="openingBalances">Opening Balances</TabsTrigger>
               <TabsTrigger value="relationships">Relationships</TabsTrigger>
             </TabsList>
-            <TabsContent value="transactions" className="mt-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">Transaction History</h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">As of:</span>
-                  <DatePicker value={asOfDate} onChange={handleDateChange} />
-                </div>
-              </div>
 
-              {transactionsLoading ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <TabsContent value="transactions" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Transaction History</h3>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                      <Filter className="mr-2 h-4 w-4" />
+                      {showAdvancedFilters ? "Hide" : "Show"} Filters
+                    </Button>
+                  </div>
                 </div>
-              ) : transactions.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">No transactions found for this account.</div>
-              ) : (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Debit</TableHead>
-                        <TableHead className="text-right">Credit</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transactions.map((transaction) => (
-                        <TableRow key={transaction.PostingDetailID}>
-                          <TableCell>{transaction.PostingDate ? format(new Date(transaction.PostingDate), "PP") : "N/A"}</TableCell>
-                          <TableCell>{transaction.ReferenceNo || transaction.PostingNo}</TableCell>
-                          <TableCell>{transaction.PostingType}</TableCell>
-                          <TableCell>{transaction.Narration || "-"}</TableCell>
-                          <TableCell className="text-right">{transaction.DebitAmount ? transaction.DebitAmount.toFixed(2) : "-"}</TableCell>
-                          <TableCell className="text-right">{transaction.CreditAmount ? transaction.CreditAmount.toFixed(2) : "-"}</TableCell>
-                          <TableCell className="text-right">{transaction.RunningBalance !== undefined ? transaction.RunningBalance.toFixed(2) : "-"}</TableCell>
+
+                {/* Filter Section */}
+                {showAdvancedFilters && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Transaction Filters</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>As of Date</Label>
+                          <DatePicker value={asOfDate} onChange={setAsOfDate} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>From Date</Label>
+                          <DatePicker value={fromDate} onChange={setFromDate} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>To Date</Label>
+                          <DatePicker value={toDate} onChange={setToDate} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 mt-4">
+                        <Button onClick={handleFilterChange}>Apply Filters</Button>
+                        <Button variant="outline" onClick={clearFilters}>
+                          Clear Filters
+                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="showTaxColumns" checked={showTaxColumns} onCheckedChange={(checked) => setShowTaxColumns(checked === true)} />
+                          <Label htmlFor="showTaxColumns">Show Tax Columns</Label>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {transactionsLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">No transactions found for this account with the current filters.</div>
+                ) : (
+                  <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Reference</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Description</TableHead>
+                          {showTaxColumns && <TableHead className="text-right">Base Amount</TableHead>}
+                          {showTaxColumns && <TableHead>Tax Code</TableHead>}
+                          {showTaxColumns && <TableHead className="text-right">Tax Amount</TableHead>}
+                          <TableHead className="text-right">Debit</TableHead>
+                          <TableHead className="text-right">Credit</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                      </TableHeader>
+                      <TableBody>
+                        {transactions.map((transaction, index) => (
+                          <TableRow key={`${transaction.PostingID}-${index}`}>
+                            <TableCell>{transaction.PostingDate ? format(new Date(transaction.PostingDate), "PP") : "N/A"}</TableCell>
+                            <TableCell>{transaction.ReferenceNo || transaction.PostingNo}</TableCell>
+                            <TableCell>{transaction.PostingType}</TableCell>
+                            <TableCell>
+                              <div>
+                                <div>{transaction.Narration || "-"}</div>
+                                {transaction.PostingDescription && <div className="text-xs text-muted-foreground">{transaction.PostingDescription}</div>}
+                              </div>
+                            </TableCell>
+                            {showTaxColumns && <TableCell className="text-right">{transaction.BaseAmount ? transaction.BaseAmount.toFixed(2) : "-"}</TableCell>}
+                            {showTaxColumns && (
+                              <TableCell>
+                                <div>
+                                  {transaction.TaxCode && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {transaction.TaxCode}
+                                    </Badge>
+                                  )}
+                                  {transaction.TaxPercentage && <div className="text-xs text-muted-foreground">{transaction.TaxPercentage}%</div>}
+                                </div>
+                              </TableCell>
+                            )}
+                            {showTaxColumns && <TableCell className="text-right">{transaction.LineTaxAmount ? transaction.LineTaxAmount.toFixed(2) : "-"}</TableCell>}
+                            <TableCell className="text-right">{transaction.DebitAmount ? transaction.DebitAmount.toFixed(2) : "-"}</TableCell>
+                            <TableCell className="text-right">{transaction.CreditAmount ? transaction.CreditAmount.toFixed(2) : "-"}</TableCell>
+                            <TableCell className="text-right font-medium">{transaction.RunningBalance !== undefined ? transaction.RunningBalance.toFixed(2) : "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="openingBalances" className="mt-6">
@@ -291,87 +384,6 @@ export const AccountDetails = () => {
                 </div>
               )}
             </TabsContent>
-            {/* <TabsContent value="relationships" className="mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Company Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p>
-                        <strong>Name:</strong> {account.CompanyName}
-                      </p>
-                      <p>
-                        <strong>Email:</strong> {account.CompanyEmail}
-                      </p>
-                      <p>
-                        <strong>Contact:</strong> {account.CompanyContact}
-                      </p>
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/companies/${account.CompanyID}`)}>
-                        View Company Details
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Currency Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p>
-                        <strong>Code:</strong> {account.CurrencyCode}
-                      </p>
-                      <p>
-                        <strong>Name:</strong> {account.CurrencyName}
-                      </p>
-                      <p>
-                        <strong>Rate:</strong> {account.ConversionRate?.toFixed(4)}
-                      </p>
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/currencies/${account.CurrencyID}`)}>
-                        View Currency Details
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="md:col-span-2">
-                  <CardHeader>
-                    <CardTitle>Cost Center Hierarchy</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {account.CostCenter1ID && (
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline">Level 1</Badge>
-                          <span>{account.CostCenter1Description}</span>
-                        </div>
-                      )}
-                      {account.CostCenter2ID && (
-                        <div className="flex items-center space-x-2 ml-4">
-                          <Badge variant="outline">Level 2</Badge>
-                          <span>{account.CostCenter2Description}</span>
-                        </div>
-                      )}
-                      {account.CostCenter3ID && (
-                        <div className="flex items-center space-x-2 ml-8">
-                          <Badge variant="outline">Level 3</Badge>
-                          <span>{account.CostCenter3Description}</span>
-                        </div>
-                      )}
-                      {account.CostCenter4ID && (
-                        <div className="flex items-center space-x-2 ml-12">
-                          <Badge variant="outline">Level 4</Badge>
-                          <span>{account.CostCenter4Description}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent> */}
           </Tabs>
         </CardContent>
       </Card>
@@ -389,5 +401,4 @@ export const AccountDetails = () => {
     </div>
   );
 };
-
 export default AccountDetails;

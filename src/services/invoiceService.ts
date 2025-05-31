@@ -1,4 +1,4 @@
-// src/services/invoiceService.ts
+// src/services/invoiceService.ts - Updated to match stored procedure
 import { BaseService, BaseRequest } from "./BaseService";
 import {
   LeaseInvoice,
@@ -40,7 +40,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Create a new lease invoice
+   * Create a new lease invoice (Mode 1)
    * @param data - The invoice data to create
    * @returns Response with status and newly created invoice ID
    */
@@ -50,31 +50,31 @@ class InvoiceService extends BaseService {
       parameters: {
         // Invoice master data
         InvoiceNo: data.invoice.InvoiceNo,
-        InvoiceDate: data.invoice.InvoiceDate,
-        DueDate: data.invoice.DueDate,
+        InvoiceDate: this.formatDate(data.invoice.InvoiceDate),
+        DueDate: this.formatDate(data.invoice.DueDate),
         ContractID: data.invoice.ContractID,
         ContractUnitID: data.invoice.ContractUnitID,
         CustomerID: data.invoice.CustomerID,
         CompanyID: data.invoice.CompanyID,
-        FiscalYearID: data.invoice.FiscalYearID,
+        FiscalYearID: data.invoice.FiscalYearID || 1, // Default to 1 if not provided
         InvoiceType: data.invoice.InvoiceType,
-        InvoiceStatus: data.invoice.InvoiceStatus,
-        PeriodFromDate: data.invoice.PeriodFromDate,
-        PeriodToDate: data.invoice.PeriodToDate,
+        InvoiceStatus: data.invoice.InvoiceStatus || "Draft",
+        PeriodFromDate: data.invoice.PeriodFromDate ? this.formatDate(data.invoice.PeriodFromDate) : null,
+        PeriodToDate: data.invoice.PeriodToDate ? this.formatDate(data.invoice.PeriodToDate) : null,
         SubTotal: data.invoice.SubTotal,
         TaxAmount: data.invoice.TaxAmount,
         DiscountAmount: data.invoice.DiscountAmount,
         TotalAmount: data.invoice.TotalAmount,
-        PaidAmount: data.invoice.PaidAmount,
+        PaidAmount: data.invoice.PaidAmount || 0,
         BalanceAmount: data.invoice.BalanceAmount,
         CurrencyID: data.invoice.CurrencyID,
-        ExchangeRate: data.invoice.ExchangeRate,
+        ExchangeRate: data.invoice.ExchangeRate || 1,
         PaymentTermID: data.invoice.PaymentTermID,
         SalesPersonID: data.invoice.SalesPersonID,
         TaxID: data.invoice.TaxID,
-        IsRecurring: data.invoice.IsRecurring,
+        IsRecurring: data.invoice.IsRecurring || false,
         RecurrencePattern: data.invoice.RecurrencePattern,
-        NextInvoiceDate: data.invoice.NextInvoiceDate,
+        NextInvoiceDate: data.invoice.NextInvoiceDate ? this.formatDate(data.invoice.NextInvoiceDate) : null,
         Notes: data.invoice.Notes,
         InternalNotes: data.invoice.InternalNotes,
 
@@ -91,7 +91,7 @@ class InvoiceService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Invoice created successfully",
-        NewInvoiceID: response.NewInvoiceID,
+        NewInvoiceID: response.data?.NewInvoiceID || response.NewInvoiceID,
       };
     }
 
@@ -102,7 +102,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Update an existing lease invoice
+   * Update an existing lease invoice (Mode 2)
    * @param data - The invoice data to update
    * @returns Response with status
    */
@@ -112,15 +112,15 @@ class InvoiceService extends BaseService {
       parameters: {
         LeaseInvoiceID: data.invoice.LeaseInvoiceID,
         InvoiceNo: data.invoice.InvoiceNo,
-        InvoiceDate: data.invoice.InvoiceDate,
-        DueDate: data.invoice.DueDate,
+        InvoiceDate: data.invoice.InvoiceDate ? this.formatDate(data.invoice.InvoiceDate) : undefined,
+        DueDate: data.invoice.DueDate ? this.formatDate(data.invoice.DueDate) : undefined,
         ContractID: data.invoice.ContractID,
         ContractUnitID: data.invoice.ContractUnitID,
         CustomerID: data.invoice.CustomerID,
         InvoiceType: data.invoice.InvoiceType,
         InvoiceStatus: data.invoice.InvoiceStatus,
-        PeriodFromDate: data.invoice.PeriodFromDate,
-        PeriodToDate: data.invoice.PeriodToDate,
+        PeriodFromDate: data.invoice.PeriodFromDate ? this.formatDate(data.invoice.PeriodFromDate) : undefined,
+        PeriodToDate: data.invoice.PeriodToDate ? this.formatDate(data.invoice.PeriodToDate) : undefined,
         SubTotal: data.invoice.SubTotal,
         TaxAmount: data.invoice.TaxAmount,
         DiscountAmount: data.invoice.DiscountAmount,
@@ -133,7 +133,7 @@ class InvoiceService extends BaseService {
         TaxID: data.invoice.TaxID,
         IsRecurring: data.invoice.IsRecurring,
         RecurrencePattern: data.invoice.RecurrencePattern,
-        NextInvoiceDate: data.invoice.NextInvoiceDate,
+        NextInvoiceDate: data.invoice.NextInvoiceDate ? this.formatDate(data.invoice.NextInvoiceDate) : undefined,
         Notes: data.invoice.Notes,
         InternalNotes: data.invoice.InternalNotes,
 
@@ -160,7 +160,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Get all active invoices
+   * Get all active invoices (Mode 3)
    * @returns Array of invoices
    */
   async getAllInvoices(): Promise<LeaseInvoice[]> {
@@ -174,7 +174,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Get an invoice by ID
+   * Get an invoice by ID (Mode 4)
    * @param invoiceId - The ID of the invoice to fetch
    * @returns The invoice object or null if not found
    */
@@ -191,7 +191,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Delete an invoice
+   * Delete an invoice (Mode 5)
    * @param invoiceId - The ID of the invoice to delete
    * @returns Response with status
    */
@@ -222,7 +222,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Search for invoices with filters
+   * Search for invoices with filters (Mode 6)
    * @param params - Search parameters
    * @returns Array of matching invoices
    */
@@ -235,8 +235,8 @@ class InvoiceService extends BaseService {
         FilterContractID: params.filterContractID,
         FilterInvoiceType: params.filterInvoiceType,
         FilterInvoiceStatus: params.filterInvoiceStatus,
-        FilterFromDate: params.filterFromDate,
-        FilterToDate: params.filterToDate,
+        FilterFromDate: params.filterFromDate ? this.formatDate(params.filterFromDate) : undefined,
+        FilterToDate: params.filterToDate ? this.formatDate(params.filterToDate) : undefined,
         FilterCompanyID: params.filterCompanyID,
         FilterFiscalYearID: params.filterFiscalYearID,
       },
@@ -247,7 +247,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Change invoice status
+   * Change invoice status (Mode 7)
    * @param invoiceId - The ID of the invoice
    * @param status - The new status
    * @returns Response with status
@@ -280,7 +280,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Get invoice statistics
+   * Get invoice statistics (Mode 8)
    * @param companyId - Optional company ID filter
    * @param fiscalYearId - Optional fiscal year ID filter
    * @returns Invoice statistics
@@ -298,14 +298,12 @@ class InvoiceService extends BaseService {
 
     if (response.success) {
       return {
-        statusCounts: response.table1 || [],
-        overdueSummary:
-          response.table2 && response.table2.length > 0
-            ? response.table2[0]
-            : {
-                OverdueCount: 0,
-                OverdueAmount: 0,
-              },
+        statusCounts: response.data?.table1 || response.table1 || [],
+        overdueSummary: response.data?.table2?.[0] ||
+          response.table2?.[0] || {
+            OverdueCount: 0,
+            OverdueAmount: 0,
+          },
       };
     }
 
@@ -319,7 +317,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Apply payment to an invoice
+   * Apply payment to an invoice (Mode 9)
    * @param data - Payment application data
    * @returns Response with status and new amounts
    */
@@ -341,8 +339,8 @@ class InvoiceService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Payment applied successfully",
-        NewPaidAmount: response.NewPaidAmount,
-        NewBalanceAmount: response.NewBalanceAmount,
+        NewPaidAmount: response.data?.NewPaidAmount || response.NewPaidAmount,
+        NewBalanceAmount: response.data?.NewBalanceAmount || response.NewBalanceAmount,
       };
     }
 
@@ -353,7 +351,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Get overdue invoices
+   * Get overdue invoices (Mode 10)
    * @param params - Overdue invoice parameters
    * @returns Array of overdue invoices
    */
@@ -372,7 +370,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Post invoice to General Ledger
+   * Post invoice to General Ledger (Mode 11)
    * @param invoiceId - The ID of the invoice to post
    * @returns Response with posting details
    */
@@ -393,8 +391,8 @@ class InvoiceService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Invoice posted to GL successfully",
-        PostingID: response.PostingID,
-        VoucherNo: response.VoucherNo,
+        GLVoucherNo: response.data?.GLVoucherNo || response.GLVoucherNo,
+        VoucherNo: response.data?.GLVoucherNo || response.GLVoucherNo, // Map GLVoucherNo to VoucherNo for backward compatibility
       };
     }
 
@@ -475,19 +473,18 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Helper method to get the current user ID
-   * @returns The current user ID
+   * Helper method to format dates for SQL Server
+   * @param date - Date to format
+   * @returns Formatted date string
    */
-  private getCurrentUserId(): number | undefined {
-    try {
-      const state = (window as any).store?.getState();
-      if (state?.auth?.user) {
-        return state.auth.user.userID;
-      }
-    } catch (error) {
-      console.warn("Error retrieving current user ID from store:", error);
-    }
-    return undefined;
+  private formatDate(date: string | Date): string {
+    if (!date) return "";
+
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "";
+
+    // Format as YYYY-MM-DD for SQL Server DATE type
+    return d.toISOString().split("T")[0];
   }
 }
 

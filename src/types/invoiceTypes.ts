@@ -1,18 +1,5 @@
-// src/types/invoiceTypes.ts
-export interface BaseInvoice {
-  CreatedBy?: string;
-  CreatedOn?: string;
-  CreatedID?: number;
-  UpdatedBy?: string;
-  UpdatedOn?: string;
-  UpdatedID?: number;
-  DeletedBy?: string;
-  DeletedOn?: string;
-  DeletedID?: number;
-  RecordStatus?: number;
-}
-
-export interface LeaseInvoice extends BaseInvoice {
+// src/types/invoiceTypes.ts - Updated to match stored procedure
+export interface LeaseInvoice {
   LeaseInvoiceID: number;
   InvoiceNo: string;
   InvoiceDate: string | Date;
@@ -24,8 +11,8 @@ export interface LeaseInvoice extends BaseInvoice {
   FiscalYearID: number;
   InvoiceType: string;
   InvoiceStatus: string;
-  PeriodFromDate?: string | Date;
-  PeriodToDate?: string | Date;
+  PeriodFromDate?: string | Date | null;
+  PeriodToDate?: string | Date | null;
   SubTotal: number;
   TaxAmount: number;
   DiscountAmount: number;
@@ -39,7 +26,7 @@ export interface LeaseInvoice extends BaseInvoice {
   TaxID?: number;
   IsRecurring: boolean;
   RecurrencePattern?: string;
-  NextInvoiceDate?: string | Date;
+  NextInvoiceDate?: string | Date | null;
   Notes?: string;
   InternalNotes?: string;
 
@@ -54,7 +41,123 @@ export interface LeaseInvoice extends BaseInvoice {
   PaymentTermName?: string;
   TaxName?: string;
   TaxRate?: number;
+
+  // Calculated fields
   OverdueDays?: number;
+
+  // Audit fields
+  CreatedBy?: string;
+  CreatedOn?: string | Date;
+  UpdatedBy?: string;
+  UpdatedOn?: string | Date;
+}
+
+export interface InvoiceRequest {
+  invoice: {
+    InvoiceNo?: string;
+    InvoiceDate: string | Date;
+    DueDate: string | Date;
+    ContractID: number;
+    ContractUnitID: number;
+    CustomerID: number;
+    CompanyID: number;
+    FiscalYearID?: number;
+    InvoiceType: string;
+    InvoiceStatus: string;
+    PeriodFromDate?: string | Date | null;
+    PeriodToDate?: string | Date | null;
+    SubTotal: number;
+    TaxAmount: number;
+    DiscountAmount: number;
+    TotalAmount: number;
+    PaidAmount: number;
+    BalanceAmount: number;
+    CurrencyID?: number;
+    ExchangeRate?: number;
+    PaymentTermID?: number;
+    SalesPersonID?: number;
+    TaxID?: number;
+    IsRecurring: boolean;
+    RecurrencePattern?: string;
+    NextInvoiceDate?: string | Date | null;
+    Notes?: string;
+    InternalNotes?: string;
+  };
+}
+
+export interface InvoiceUpdateRequest {
+  invoice: {
+    LeaseInvoiceID: number;
+    InvoiceNo?: string;
+    InvoiceDate?: string | Date;
+    DueDate?: string | Date;
+    ContractID?: number;
+    ContractUnitID?: number;
+    CustomerID?: number;
+    CompanyID?: number;
+    FiscalYearID?: number;
+    InvoiceType?: string;
+    InvoiceStatus?: string;
+    PeriodFromDate?: string | Date | null;
+    PeriodToDate?: string | Date | null;
+    SubTotal?: number;
+    TaxAmount?: number;
+    DiscountAmount?: number;
+    TotalAmount?: number;
+    PaidAmount?: number;
+    BalanceAmount?: number;
+    CurrencyID?: number;
+    ExchangeRate?: number;
+    PaymentTermID?: number;
+    SalesPersonID?: number;
+    TaxID?: number;
+    IsRecurring?: boolean;
+    RecurrencePattern?: string;
+    NextInvoiceDate?: string | Date | null;
+    Notes?: string;
+    InternalNotes?: string;
+  };
+}
+
+export interface InvoiceSearchParams {
+  searchText?: string;
+  filterCustomerID?: number;
+  filterContractID?: number;
+  filterInvoiceType?: string;
+  filterInvoiceStatus?: string;
+  filterFromDate?: string | Date;
+  filterToDate?: string | Date;
+  filterCompanyID?: number;
+  filterFiscalYearID?: number;
+}
+
+export interface PaymentApplicationRequest {
+  LeaseInvoiceID: number;
+  PaymentAmount: number;
+}
+
+export interface PaymentApplication {
+  NewPaidAmount: number;
+  NewBalanceAmount: number;
+}
+
+export interface OverdueInvoiceParams {
+  overdueDays?: number;
+  filterCustomerID?: number;
+  filterCompanyID?: number;
+}
+
+export interface OverdueInvoice {
+  LeaseInvoiceID: number;
+  InvoiceNo: string;
+  InvoiceDate: string | Date;
+  DueDate: string | Date;
+  TotalAmount: number;
+  PaidAmount: number;
+  BalanceAmount: number;
+  CustomerFullName: string;
+  CustomerNo: string;
+  OverdueDays: number;
 }
 
 export interface InvoiceStatistics {
@@ -71,65 +174,18 @@ export interface InvoiceStatistics {
   };
 }
 
-export interface OverdueInvoice extends LeaseInvoice {
-  OverdueDays: number;
-}
-
-export interface PaymentApplication {
-  LeaseInvoiceID: number;
-  PaymentAmount: number;
-  NewPaidAmount?: number;
-  NewBalanceAmount?: number;
-}
-
 export interface InvoicePosting {
   PostingID?: number;
   VoucherNo?: string;
-  CustomerAccountID?: number;
-  RevenueAccountID?: number;
-  TaxAccountID?: number;
-}
-
-// Search parameters
-export interface InvoiceSearchParams {
-  searchText?: string;
-  filterCustomerID?: number;
-  filterContractID?: number;
-  filterInvoiceType?: string;
-  filterInvoiceStatus?: string;
-  filterFromDate?: string | Date;
-  filterToDate?: string | Date;
-  filterCompanyID?: number;
-  filterFiscalYearID?: number;
-}
-
-// Request parameters for invoice operations
-export interface InvoiceRequest {
-  invoice: Partial<LeaseInvoice>;
-}
-
-export interface InvoiceUpdateRequest {
-  invoice: Partial<LeaseInvoice> & { LeaseInvoiceID: number };
-}
-
-export interface PaymentApplicationRequest {
-  LeaseInvoiceID: number;
-  PaymentAmount: number;
+  GLVoucherNo?: string;
 }
 
 export interface RecurringInvoiceParams {
-  recurringFromDate?: string | Date;
-  recurringToDate?: string | Date;
+  fromDate: string | Date;
+  toDate: string | Date;
 }
 
-export interface OverdueInvoiceParams {
-  overdueDays?: number;
-  filterCustomerID?: number;
-  filterCompanyID?: number;
-}
-
-// API response
-export interface ApiResponse<T = any> {
+export interface ApiResponse {
   Status: number;
   Message: string;
   NewInvoiceID?: number;
@@ -137,7 +193,33 @@ export interface ApiResponse<T = any> {
   NewBalanceAmount?: number;
   PostingID?: number;
   VoucherNo?: string;
-  IsActive?: boolean;
-  [key: string]: any;
-  data?: T;
+  GLVoucherNo?: string;
 }
+
+// Invoice status constants
+export const INVOICE_STATUS = {
+  DRAFT: "Draft",
+  PENDING: "Pending",
+  SENT: "Sent",
+  PARTIAL: "Partial",
+  PAID: "Paid",
+  OVERDUE: "Overdue",
+  CANCELLED: "Cancelled",
+} as const;
+
+// Invoice type constants
+export const INVOICE_TYPE = {
+  REGULAR: "Regular",
+  ADVANCE: "Advance",
+  SECURITY_DEPOSIT: "Security Deposit",
+  PENALTY: "Penalty",
+  ADJUSTMENT: "Adjustment",
+} as const;
+
+// Recurrence pattern constants
+export const RECURRENCE_PATTERN = {
+  MONTHLY: "Monthly",
+  QUARTERLY: "Quarterly",
+  SEMI_ANNUALLY: "Semi-Annually",
+  ANNUALLY: "Annually",
+} as const;

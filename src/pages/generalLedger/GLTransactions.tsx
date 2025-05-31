@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, FileText, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, FileText, MoreHorizontal, Info } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { generalLedgerService } from "@/services/generalLedgerService";
@@ -19,6 +19,7 @@ import { Account } from "@/types/accountTypes";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { debounce } from "lodash";
 
@@ -35,6 +36,7 @@ const GLTransactions = () => {
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showTaxColumns, setShowTaxColumns] = useState(false);
 
   // Form state
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -64,7 +66,9 @@ const GLTransactions = () => {
           transaction.Description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           transaction.Narration?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           transaction.CustomerFullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          transaction.SupplierName?.toLowerCase().includes(searchTerm.toLowerCase())
+          transaction.SupplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          transaction.TaxCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          transaction.TaxName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredTransactions(filtered);
     }
@@ -74,6 +78,14 @@ const GLTransactions = () => {
   useEffect(() => {
     debouncedSearch();
   }, [searchTerm, transactions]);
+
+  // Check if any transactions have tax information
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const hasTaxData = transactions.some((transaction) => transaction.TaxID || transaction.TaxCode || transaction.BaseAmount || transaction.LineTaxAmount);
+      setShowTaxColumns(hasTaxData);
+    }
+  }, [transactions]);
 
   const initializeComponent = async () => {
     try {
@@ -244,6 +256,11 @@ const GLTransactions = () => {
     }).format(amount);
   };
 
+  const formatPercentage = (percentage?: number): string => {
+    if (!percentage) return "-";
+    return `${percentage.toFixed(2)}%`;
+  };
+
   const getFilteredFiscalYears = () => {
     if (!selectedCompanyId) return fiscalYears;
     return fiscalYears.filter((fy) => fy.CompanyID === parseInt(selectedCompanyId));
@@ -262,6 +279,7 @@ const GLTransactions = () => {
   // Calculate totals
   const totalDebits = filteredTransactions.reduce((sum, t) => sum + (t.DebitAmount || 0), 0);
   const totalCredits = filteredTransactions.reduce((sum, t) => sum + (t.CreditAmount || 0), 0);
+  const totalTaxAmount = filteredTransactions.reduce((sum, t) => sum + (t.LineTaxAmount || 0), 0);
 
   // Get selected references
   const selectedCompany = companies.find((c) => c.CompanyID === parseInt(selectedCompanyId));
@@ -399,7 +417,7 @@ const GLTransactions = () => {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  0<SelectItem value="0">All Statuses</SelectItem>
+                  <SelectItem value="0">All Statuses</SelectItem>
                   {getPostingStatuses().map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
@@ -422,6 +440,15 @@ const GLTransactions = () => {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-6">
+            {showTaxColumns && (
+              <div className="flex items-center space-x-2">
+                <Switch id="showTaxColumns" checked={showTaxColumns} onCheckedChange={setShowTaxColumns} />
+                <Label htmlFor="showTaxColumns">Show Tax Columns</Label>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -477,8 +504,15 @@ const GLTransactions = () => {
             <Badge variant="outline">
               {filteredTransactions.length} of {transactions.length} transactions
             </Badge>
+            {showTaxColumns && (
+              <Badge variant="secondary">
+                <Info className="mr-1 h-3 w-3" />
+                Tax Details Available
+              </Badge>
+            )}
             <div className="text-sm text-muted-foreground">
               Debits: {formatCurrency(totalDebits)} | Credits: {formatCurrency(totalCredits)}
+              {showTaxColumns && totalTaxAmount > 0 && ` | Tax: ${formatCurrency(totalTaxAmount)}`}
             </div>
           </div>
         </div>
@@ -492,7 +526,7 @@ const GLTransactions = () => {
             <CardDescription>Detailed transaction listing {selectedFiscalYear ? `for ${selectedFiscalYear.FYDescription}` : ""}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-md">
+            <div className="border rounded-md overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -502,6 +536,13 @@ const GLTransactions = () => {
                     <TableHead className="w-[150px]">Account</TableHead>
                     <TableHead className="min-w-[200px]">Description</TableHead>
                     <TableHead>Reference</TableHead>
+                    {showTaxColumns && (
+                      <>
+                        <TableHead className="text-right">Base Amount</TableHead>
+                        <TableHead>Tax</TableHead>
+                        <TableHead className="text-right">Tax Amount</TableHead>
+                      </>
+                    )}
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead className="w-[60px]">Status</TableHead>
@@ -542,6 +583,23 @@ const GLTransactions = () => {
                         )}
                         {transaction.ChequeNo && <div className="text-xs text-muted-foreground">Cheque: {transaction.ChequeNo}</div>}
                       </TableCell>
+                      {showTaxColumns && (
+                        <>
+                          <TableCell className="text-right text-sm">{transaction.BaseAmount ? formatCurrency(transaction.BaseAmount) : "-"}</TableCell>
+                          <TableCell className="text-sm">
+                            {transaction.TaxCode && (
+                              <div>
+                                <div className="font-medium">{transaction.TaxCode}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatPercentage(transaction.TaxPercentage)}
+                                  {transaction.IsTaxInclusive && " (Incl.)"}
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">{transaction.LineTaxAmount ? formatCurrency(transaction.LineTaxAmount) : "-"}</TableCell>
+                        </>
+                      )}
                       <TableCell className="text-right font-medium text-green-600">{transaction.DebitAmount ? formatCurrency(transaction.DebitAmount) : "-"}</TableCell>
                       <TableCell className="text-right font-medium text-red-600">{transaction.CreditAmount ? formatCurrency(transaction.CreditAmount) : "-"}</TableCell>
                       <TableCell>
@@ -579,7 +637,7 @@ const GLTransactions = () => {
 
             {/* Totals Summary */}
             <div className="mt-4 p-4 bg-muted rounded-md">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                 <div className="text-center">
                   <p className="text-muted-foreground">Total Transactions</p>
                   <p className="font-bold text-lg">{filteredTransactions.length}</p>
@@ -592,6 +650,12 @@ const GLTransactions = () => {
                   <p className="text-muted-foreground">Total Credits</p>
                   <p className="font-bold text-lg text-red-600">{formatCurrency(totalCredits)}</p>
                 </div>
+                {showTaxColumns && totalTaxAmount > 0 && (
+                  <div className="text-center">
+                    <p className="text-muted-foreground">Total Tax Amount</p>
+                    <p className="font-bold text-lg text-orange-600">{formatCurrency(totalTaxAmount)}</p>
+                  </div>
+                )}
               </div>
 
               {/* Balance Check */}

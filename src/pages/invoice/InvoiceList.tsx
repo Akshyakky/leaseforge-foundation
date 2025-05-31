@@ -1,13 +1,14 @@
-// src/pages/invoice/InvoiceList.tsx
+// src/pages/invoice/InvoiceList.tsx - Updated for enhanced receipt integration
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, Calendar, User, FileText, AlertTriangle, CheckCircle, Clock, DollarSign } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, Calendar, User, FileText, AlertTriangle, CheckCircle, Clock, DollarSign, Receipt, Eye, History, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { invoiceService, LeaseInvoice } from "@/services/invoiceService";
+import { receiptService, PaymentStatus } from "@/services/receiptService";
 import { customerService } from "@/services/customerService";
 import { contractService } from "@/services/contractService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -19,15 +20,24 @@ import { format } from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+
+interface InvoiceWithPaymentInfo extends LeaseInvoice {
+  hasReceipts?: boolean;
+  pendingReceipts?: number;
+  lastPaymentDate?: string;
+  paymentProgress?: number;
+}
 
 const InvoiceList: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // State variables
   const [searchTerm, setSearchTerm] = useState("");
-  const [invoices, setInvoices] = useState<LeaseInvoice[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceWithPaymentInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedInvoice, setSelectedInvoice] = useState<LeaseInvoice | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithPaymentInfo | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
@@ -49,22 +59,45 @@ const InvoiceList: React.FC = () => {
   const invoiceStatusOptions = ["Draft", "Pending", "Sent", "Partial", "Paid", "Overdue", "Cancelled"];
   const invoiceTypeOptions = ["Regular", "Advance", "Security Deposit", "Penalty", "Adjustment"];
 
+  // Initialize filters from URL params
+  useEffect(() => {
+    const customerId = searchParams.get("customerId");
+    const invoiceId = searchParams.get("invoiceId");
+
+    if (customerId) {
+      setSelectedCustomerId(customerId);
+      setActiveTab("customer");
+    }
+
+    if (invoiceId) {
+      // If specific invoice ID is provided, navigate directly to it
+      navigate(`/invoices/${invoiceId}`);
+      return;
+    }
+  }, [searchParams, navigate]);
+
   // Fetch data on component mount
   useEffect(() => {
     fetchInvoices();
     fetchReferenceData();
   }, []);
 
-  // Fetch all invoices
+  // Fetch all invoices with payment information
   const fetchInvoices = async (search?: string, filters?: any) => {
     try {
       setLoading(true);
       let invoicesData: LeaseInvoice[] = [];
 
       if (activeTab === "overdue") {
-        invoicesData = await invoiceService.getOverdueInvoices({
-          filterCustomerID: filters?.customerID,
+        invoicesData = await invoiceService.getInvoicesByStatus("Overdue");
+        // Also include invoices that are past due date but not marked as overdue
+        const allInvoices = await invoiceService.getAllInvoices();
+        const pastDueInvoices = allInvoices.filter((inv) => {
+          const dueDate = new Date(inv.DueDate);
+          const today = new Date();
+          return dueDate < today && inv.BalanceAmount > 0 && inv.InvoiceStatus !== "Overdue" && inv.InvoiceStatus !== "Paid";
         });
+        invoicesData = [...invoicesData, ...pastDueInvoices];
       } else {
         invoicesData = await invoiceService.searchInvoices({
           searchText: search,
@@ -87,13 +120,48 @@ const InvoiceList: React.FC = () => {
               return invoice.InvoiceStatus === "Paid";
             case "partial":
               return invoice.InvoiceStatus === "Partial";
+            case "unpaid":
+              return invoice.BalanceAmount > 0 && invoice.InvoiceStatus !== "Paid";
             default:
               return true;
           }
         });
       }
 
-      setInvoices(invoicesData);
+      // Enhance invoices with payment information
+      const enhancedInvoices = await Promise.all(
+        invoicesData.map(async (invoice) => {
+          try {
+            const receipts = await receiptService.getReceiptsByInvoice(invoice.LeaseInvoiceID);
+            const validReceipts = receipts.filter(
+              (r) => r.PaymentStatus !== PaymentStatus.CANCELLED && r.PaymentStatus !== PaymentStatus.BOUNCED && r.PaymentStatus !== PaymentStatus.REVERSED
+            );
+            const pendingReceipts = receipts.filter((r) => r.PaymentStatus === PaymentStatus.RECEIVED || r.PaymentStatus === PaymentStatus.DEPOSITED);
+
+            const lastReceipt = validReceipts.length > 0 ? validReceipts.sort((a, b) => new Date(b.ReceiptDate).getTime() - new Date(a.ReceiptDate).getTime())[0] : null;
+
+            const paymentProgress = invoice.TotalAmount > 0 ? (invoice.PaidAmount / invoice.TotalAmount) * 100 : 0;
+
+            return {
+              ...invoice,
+              hasReceipts: validReceipts.length > 0,
+              pendingReceipts: pendingReceipts.length,
+              lastPaymentDate: lastReceipt?.ReceiptDate,
+              paymentProgress,
+            } as InvoiceWithPaymentInfo;
+          } catch (error) {
+            console.error(`Error fetching receipts for invoice ${invoice.LeaseInvoiceID}:`, error);
+            return {
+              ...invoice,
+              hasReceipts: false,
+              pendingReceipts: 0,
+              paymentProgress: 0,
+            } as InvoiceWithPaymentInfo;
+          }
+        })
+      );
+
+      setInvoices(enhancedInvoices);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       toast.error("Failed to load invoices");
@@ -158,8 +226,16 @@ const InvoiceList: React.FC = () => {
     navigate(`/invoices/${invoiceId}`);
   };
 
+  const handleViewReceipts = (invoiceId: number) => {
+    navigate(`/receipts?invoiceId=${invoiceId}`);
+  };
+
+  const handleCreateReceipt = (invoiceId: number) => {
+    navigate(`/receipts/new?invoiceId=${invoiceId}`);
+  };
+
   // Delete invoice handlers
-  const openDeleteDialog = (invoice: LeaseInvoice) => {
+  const openDeleteDialog = (invoice: InvoiceWithPaymentInfo) => {
     setSelectedInvoice(invoice);
     setIsDeleteDialogOpen(true);
   };
@@ -190,7 +266,7 @@ const InvoiceList: React.FC = () => {
   };
 
   // Status change handlers
-  const openStatusChangeDialog = (invoice: LeaseInvoice, status: string) => {
+  const openStatusChangeDialog = (invoice: InvoiceWithPaymentInfo, status: string) => {
     setSelectedInvoice(invoice);
     setSelectedStatus(status);
     setIsStatusChangeDialogOpen(true);
@@ -223,7 +299,7 @@ const InvoiceList: React.FC = () => {
   };
 
   // Post invoice to GL
-  const handlePostToGL = async (invoice: LeaseInvoice) => {
+  const handlePostToGL = async (invoice: InvoiceWithPaymentInfo) => {
     try {
       const response = await invoiceService.postInvoiceToGL(invoice.LeaseInvoiceID);
 
@@ -291,6 +367,14 @@ const InvoiceList: React.FC = () => {
     }
   };
 
+  // Check if invoice is overdue
+  const isOverdue = (invoice: InvoiceWithPaymentInfo) => {
+    if (invoice.InvoiceStatus === "Paid" || invoice.BalanceAmount <= 0) return false;
+    const dueDate = new Date(invoice.DueDate);
+    const today = new Date();
+    return dueDate < today;
+  };
+
   // Get tab counts
   const getTabCounts = () => {
     return {
@@ -298,7 +382,8 @@ const InvoiceList: React.FC = () => {
       pending: invoices.filter((i) => ["Draft", "Pending", "Sent"].includes(i.InvoiceStatus)).length,
       paid: invoices.filter((i) => i.InvoiceStatus === "Paid").length,
       partial: invoices.filter((i) => i.InvoiceStatus === "Partial").length,
-      overdue: invoices.filter((i) => i.InvoiceStatus === "Overdue" || (i.OverdueDays && i.OverdueDays > 0)).length,
+      unpaid: invoices.filter((i) => i.BalanceAmount > 0 && i.InvoiceStatus !== "Paid").length,
+      overdue: invoices.filter((i) => isOverdue(i) || i.InvoiceStatus === "Overdue").length,
     };
   };
 
@@ -307,25 +392,35 @@ const InvoiceList: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Invoice Management</h1>
-        <Button onClick={handleAddInvoice}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Invoice
-        </Button>
+        <div>
+          <h1 className="text-2xl font-semibold">Invoice Management</h1>
+          <p className="text-muted-foreground">Manage lease invoices and track payments</p>
+        </div>
+        <div className="flex space-x-2">
+          <Button variant="outline" onClick={() => fetchInvoices()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+          <Button onClick={handleAddInvoice}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Invoice
+          </Button>
+        </div>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>Invoices</CardTitle>
-          <CardDescription>Manage lease invoices and billing</CardDescription>
+          <CardDescription>Manage lease invoices and track payment status</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-5 w-[500px] mb-6">
+            <TabsList className="grid grid-cols-6 w-[600px] mb-6">
               <TabsTrigger value="all">All ({tabCounts.all})</TabsTrigger>
               <TabsTrigger value="pending">Pending ({tabCounts.pending})</TabsTrigger>
-              <TabsTrigger value="paid">Paid ({tabCounts.paid})</TabsTrigger>
               <TabsTrigger value="partial">Partial ({tabCounts.partial})</TabsTrigger>
+              <TabsTrigger value="unpaid">Unpaid ({tabCounts.unpaid})</TabsTrigger>
+              <TabsTrigger value="paid">Paid ({tabCounts.paid})</TabsTrigger>
               <TabsTrigger value="overdue">Overdue ({tabCounts.overdue})</TabsTrigger>
             </TabsList>
 
@@ -451,29 +546,42 @@ const InvoiceList: React.FC = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[150px]">Invoice #</TableHead>
+                        <TableHead className="w-[180px]">Invoice #</TableHead>
                         <TableHead>Customer</TableHead>
                         <TableHead>Contract</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Invoice Date</TableHead>
                         <TableHead>Due Date</TableHead>
-                        <TableHead>Total Amount</TableHead>
-                        <TableHead>Balance</TableHead>
+                        <TableHead>Amount & Payment</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-[100px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {invoices.map((invoice) => (
-                        <TableRow key={invoice.LeaseInvoiceID} className={invoice.OverdueDays && invoice.OverdueDays > 0 ? "bg-red-50" : ""}>
+                        <TableRow key={invoice.LeaseInvoiceID} className={isOverdue(invoice) ? "bg-red-50" : ""}>
                           <TableCell>
-                            <div className="font-medium">{invoice.InvoiceNo}</div>
-                            {invoice.OverdueDays && invoice.OverdueDays > 0 && (
-                              <div className="text-xs text-red-600 flex items-center">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                {invoice.OverdueDays} days overdue
-                              </div>
-                            )}
+                            <div className="space-y-1">
+                              <div className="font-medium">{invoice.InvoiceNo}</div>
+                              {isOverdue(invoice) && (
+                                <div className="text-xs text-red-600 flex items-center">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  {invoice.OverdueDays || 0} days overdue
+                                </div>
+                              )}
+                              {invoice.hasReceipts && (
+                                <div className="text-xs text-green-600 flex items-center">
+                                  <Receipt className="h-3 w-3 mr-1" />
+                                  Has payments
+                                </div>
+                              )}
+                              {invoice.pendingReceipts && invoice.pendingReceipts > 0 && (
+                                <div className="text-xs text-orange-600 flex items-center">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {invoice.pendingReceipts} pending
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
@@ -490,15 +598,21 @@ const InvoiceList: React.FC = () => {
                           </TableCell>
                           <TableCell>{formatDate(invoice.InvoiceDate)}</TableCell>
                           <TableCell>
-                            <div className={invoice.OverdueDays && invoice.OverdueDays > 0 ? "text-red-600 font-medium" : ""}>{formatDate(invoice.DueDate)}</div>
+                            <div className={isOverdue(invoice) ? "text-red-600 font-medium" : ""}>{formatDate(invoice.DueDate)}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="font-medium">{formatCurrency(invoice.TotalAmount)}</div>
-                            {invoice.TaxAmount > 0 && <div className="text-sm text-muted-foreground">Tax: {formatCurrency(invoice.TaxAmount)}</div>}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{formatCurrency(invoice.BalanceAmount)}</div>
-                            {invoice.PaidAmount > 0 && <div className="text-sm text-muted-foreground">Paid: {formatCurrency(invoice.PaidAmount)}</div>}
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">{formatCurrency(invoice.TotalAmount)}</span>
+                                {invoice.InvoiceStatus === "Partial" && <span className="text-xs text-muted-foreground">{invoice.paymentProgress?.toFixed(0)}%</span>}
+                              </div>
+                              {invoice.InvoiceStatus === "Partial" && <Progress value={invoice.paymentProgress} className="h-1" />}
+                              <div className="flex justify-between text-sm">
+                                <span className="text-green-600">Paid: {formatCurrency(invoice.PaidAmount)}</span>
+                                <span className={invoice.BalanceAmount > 0 ? "text-red-600" : "text-green-600"}>Due: {formatCurrency(invoice.BalanceAmount)}</span>
+                              </div>
+                              {invoice.lastPaymentDate && <div className="text-xs text-muted-foreground">Last payment: {formatDate(invoice.lastPaymentDate)}</div>}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={getStatusColor(invoice.InvoiceStatus)} className="flex items-center gap-1">
@@ -514,9 +628,24 @@ const InvoiceList: React.FC = () => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleViewInvoice(invoice.LeaseInvoiceID)}>View details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewInvoice(invoice.LeaseInvoiceID)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View details
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleEditInvoice(invoice.LeaseInvoiceID)} disabled={invoice.InvoiceStatus === "Paid"}>
                                   Edit
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem onClick={() => handleCreateReceipt(invoice.LeaseInvoiceID)} disabled={invoice.BalanceAmount <= 0}>
+                                  <Receipt className="h-4 w-4 mr-2" />
+                                  Record Payment
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem onClick={() => handleViewReceipts(invoice.LeaseInvoiceID)} disabled={!invoice.hasReceipts}>
+                                  <History className="h-4 w-4 mr-2" />
+                                  Payment History
                                 </DropdownMenuItem>
 
                                 <DropdownMenuSeparator />

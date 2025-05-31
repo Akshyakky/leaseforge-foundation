@@ -148,14 +148,43 @@ export const PettyCashDetails: React.FC = () => {
       accessorKey: "TransactionType",
     },
     {
+      header: t("pettyCash.baseAmount"),
+      accessorKey: "BaseAmount",
+      cell: ({ row }) => <div className="text-right">{row.BaseAmount?.toFixed(2) || "0.00"}</div>,
+    },
+    {
+      header: t("pettyCash.tax"),
+      accessorKey: "TaxName",
+      cell: ({ row }) => {
+        if (row.TaxID && row.TaxName) {
+          return (
+            <div className="space-y-1">
+              <div className="text-sm font-medium">
+                {row.TaxCode} - {row.TaxName}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {row.TaxPercentage?.toFixed(2)}%{row.IsTaxInclusive ? " (Inclusive)" : " (Exclusive)"}
+              </div>
+            </div>
+          );
+        }
+        return <span className="text-muted-foreground">No Tax</span>;
+      },
+    },
+    {
+      header: t("pettyCash.taxAmount"),
+      accessorKey: "LineTaxAmount",
+      cell: ({ row }) => <div className="text-right">{row.LineTaxAmount?.toFixed(2) || "0.00"}</div>,
+    },
+    {
       header: t("pettyCash.debitAmount"),
       accessorKey: "DebitAmount",
-      cell: ({ row }) => <div className="text-right">{row.DebitAmount?.toFixed(2) || "0.00"}</div>, // Simplified, as DebitAmount is already 0 if not debit
+      cell: ({ row }) => <div className="text-right">{row.DebitAmount?.toFixed(2) || "0.00"}</div>,
     },
     {
       header: t("pettyCash.creditAmount"),
       accessorKey: "CreditAmount",
-      cell: ({ row }) => <div className="text-right">{row.CreditAmount?.toFixed(2) || "0.00"}</div>, // Simplified, as CreditAmount is already 0 if not credit
+      cell: ({ row }) => <div className="text-right">{row.CreditAmount?.toFixed(2) || "0.00"}</div>,
     },
     {
       header: t("pettyCash.costCenter1"),
@@ -178,14 +207,14 @@ export const PettyCashDetails: React.FC = () => {
       cell: ({ row }) => row.CostCenter4Name || "-",
     },
     {
-      header: t("pettyCash.lineDescription"), // Added for line-specific description
+      header: t("pettyCash.lineDescription"),
       accessorKey: "LineDescription",
-      cell: ({ row }) => row.LineDescription || voucher?.Description || "-", // Fallback to header description
+      cell: ({ row }) => row.LineDescription || voucher?.Description || "-",
     },
     {
-      header: t("pettyCash.lineNarration"), // Added for line-specific narration
+      header: t("pettyCash.lineNarration"),
       accessorKey: "LineNarration",
-      cell: ({ row }) => row.LineNarration || voucher?.Narration || "-", // Fallback to header narration
+      cell: ({ row }) => row.LineNarration || voucher?.Narration || "-",
     },
   ];
 
@@ -214,6 +243,12 @@ export const PettyCashDetails: React.FC = () => {
         return "outline"; // Default or unknown status
     }
   };
+
+  // Calculate totals for tax information
+  const totalBaseAmount = postingLines.reduce((sum, line) => sum + (line.BaseAmount || 0), 0);
+  const totalTaxAmount = postingLines.reduce((sum, line) => sum + (line.LineTaxAmount || 0), 0);
+  const totalDebitAmount = postingLines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
+  const totalCreditAmount = postingLines.reduce((sum, line) => sum + (line.CreditAmount || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -260,14 +295,9 @@ export const PettyCashDetails: React.FC = () => {
             <DescriptionItem label={t("pettyCash.postingDate")} value={voucher.PostingDate ? format(new Date(voucher.PostingDate), "PPP") : "-"} />
             <DescriptionItem label={t("pettyCash.company")} value={voucher.CompanyName} />
             <DescriptionItem label={t("pettyCash.fiscalYear")} value={voucher.FYDescription} />
-            {/* Display TotalAmount now as it's the sum of debits/credits */}
             <DescriptionItem label={t("pettyCash.totalAmount")} value={`${voucher.TotalAmount?.toFixed(2)} ${voucher.CurrencyName || ""}`} />
             <DescriptionItem label={t("pettyCash.currency")} value={voucher.CurrencyName} />
             <DescriptionItem label={t("pettyCash.exchangeRate")} value={voucher.ExchangeRate?.toFixed(4)} />
-            {/* Removed ExpenseAccount, ReceivedBy, ExpenseCategory as they are not top-level properties on the voucher anymore */}
-            {/* <DescriptionItem label={t("pettyCash.expenseAccount")} value={voucher.ExpenseAccount} />
-            <DescriptionItem label={t("pettyCash.receivedBy")} value={voucher.ReceivedBy} />
-            <DescriptionItem label={t("pettyCash.expenseCategory")} value={voucher.ExpenseCategory} /> */}
             <DescriptionItem label={t("pettyCash.receiptNo")} value={voucher.ReceiptNo} />
             <DescriptionItem label={t("pettyCash.postingStatus")} value={<Badge variant={getStatusBadgeVariant(voucher.PostingStatus)}>{voucher.PostingStatus}</Badge>} />
             <DescriptionItem label={t("pettyCash.description")} value={voucher.Description} className="col-span-full" />
@@ -275,6 +305,23 @@ export const PettyCashDetails: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Tax Summary Card */}
+      {totalTaxAmount > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("pettyCash.taxSummary")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DescriptionItem label={t("pettyCash.totalBaseAmount")} value={`${totalBaseAmount.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+              <DescriptionItem label={t("pettyCash.totalTaxAmount")} value={`${totalTaxAmount.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+              <DescriptionItem label={t("pettyCash.totalDebitAmount")} value={`${totalDebitAmount.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+              <DescriptionItem label={t("pettyCash.totalCreditAmount")} value={`${totalCreditAmount.toFixed(2)} ${voucher.CurrencyName || ""}`} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

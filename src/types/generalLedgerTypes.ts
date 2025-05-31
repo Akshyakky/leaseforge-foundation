@@ -34,6 +34,15 @@ export interface AccountLedgerTransaction {
   SourceModule?: string;
   RunningBalance: number;
 
+  // Tax-related fields (added from stored procedure modification)
+  BaseAmount?: number;
+  TaxID?: number;
+  TaxCode?: string;
+  TaxName?: string;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  IsTaxInclusive?: boolean;
+
   // Joined fields
   CustomerFullName?: string;
   SupplierName?: string;
@@ -189,6 +198,15 @@ export interface DetailedGLTransaction {
   SourceModule?: string;
   CreatedBy?: string;
   CreatedOn?: string | Date;
+
+  // Tax-related fields (added from stored procedure modification)
+  BaseAmount?: number;
+  TaxID?: number;
+  TaxCode?: string;
+  TaxName?: string;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  IsTaxInclusive?: boolean;
 }
 
 // Account Activity Summary Types (Mode 8)
@@ -235,6 +253,15 @@ export interface BankReconciliationTransaction {
   ChequeNo?: string;
   ChequeDate?: string | Date;
   Amount: number;
+
+  // Tax-related fields (added from stored procedure modification)
+  BaseAmount?: number;
+  TaxID?: number;
+  TaxCode?: string;
+  TaxName?: string;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  IsTaxInclusive?: boolean;
 }
 
 export interface BankReconciliationSummary {

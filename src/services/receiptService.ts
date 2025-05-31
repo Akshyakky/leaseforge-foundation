@@ -1,14 +1,16 @@
-// src/services/receiptService.ts
+// src/services/receiptService.ts - Updated to match stored procedure
 import { BaseService, BaseRequest } from "./BaseService";
 import {
   LeaseReceipt,
   ReceiptStatistics,
   UnpostedReceipt,
   ReceiptPosting,
+  ReceiptReversal,
   ReceiptSearchParams,
   ReceiptRequest,
   ReceiptUpdateRequest,
   ReceiptPostingRequest,
+  ReceiptReversalRequest,
   ReceiptStatisticsParams,
   PaymentType,
   PaymentStatus,
@@ -21,10 +23,12 @@ export type {
   ReceiptStatistics,
   UnpostedReceipt,
   ReceiptPosting,
+  ReceiptReversal,
   ReceiptSearchParams,
   ReceiptRequest,
   ReceiptUpdateRequest,
   ReceiptPostingRequest,
+  ReceiptReversalRequest,
   ReceiptStatisticsParams,
 };
 
@@ -41,7 +45,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Create a new lease receipt
+   * Create a new lease receipt (Mode 1)
    * @param data - The receipt data to create
    * @returns Response with status and newly created receipt ID
    */
@@ -51,31 +55,31 @@ class ReceiptService extends BaseService {
       parameters: {
         // Receipt master data
         ReceiptNo: data.receipt.ReceiptNo,
-        ReceiptDate: data.receipt.ReceiptDate,
+        ReceiptDate: this.formatDate(data.receipt.ReceiptDate),
         LeaseInvoiceID: data.receipt.LeaseInvoiceID,
         CustomerID: data.receipt.CustomerID,
         CompanyID: data.receipt.CompanyID,
         FiscalYearID: data.receipt.FiscalYearID,
-        PaymentType: data.receipt.PaymentType,
-        PaymentStatus: data.receipt.PaymentStatus,
+        PaymentType: data.receipt.PaymentType || PaymentType.CASH,
+        PaymentStatus: data.receipt.PaymentStatus || PaymentStatus.RECEIVED,
         ReceivedAmount: data.receipt.ReceivedAmount,
         CurrencyID: data.receipt.CurrencyID,
-        ExchangeRate: data.receipt.ExchangeRate,
+        ExchangeRate: data.receipt.ExchangeRate || 1.0,
         BankID: data.receipt.BankID,
         BankAccountNo: data.receipt.BankAccountNo,
         ChequeNo: data.receipt.ChequeNo,
-        ChequeDate: data.receipt.ChequeDate,
+        ChequeDate: data.receipt.ChequeDate ? this.formatDate(data.receipt.ChequeDate) : null,
         TransactionReference: data.receipt.TransactionReference,
         DepositedBankID: data.receipt.DepositedBankID,
-        DepositDate: data.receipt.DepositDate,
-        ClearanceDate: data.receipt.ClearanceDate,
-        IsAdvancePayment: data.receipt.IsAdvancePayment,
-        SecurityDepositAmount: data.receipt.SecurityDepositAmount,
-        PenaltyAmount: data.receipt.PenaltyAmount,
-        DiscountAmount: data.receipt.DiscountAmount,
+        DepositDate: data.receipt.DepositDate ? this.formatDate(data.receipt.DepositDate) : null,
+        ClearanceDate: data.receipt.ClearanceDate ? this.formatDate(data.receipt.ClearanceDate) : null,
+        IsAdvancePayment: data.receipt.IsAdvancePayment || false,
+        SecurityDepositAmount: data.receipt.SecurityDepositAmount || 0,
+        PenaltyAmount: data.receipt.PenaltyAmount || 0,
+        DiscountAmount: data.receipt.DiscountAmount || 0,
         ReceivedByUserID: data.receipt.ReceivedByUserID,
-        AccountID: data.receipt.AccountID,
-        IsPosted: data.receipt.IsPosted,
+        AccountID: data.receipt.AccountID, // Cash/Bank account for the receipt
+        IsPosted: data.receipt.IsPosted || false,
         PostingID: data.receipt.PostingID,
         Notes: data.receipt.Notes,
 
@@ -92,7 +96,7 @@ class ReceiptService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Receipt created successfully",
-        NewReceiptID: response.NewReceiptID,
+        NewReceiptID: response.data?.NewReceiptID || response.NewReceiptID,
       };
     }
 
@@ -103,7 +107,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Update an existing lease receipt
+   * Update an existing lease receipt (Mode 2)
    * @param data - The receipt data to update
    * @returns Response with status
    */
@@ -113,7 +117,7 @@ class ReceiptService extends BaseService {
       parameters: {
         LeaseReceiptID: data.receipt.LeaseReceiptID,
         ReceiptNo: data.receipt.ReceiptNo,
-        ReceiptDate: data.receipt.ReceiptDate,
+        ReceiptDate: data.receipt.ReceiptDate ? this.formatDate(data.receipt.ReceiptDate) : undefined,
         LeaseInvoiceID: data.receipt.LeaseInvoiceID,
         CustomerID: data.receipt.CustomerID,
         PaymentType: data.receipt.PaymentType,
@@ -124,18 +128,19 @@ class ReceiptService extends BaseService {
         BankID: data.receipt.BankID,
         BankAccountNo: data.receipt.BankAccountNo,
         ChequeNo: data.receipt.ChequeNo,
-        ChequeDate: data.receipt.ChequeDate,
+        ChequeDate: data.receipt.ChequeDate ? this.formatDate(data.receipt.ChequeDate) : undefined,
         TransactionReference: data.receipt.TransactionReference,
         DepositedBankID: data.receipt.DepositedBankID,
-        DepositDate: data.receipt.DepositDate,
-        ClearanceDate: data.receipt.ClearanceDate,
+        DepositDate: data.receipt.DepositDate ? this.formatDate(data.receipt.DepositDate) : undefined,
+        ClearanceDate: data.receipt.ClearanceDate ? this.formatDate(data.receipt.ClearanceDate) : undefined,
         IsAdvancePayment: data.receipt.IsAdvancePayment,
         SecurityDepositAmount: data.receipt.SecurityDepositAmount,
         PenaltyAmount: data.receipt.PenaltyAmount,
         DiscountAmount: data.receipt.DiscountAmount,
         ReceivedByUserID: data.receipt.ReceivedByUserID,
-        AccountID: data.receipt.AccountID,
+        AccountID: data.receipt.AccountID, // Cash/Bank account
         Notes: data.receipt.Notes,
+        IsPosted: data.receipt.IsPosted,
 
         // Audit parameters
         CurrentUserID: this.getCurrentUserId(),
@@ -160,13 +165,16 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Get all active receipts
+   * Get all active receipts (Mode 3)
+   * @param companyId - Optional company ID filter
    * @returns Array of receipts
    */
-  async getAllReceipts(): Promise<LeaseReceipt[]> {
+  async getAllReceipts(companyId?: number): Promise<LeaseReceipt[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Receipts
-      parameters: {},
+      parameters: {
+        CompanyID: companyId,
+      },
     };
 
     const response = await this.execute<LeaseReceipt[]>(request);
@@ -174,7 +182,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Get a receipt by ID
+   * Get a receipt by ID (Mode 4)
    * @param receiptId - The ID of the receipt to fetch
    * @returns The receipt object or null if not found
    */
@@ -191,7 +199,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Delete a receipt
+   * Delete a receipt (Mode 5)
    * @param receiptId - The ID of the receipt to delete
    * @returns Response with status
    */
@@ -222,7 +230,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Search for receipts with filters
+   * Search for receipts with filters (Mode 6)
    * @param params - Search parameters
    * @returns Array of matching receipts
    */
@@ -235,8 +243,8 @@ class ReceiptService extends BaseService {
         FilterInvoiceID: params.filterInvoiceID,
         FilterPaymentType: params.filterPaymentType,
         FilterPaymentStatus: params.filterPaymentStatus,
-        FilterFromDate: params.filterFromDate,
-        FilterToDate: params.filterToDate,
+        FilterFromDate: params.filterFromDate ? this.formatDate(params.filterFromDate) : undefined,
+        FilterToDate: params.filterToDate ? this.formatDate(params.filterToDate) : undefined,
         FilterCompanyID: params.filterCompanyID,
         FilterFiscalYearID: params.filterFiscalYearID,
         FilterIsPosted: params.filterIsPosted,
@@ -248,7 +256,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Get receipt statistics
+   * Get receipt statistics (Mode 7)
    * @param params - Statistics parameters
    * @returns Receipt statistics
    */
@@ -258,8 +266,8 @@ class ReceiptService extends BaseService {
       parameters: {
         FilterCompanyID: params.filterCompanyID,
         FilterFiscalYearID: params.filterFiscalYearID,
-        FilterFromDate: params.filterFromDate,
-        FilterToDate: params.filterToDate,
+        FilterFromDate: params.filterFromDate ? this.formatDate(params.filterFromDate) : undefined,
+        FilterToDate: params.filterToDate ? this.formatDate(params.filterToDate) : undefined,
       },
     };
 
@@ -267,8 +275,8 @@ class ReceiptService extends BaseService {
 
     if (response.success) {
       return {
-        paymentTypeCounts: response.table1 || [],
-        postingStatusSummary: response.table2 || [],
+        paymentTypeCounts: response.data?.table1 || response.table1 || [],
+        postingStatusSummary: response.data?.table2 || response.table2 || [],
       };
     }
 
@@ -279,7 +287,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Get unposted receipts
+   * Get unposted receipts (Mode 8)
    * @param companyId - Optional company ID filter
    * @param fiscalYearId - Optional fiscal year ID filter
    * @returns Array of unposted receipts
@@ -298,7 +306,7 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Post receipt to General Ledger
+   * Post receipt to General Ledger (Mode 9)
    * @param data - Receipt posting data
    * @returns Response with posting details
    */
@@ -307,8 +315,8 @@ class ReceiptService extends BaseService {
       mode: 9, // Mode 9: Post Receipt to GL
       parameters: {
         LeaseReceiptID: data.LeaseReceiptID,
-        ReversePosting: data.reversePosting,
-        ReversalReason: data.reversalReason,
+        ReversePosting: data.ReversePosting || false,
+        ReversalReason: data.ReversalReason,
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -321,14 +329,49 @@ class ReceiptService extends BaseService {
       return {
         Status: 1,
         Message: response.message || "Receipt posted to GL successfully",
-        PostingID: response.PostingID,
-        VoucherNo: response.VoucherNo,
+        MainPostingID: response.data?.MainPostingID || response.MainPostingID,
+        GLVoucherNo: response.data?.GLVoucherNo || response.GLVoucherNo,
+        PostingID: response.data?.MainPostingID || response.MainPostingID, // For backward compatibility
+        VoucherNo: response.data?.GLVoucherNo || response.GLVoucherNo, // For backward compatibility
       };
     }
 
     return {
       Status: 0,
       Message: response.message || "Failed to post receipt to GL",
+    };
+  }
+
+  /**
+   * Reverse receipt GL posting (Mode 10)
+   * @param data - Receipt reversal data
+   * @returns Response with reversal details
+   */
+  async reverseReceiptGLPosting(data: ReceiptReversalRequest): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 10, // Mode 10: Reverse Receipt GL Posting
+      parameters: {
+        LeaseReceiptID: data.LeaseReceiptID,
+        ReversalReason: data.ReversalReason,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Receipt GL posting reversed successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Receipt GL posting reversed successfully",
+        ReversalGLVoucherNo: response.data?.ReversalGLVoucherNo || response.ReversalGLVoucherNo,
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reverse receipt GL posting",
     };
   }
 
@@ -425,7 +468,10 @@ class ReceiptService extends BaseService {
    */
   async getReceiptsPendingClearance(): Promise<LeaseReceipt[]> {
     const allReceipts = await this.getAllReceipts();
-    return allReceipts.filter((receipt) => receipt.PaymentType === PaymentType.CHEQUE && !receipt.ClearanceDate && receipt.PaymentStatus !== PaymentStatus.BOUNCED);
+    return allReceipts.filter(
+      (receipt) =>
+        receipt.PaymentType === PaymentType.CHEQUE && !receipt.ClearanceDate && receipt.PaymentStatus !== PaymentStatus.BOUNCED && receipt.PaymentStatus !== PaymentStatus.CANCELLED
+    );
   }
 
   /**
@@ -497,19 +543,64 @@ class ReceiptService extends BaseService {
   }
 
   /**
-   * Helper method to get the current user ID
-   * @returns The current user ID
+   * Get receipts that can be reversed
+   * @returns Array of receipts that can have their GL posting reversed
    */
-  private getCurrentUserId(): number | undefined {
-    try {
-      const state = (window as any).store?.getState();
-      if (state?.auth?.user) {
-        return state.auth.user.userID;
-      }
-    } catch (error) {
-      console.warn("Error retrieving current user ID from store:", error);
+  async getReceiptsEligibleForReversal(): Promise<LeaseReceipt[]> {
+    const allReceipts = await this.getAllReceipts();
+    return allReceipts.filter((receipt) => receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED && receipt.PaymentStatus !== PaymentStatus.CANCELLED);
+  }
+
+  /**
+   * Validate receipt data before posting
+   * @param receiptId - The receipt ID to validate
+   * @returns Validation result with any errors
+   */
+  async validateReceiptForPosting(receiptId: number): Promise<{ isValid: boolean; errors: string[] }> {
+    const receipt = await this.getReceiptById(receiptId);
+    const errors: string[] = [];
+
+    if (!receipt) {
+      errors.push("Receipt not found");
+      return { isValid: false, errors };
     }
-    return undefined;
+
+    if (receipt.IsPosted) {
+      errors.push("Receipt is already posted to GL");
+    }
+
+    if (receipt.ReceivedAmount <= 0) {
+      errors.push("Received amount must be greater than zero");
+    }
+
+    if (!receipt.CustomerID) {
+      errors.push("Customer is required");
+    }
+
+    if (!receipt.CompanyID) {
+      errors.push("Company is required");
+    }
+
+    if (!receipt.AccountID) {
+      errors.push("Cash/Bank account is required for GL posting");
+    }
+
+    return { isValid: errors.length === 0, errors };
+  }
+
+  /**
+   * Helper method to format dates for SQL Server
+   * @param date - Date to format
+   * @returns Formatted date string
+   */
+  private formatDate(date: string | Date): string {
+    if (!date) return "";
+
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "";
+
+    // Format as YYYY-MM-DD for SQL Server DATE type
+    return d.toISOString().split("T")[0];
   }
 }
 
