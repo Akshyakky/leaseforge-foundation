@@ -1,4 +1,4 @@
-// src/types/receiptTypes.ts - Updated to match stored procedure
+// src/types/receiptTypes.ts - Updated with consistent interface definitions
 export interface BaseReceipt {
   CreatedBy?: string;
   CreatedOn?: string | Date;
@@ -68,15 +68,20 @@ export interface ReceiptStatistics {
   }[];
 }
 
-export interface UnpostedReceipt {
-  LeaseReceiptID: number;
-  ReceiptNo: string;
-  ReceiptDate: string | Date;
-  ReceivedAmount: number;
-  PaymentType: string;
-  CustomerFullName?: string;
-  InvoiceNo?: string;
-}
+// Type alias for unposted receipts - they are still full LeaseReceipt objects
+// This maintains semantic clarity while ensuring type consistency
+export type UnpostedReceipt = LeaseReceipt;
+
+// Type alias for advance payment receipts
+export type AdvancePaymentReceipt = LeaseReceipt & {
+  IsAdvancePayment: true;
+};
+
+// Type alias for posted receipts
+export type PostedReceipt = LeaseReceipt & {
+  IsPosted: true;
+  PostingID: number;
+};
 
 export interface ReceiptPosting {
   MainPostingID?: number;
@@ -266,3 +271,90 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> 
   [PaymentStatus.CANCELLED]: [], // Terminal status
   [PaymentStatus.REVERSED]: [], // Terminal status
 };
+
+// Utility type guards for better type safety
+export function isUnpostedReceipt(receipt: LeaseReceipt): receipt is UnpostedReceipt {
+  return !receipt.IsPosted;
+}
+
+export function isPostedReceipt(receipt: LeaseReceipt): receipt is PostedReceipt {
+  return receipt.IsPosted && !!receipt.PostingID;
+}
+
+export function isAdvancePaymentReceipt(receipt: LeaseReceipt): receipt is AdvancePaymentReceipt {
+  return receipt.IsAdvancePayment;
+}
+
+export function isReversibleReceipt(receipt: LeaseReceipt): boolean {
+  return receipt.IsPosted && receipt.PaymentStatus !== PaymentStatus.REVERSED && receipt.PaymentStatus !== PaymentStatus.CANCELLED;
+}
+
+export function requiresChequeDetails(paymentType: PaymentType): boolean {
+  return PAYMENT_TYPE_CONFIG[paymentType]?.requiresChequeDetails || false;
+}
+
+export function requiresBankDetails(paymentType: PaymentType): boolean {
+  return PAYMENT_TYPE_CONFIG[paymentType]?.requiresBank || false;
+}
+
+export function requiresTransactionReference(paymentType: PaymentType): boolean {
+  return PAYMENT_TYPE_CONFIG[paymentType]?.requiresTransactionRef || false;
+}
+
+// Enhanced types for specific receipt views
+export interface ReceiptListItem extends LeaseReceipt {
+  // Additional computed properties for list display
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canPost?: boolean;
+  canReverse?: boolean;
+  displayStatus?: string;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH";
+}
+
+export interface ReceiptSummary {
+  totalReceipts: number;
+  totalAmount: number;
+  postedReceipts: number;
+  postedAmount: number;
+  unpostedReceipts: number;
+  unpostedAmount: number;
+  bounced: number;
+  bouncedAmount: number;
+  reversed: number;
+  reversedAmount: number;
+}
+
+// Filter presets for common receipt queries
+export const RECEIPT_FILTER_PRESETS = {
+  TODAY: {
+    filterFromDate: new Date(),
+    filterToDate: new Date(),
+  },
+  THIS_WEEK: {
+    filterFromDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    filterToDate: new Date(),
+  },
+  THIS_MONTH: {
+    filterFromDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    filterToDate: new Date(),
+  },
+  UNPOSTED: {
+    filterIsPosted: false,
+  },
+  POSTED: {
+    filterIsPosted: true,
+  },
+  BOUNCED: {
+    filterPaymentStatus: PaymentStatus.BOUNCED,
+  },
+  PENDING_CLEARANCE: {
+    filterPaymentStatus: PaymentStatus.PENDING_CLEARANCE,
+  },
+  CASH_ONLY: {
+    filterPaymentType: PaymentType.CASH,
+  },
+  CHEQUE_ONLY: {
+    filterPaymentType: PaymentType.CHEQUE,
+  },
+} as const;

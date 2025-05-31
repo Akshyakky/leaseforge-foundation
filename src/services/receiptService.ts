@@ -1,9 +1,8 @@
-// src/services/receiptService.ts - Updated to match stored procedure
+// src/services/receiptService.ts - Updated with corrected return types
 import { BaseService, BaseRequest } from "./BaseService";
 import {
   LeaseReceipt,
   ReceiptStatistics,
-  UnpostedReceipt,
   ReceiptPosting,
   ReceiptReversal,
   ReceiptSearchParams,
@@ -21,7 +20,6 @@ import {
 export type {
   LeaseReceipt,
   ReceiptStatistics,
-  UnpostedReceipt,
   ReceiptPosting,
   ReceiptReversal,
   ReceiptSearchParams,
@@ -288,11 +286,12 @@ class ReceiptService extends BaseService {
 
   /**
    * Get unposted receipts (Mode 8)
+   * Returns full LeaseReceipt objects filtered for unposted status
    * @param companyId - Optional company ID filter
    * @param fiscalYearId - Optional fiscal year ID filter
-   * @returns Array of unposted receipts
+   * @returns Array of unposted receipts with complete information
    */
-  async getUnpostedReceipts(companyId?: number, fiscalYearId?: number): Promise<UnpostedReceipt[]> {
+  async getUnpostedReceipts(companyId?: number, fiscalYearId?: number): Promise<LeaseReceipt[]> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Get Unposted Receipts
       parameters: {
@@ -301,7 +300,7 @@ class ReceiptService extends BaseService {
       },
     };
 
-    const response = await this.execute<UnpostedReceipt[]>(request);
+    const response = await this.execute<LeaseReceipt[]>(request);
     return response.success ? response.data || [] : [];
   }
 
@@ -374,6 +373,8 @@ class ReceiptService extends BaseService {
       Message: response.message || "Failed to reverse receipt GL posting",
     };
   }
+
+  // Convenience methods that return LeaseReceipt[] for consistency
 
   /**
    * Get receipts by customer
