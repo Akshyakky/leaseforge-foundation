@@ -3,18 +3,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { AttachmentPreview } from "./AttachmentPreview";
-import { CustomerAttachment } from "@/types/customerTypes";
+
+interface BaseAttachment {
+  DocumentName?: string;
+  FileContentType?: string;
+  FileSize?: number;
+  CreatedOn?: string | Date;
+  CreatedBy?: string;
+  DocumentDescription?: string;
+  DocTypeName?: string;
+  DocIssueDate?: string | Date;
+  DocExpiryDate?: string | Date;
+  fileUrl?: string;
+}
 
 interface AttachmentGalleryProps {
   isOpen: boolean;
   onClose: () => void;
-  attachments: CustomerAttachment[];
+  attachments: BaseAttachment[];
   initialAttachmentId?: number;
 }
 
 export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, onClose, attachments, initialAttachmentId }) => {
   // Find the initial index based on the initial attachment ID
-  const initialIndex = initialAttachmentId ? attachments.findIndex((a) => a.CustomerAttachmentID === initialAttachmentId) : 0;
+  const initialIndex = initialAttachmentId ? attachments.findIndex((a) => (a as any).PostingAttachmentID === initialAttachmentId) : 0;
 
   const [currentIndex, setCurrentIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
 
@@ -76,7 +88,7 @@ export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, on
           )}
 
           {/* The actual attachment preview */}
-          <div className="h-[calc(90vh-120px)]">
+          <div>
             <AttachmentPreview
               isOpen={true}
               onClose={() => {}} // No-op since we handle closing in the gallery
@@ -86,7 +98,7 @@ export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, on
               fileSize={currentAttachment.FileSize}
               uploadDate={currentAttachment.CreatedOn}
               uploadedBy={currentAttachment.CreatedBy}
-              description={currentAttachment.Remark}
+              description={currentAttachment.DocumentDescription}
               documentType={currentAttachment.DocTypeName}
               issueDate={currentAttachment.DocIssueDate}
               expiryDate={currentAttachment.DocExpiryDate}
@@ -99,7 +111,7 @@ export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, on
           <div className="flex overflow-x-auto p-2 border-t gap-2">
             {attachments.map((attachment, index) => (
               <div
-                key={attachment.CustomerAttachmentID}
+                key={index}
                 className={`w-16 h-16 flex-shrink-0 cursor-pointer rounded overflow-hidden border-2 ${index === currentIndex ? "border-primary" : "border-transparent"}`}
                 onClick={() => setCurrentIndex(index)}
               >

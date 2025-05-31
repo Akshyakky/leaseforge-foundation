@@ -30,6 +30,7 @@ import receiptRoutes from "./receiptRoutes";
 import pettyCashRoutes from "./pettyCashRoutes";
 import fiscalYearRoutes from "./fiscalYearRoutes";
 import generalLedgerRoutes from "./generalLedgerRoutes";
+import paymentVoucherRoutes from "./paymentVoucherRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -112,6 +113,9 @@ const AppRoutes = () => {
 
           {/* Petty Cash Management routes */}
           {pettyCashRoutes}
+
+          {/* Payment Voucher Management routes */}
+          {paymentVoucherRoutes}
 
           {/* Fiscal Year Management routes */}
           {fiscalYearRoutes}
