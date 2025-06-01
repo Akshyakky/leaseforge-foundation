@@ -9,7 +9,7 @@ import { Form } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Save, Plus, Trash2, Upload, FileText, AlertCircle, Calculator } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, Upload, FileText, AlertCircle, Calculator, Building, Network } from "lucide-react";
 import { pettyCashService } from "@/services/pettyCashService";
 import { accountService } from "@/services/accountService";
 import { companyService } from "@/services/companyService";
@@ -19,6 +19,7 @@ import { bankService } from "@/services/bankService";
 import { supplierService } from "@/services/supplierService";
 import { taxService } from "@/services/taxService";
 import { docTypeService } from "@/services/docTypeService";
+import { costCenterService } from "@/services/costCenterService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, TransactionType } from "@/types/pettyCashTypes";
@@ -29,8 +30,9 @@ import { Currency } from "@/services/currencyService";
 import { Bank } from "@/types/bankTypes";
 import { Tax } from "@/services/taxService";
 import { DocType } from "@/services/docTypeService";
+import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 
-// Create the schema for petty cash voucher form validation
+// Enhanced schema with cost centers
 const voucherLineSchema = z.object({
   accountId: z.string().min(1, "Account is required"),
   transactionType: z.enum(["Debit", "Credit"], { required_error: "Transaction type is required" }),
@@ -39,6 +41,11 @@ const voucherLineSchema = z.object({
   customerId: z.string().optional(),
   supplierId: z.string().optional(),
   taxPercentage: z.coerce.number().min(0).max(100).optional(),
+  // Line-level cost centers
+  lineCostCenter1Id: z.string().optional(),
+  lineCostCenter2Id: z.string().optional(),
+  lineCostCenter3Id: z.string().optional(),
+  lineCostCenter4Id: z.string().optional(),
 });
 
 const attachmentSchema = z.object({
@@ -67,6 +74,11 @@ const pettyCashVoucherSchema = z.object({
   bankId: z.string().optional(),
   taxId: z.string().optional(),
   isTaxInclusive: z.boolean().optional(),
+  // Voucher-level cost centers
+  costCenter1Id: z.string().optional(),
+  costCenter2Id: z.string().optional(),
+  costCenter3Id: z.string().optional(),
+  costCenter4Id: z.string().optional(),
   lines: z.array(voucherLineSchema).min(1, "At least one voucher line is required"),
   attachments: z.array(attachmentSchema).optional(),
 });
@@ -92,6 +104,12 @@ const PettyCashForm = () => {
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [docTypes, setDocTypes] = useState<DocType[]>([]);
 
+  // Cost center data
+  const [costCenters1, setCostCenters1] = useState<CostCenter1[]>([]);
+  const [costCenters2, setCostCenters2] = useState<CostCenter2[]>([]);
+  const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
+  const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
+
   // Initialize form
   const form = useForm<PettyCashVoucherFormValues>({
     resolver: zodResolver(pettyCashVoucherSchema),
@@ -111,6 +129,10 @@ const PettyCashForm = () => {
       bankId: "",
       taxId: "",
       isTaxInclusive: false,
+      costCenter1Id: "",
+      costCenter2Id: "",
+      costCenter3Id: "",
+      costCenter4Id: "",
       lines: [{ accountId: "", transactionType: "Debit" as TransactionType, amount: 0 }],
       attachments: [],
     },
@@ -148,7 +170,7 @@ const PettyCashForm = () => {
           if (voucherData.voucher) {
             setVoucher(voucherData.voucher);
 
-            // Set form values
+            // Set form values including cost centers
             form.reset({
               voucherNo: voucherData.voucher.VoucherNo,
               transactionDate: new Date(voucherData.voucher.TransactionDate),
@@ -167,6 +189,11 @@ const PettyCashForm = () => {
               bankId: voucherData.voucher.BankID?.toString() || "",
               taxId: voucherData.voucher.TaxID?.toString() || "",
               isTaxInclusive: voucherData.voucher.IsTaxInclusive || false,
+              // Cost centers
+              costCenter1Id: voucherData.voucher.CostCenter1ID?.toString() || "",
+              costCenter2Id: voucherData.voucher.CostCenter2ID?.toString() || "",
+              costCenter3Id: voucherData.voucher.CostCenter3ID?.toString() || "",
+              costCenter4Id: voucherData.voucher.CostCenter4ID?.toString() || "",
               lines: voucherData.lines.map((line) => ({
                 accountId: line.AccountID.toString(),
                 transactionType: line.TransactionType,
@@ -175,6 +202,11 @@ const PettyCashForm = () => {
                 customerId: line.CustomerID?.toString() || "",
                 supplierId: line.SupplierID?.toString() || "",
                 taxPercentage: line.TaxPercentage || undefined,
+                // Line-level cost centers
+                lineCostCenter1Id: line.LineCostCenter1ID?.toString() || "",
+                lineCostCenter2Id: line.LineCostCenter2ID?.toString() || "",
+                lineCostCenter3Id: line.LineCostCenter3ID?.toString() || "",
+                lineCostCenter4Id: line.LineCostCenter4ID?.toString() || "",
               })),
               attachments: voucherData.attachments.map((attachment) => ({
                 docTypeId: attachment.DocTypeID.toString(),
@@ -186,16 +218,6 @@ const PettyCashForm = () => {
           } else {
             toast.error("Voucher not found");
             navigate("/petty-cash");
-          }
-        } else {
-          // For new voucher, get next voucher number
-          const selectedCompanyId = form.watch("companyId");
-          const selectedFiscalYearId = form.watch("fiscalYearId");
-          if (selectedCompanyId && selectedFiscalYearId) {
-            const nextVoucherNo = await pettyCashService.getNextVoucherNumber(parseInt(selectedCompanyId), parseInt(selectedFiscalYearId));
-            if (nextVoucherNo) {
-              form.setValue("voucherNo", nextVoucherNo);
-            }
           }
         }
       } catch (error) {
@@ -209,10 +231,10 @@ const PettyCashForm = () => {
     initializeForm();
   }, [id, isEdit, navigate, form]);
 
-  // Fetch reference data
+  // Fetch reference data including cost centers
   const fetchReferenceData = async () => {
     try {
-      const [accountsData, companiesData, fiscalYearsData, currenciesData, banksData, taxesData, docTypesData] = await Promise.all([
+      const [accountsData, companiesData, fiscalYearsData, currenciesData, banksData, taxesData, docTypesData, costCenters1Data] = await Promise.all([
         accountService.getAllAccounts(),
         companyService.getCompaniesForDropdown(true),
         fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
@@ -220,6 +242,7 @@ const PettyCashForm = () => {
         bankService.getAllBanks(),
         taxService.getAllTaxes(),
         docTypeService.getAllDocTypes(),
+        costCenterService.getCostCentersByLevel(1),
       ]);
 
       setAccounts(accountsData.filter((account) => account.IsActive && account.IsPostable));
@@ -229,31 +252,66 @@ const PettyCashForm = () => {
       setBanks(banksData.filter((bank) => bank.IsActive));
       setTaxes(taxesData);
       setDocTypes(docTypesData);
+      setCostCenters1(costCenters1Data as CostCenter1[]);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");
     }
   };
 
-  // Watch for company/fiscal year changes to generate voucher number
+  // Load child cost centers when parent changes
+  const loadChildCostCenters = async (level: number, parentIds: { CostCenter1ID?: number; CostCenter2ID?: number; CostCenter3ID?: number }) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setCostCenters2(childCostCenters as CostCenter2[]);
+          break;
+        case 3:
+          setCostCenters3(childCostCenters as CostCenter3[]);
+          break;
+        case 4:
+          setCostCenters4(childCostCenters as CostCenter4[]);
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading cost centers level ${level}:`, error);
+    }
+  };
+
+  // Watch for cost center hierarchy changes
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      if ((name === "companyId" || name === "fiscalYearId") && !isEdit) {
-        const companyId = value.companyId;
-        const fiscalYearId = value.fiscalYearId;
-
-        if (companyId && fiscalYearId) {
-          pettyCashService.getNextVoucherNumber(parseInt(companyId), parseInt(fiscalYearId), value.transactionDate).then((nextVoucherNo) => {
-            if (nextVoucherNo) {
-              form.setValue("voucherNo", nextVoucherNo);
-            }
-          });
-        }
+      if (name === "costCenter1Id" && value.costCenter1Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id);
+        loadChildCostCenters(2, { CostCenter1ID: costCenter1Id });
+        // Reset child selections
+        form.setValue("costCenter2Id", "");
+        form.setValue("costCenter3Id", "");
+        form.setValue("costCenter4Id", "");
+        setCostCenters3([]);
+        setCostCenters4([]);
+      } else if (name === "costCenter2Id" && value.costCenter2Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id || "0");
+        const costCenter2Id = parseInt(value.costCenter2Id);
+        loadChildCostCenters(3, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id });
+        // Reset child selections
+        form.setValue("costCenter3Id", "");
+        form.setValue("costCenter4Id", "");
+        setCostCenters4([]);
+      } else if (name === "costCenter3Id" && value.costCenter3Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id || "0");
+        const costCenter2Id = parseInt(value.costCenter2Id || "0");
+        const costCenter3Id = parseInt(value.costCenter3Id);
+        loadChildCostCenters(4, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id, CostCenter3ID: costCenter3Id });
+        // Reset child selections
+        form.setValue("costCenter4Id", "");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form, isEdit]);
+  }, [form]);
 
   // Submit handler for the voucher form
   const onSubmit = async (data: PettyCashVoucherFormValues) => {
@@ -270,7 +328,7 @@ const PettyCashForm = () => {
         return;
       }
 
-      // Prepare voucher data
+      // Prepare voucher data with cost centers
       const voucherData = {
         VoucherNo: data.voucherNo,
         TransactionDate: data.transactionDate.toISOString(),
@@ -289,9 +347,14 @@ const PettyCashForm = () => {
         BankID: data.bankId ? parseInt(data.bankId) : undefined,
         TaxID: data.taxId ? parseInt(data.taxId) : undefined,
         IsTaxInclusive: data.isTaxInclusive || false,
+        // Voucher-level cost centers
+        CostCenter1ID: data.costCenter1Id ? parseInt(data.costCenter1Id) : undefined,
+        CostCenter2ID: data.costCenter2Id ? parseInt(data.costCenter2Id) : undefined,
+        CostCenter3ID: data.costCenter3Id ? parseInt(data.costCenter3Id) : undefined,
+        CostCenter4ID: data.costCenter4Id ? parseInt(data.costCenter4Id) : undefined,
       };
 
-      // Prepare lines data
+      // Prepare lines data with line-level cost centers
       const linesData = data.lines.map((line) => ({
         AccountID: parseInt(line.accountId),
         TransactionType: line.transactionType as TransactionType,
@@ -303,6 +366,11 @@ const PettyCashForm = () => {
         LineDescription: line.description?.trim() || undefined,
         CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
         SupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
+        // Line-level cost centers (these override voucher-level if specified)
+        LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
+        LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
+        LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
+        LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
       }));
 
       // Prepare attachments data
@@ -483,6 +551,69 @@ const PettyCashForm = () => {
                 <FormField form={form} name="exchangeRate" label="Exchange Rate" type="number" step="0.0001" placeholder="1.0000" description="Exchange rate to base currency" />
               </div>
 
+              {/* Cost Center Section */}
+              <Separator />
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Network className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Cost Centers</h3>
+                  <Badge variant="secondary">Voucher Level</Badge>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <FormField
+                    form={form}
+                    name="costCenter1Id"
+                    label="Cost Center Level 1"
+                    type="select"
+                    options={costCenters1.map((cc) => ({
+                      label: cc.Description,
+                      value: cc.CostCenter1ID.toString(),
+                    }))}
+                    placeholder="Select level 1"
+                    description="Primary cost center"
+                  />
+                  <FormField
+                    form={form}
+                    name="costCenter2Id"
+                    label="Cost Center Level 2"
+                    type="select"
+                    options={costCenters2.map((cc) => ({
+                      label: cc.Description,
+                      value: cc.CostCenter2ID.toString(),
+                    }))}
+                    placeholder="Select level 2"
+                    description="Secondary cost center"
+                    disabled={!form.watch("costCenter1Id")}
+                  />
+                  <FormField
+                    form={form}
+                    name="costCenter3Id"
+                    label="Cost Center Level 3"
+                    type="select"
+                    options={costCenters3.map((cc) => ({
+                      label: cc.Description,
+                      value: cc.CostCenter3ID.toString(),
+                    }))}
+                    placeholder="Select level 3"
+                    description="Tertiary cost center"
+                    disabled={!form.watch("costCenter2Id")}
+                  />
+                  <FormField
+                    form={form}
+                    name="costCenter4Id"
+                    label="Cost Center Level 4"
+                    type="select"
+                    options={costCenters4.map((cc) => ({
+                      label: cc.Description,
+                      value: cc.CostCenter4ID.toString(),
+                    }))}
+                    placeholder="Select level 4"
+                    description="Quaternary cost center"
+                    disabled={!form.watch("costCenter3Id")}
+                  />
+                </div>
+              </div>
+
               {/* Bank and Cheque Details */}
               <Separator />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -528,7 +659,7 @@ const PettyCashForm = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle>Voucher Lines</CardTitle>
-                  <CardDescription>Add debit and credit entries</CardDescription>
+                  <CardDescription>Add debit and credit entries with optional line-level cost centers</CardDescription>
                 </div>
                 <Button type="button" variant="outline" onClick={addVoucherLine}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -541,10 +672,11 @@ const PettyCashForm = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[250px]">Account</TableHead>
-                      <TableHead className="w-[120px]">Type</TableHead>
+                      <TableHead className="w-[200px]">Account</TableHead>
+                      <TableHead className="w-[100px]">Type</TableHead>
                       <TableHead className="w-[120px]">Amount</TableHead>
-                      <TableHead>Description</TableHead>
+                      <TableHead className="w-[150px]">Description</TableHead>
+                      <TableHead className="w-[150px]">Cost Centers</TableHead>
                       <TableHead className="w-[80px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -561,7 +693,7 @@ const PettyCashForm = () => {
                               value: account.AccountID.toString(),
                             }))}
                             placeholder="Select account"
-                            className="min-w-[200px]"
+                            className="min-w-[180px]"
                           />
                         </TableCell>
                         <TableCell>
@@ -579,7 +711,22 @@ const PettyCashForm = () => {
                           <FormField form={form} name={`lines.${index}.amount`} type="number" step="0.01" placeholder="0.00" className="w-[100px]" />
                         </TableCell>
                         <TableCell>
-                          <FormField form={form} name={`lines.${index}.description`} placeholder="Line description" className="min-w-[150px]" />
+                          <FormField form={form} name={`lines.${index}.description`} placeholder="Line description" className="min-w-[130px]" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <FormField
+                              form={form}
+                              name={`lines.${index}.lineCostCenter1Id`}
+                              type="select"
+                              options={costCenters1.map((cc) => ({
+                                label: cc.Description,
+                                value: cc.CostCenter1ID.toString(),
+                              }))}
+                              placeholder="CC Level 1"
+                              className="min-w-[130px] text-xs"
+                            />
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Button type="button" variant="ghost" size="icon" onClick={() => removeVoucherLine(index)} disabled={lineFields.length === 1}>

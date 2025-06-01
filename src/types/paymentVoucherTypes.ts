@@ -1,109 +1,116 @@
 // src/types/paymentVoucherTypes.ts
+
 export interface BasePaymentVoucher {
   CreatedBy?: string;
-  CreatedOn?: string | Date;
-  CreatedID?: number;
+  CreatedOn?: string;
   UpdatedBy?: string;
-  UpdatedOn?: string | Date;
-  UpdatedID?: number;
+  UpdatedOn?: string;
   DeletedBy?: string;
-  DeletedOn?: string | Date;
-  DeletedID?: number;
-  RecordStatus?: number;
+  DeletedOn?: string;
+  RecordStatus?: boolean;
 }
 
 export interface PaymentVoucher extends BasePaymentVoucher {
   PostingID?: number;
   VoucherNo: string;
+  VoucherType?: string;
   TransactionDate: string | Date;
-  PostingDate: string | Date;
+  PostingDate?: string | Date;
   CompanyID: number;
   FiscalYearID: number;
-  SupplierID?: number;
-  PaymentType: PaymentType;
-  PaymentStatus: PaymentStatus;
-  TotalAmount: number;
-  CurrencyID?: number;
+  CurrencyID: number;
   ExchangeRate?: number;
-  BaseCurrencyAmount?: number;
-
-  // Bank/Cheque Details
-  BankID?: number;
-  BankAccountNo?: string;
-  ChequeNo?: string;
-  ChequeDate?: string | Date;
-  TransactionReference?: string;
-
-  // GL Account Details
-  BankAccountID?: number; // Credit account (bank/cash account)
-  PayableAccountID?: number; // Debit account (supplier payable account)
-
-  // Description and Notes
   Description?: string;
   Narration?: string;
-  InternalNotes?: string;
 
-  // Cost Center Information
+  // Payment Specific Fields
+  PaymentType: PaymentType;
+  PaymentAccountID: number;
+  SupplierID?: number;
+  PaidTo?: string;
+  RefNo?: string;
+  ChequeNo?: string;
+  ChequeDate?: string | Date;
+  BankID?: number;
+  TotalAmount: number;
+  PaymentStatus?: PaymentStatus;
+
+  // Cost Center Parameters
   CostCenter1ID?: number;
   CostCenter2ID?: number;
   CostCenter3ID?: number;
   CostCenter4ID?: number;
+  CopyCostCenters?: boolean;
 
-  // Tax Information
+  // Tax Parameters
   TaxID?: number;
-  TaxPercentage?: number;
-  TaxAmount?: number;
   IsTaxInclusive?: boolean;
-  BaseAmount?: number;
 
   // Reference Information
-  ReferenceType?: string; // 'Invoice', 'Advance', 'Expense', 'Other'
+  ReferenceType?: string;
   ReferenceID?: number;
   ReferenceNo?: string;
 
-  // Approval Workflow
-  ApprovedBy?: number;
-  ApprovedOn?: string | Date;
-  RequiresApproval?: boolean;
-
-  // Additional Parameters
-  AutoPostToGL?: boolean;
-  IsRecurring?: boolean;
-  RecurrencePattern?: string;
-
-  // Joined fields from related tables
-  SupplierName?: string;
+  // Additional fields from joins
   CompanyName?: string;
+  FYDescription?: string;
   CurrencyName?: string;
   BankName?: string;
-  FYDescription?: string;
-  BankAccountName?: string;
-  PayableAccountName?: string;
-  TaxName?: string;
+  PaymentAccountName?: string;
+  SupplierName?: string;
+  CostCenter1Name?: string;
+  CostCenter2Name?: string;
+  CostCenter3Name?: string;
+  CostCenter4Name?: string;
+
+  // Calculated fields
+  TotalDebits?: number;
+  TotalCredits?: number;
+
+  // Approval fields
+  ApprovedBy?: number;
+  ApprovedOn?: string;
   ApprovedByUserName?: string;
+
+  // Reversal fields
+  IsReversed?: boolean;
+  ReversedBy?: number;
+  ReversedOn?: string;
+  ReversedByUserName?: string;
+  ReversalReason?: string;
+  ReversalPostingID?: number;
 }
 
 export interface PaymentVoucherLine extends BasePaymentVoucher {
-  PostingID: number;
-  Line_No?: number;
+  PostingID?: number;
+  VoucherNo?: string;
   AccountID: number;
-  Description?: string;
+  TransactionType: TransactionType;
   DebitAmount: number;
   CreditAmount: number;
-  TaxID?: number;
-  TaxPercentage?: number;
-  TaxAmount?: number;
   BaseAmount?: number;
-  CostCenter1ID?: number;
-  CostCenter2ID?: number;
-  CostCenter3ID?: number;
-  CostCenter4ID?: number;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  LineDescription?: string;
 
-  // Joined fields
+  // Line-specific cost centers
+  LineCostCenter1ID?: number;
+  LineCostCenter2ID?: number;
+  LineCostCenter3ID?: number;
+  LineCostCenter4ID?: number;
+
+  // Customer/Supplier assignment
+  CustomerID?: number;
+  LineSupplierID?: number;
+
+  // Currency conversion
+  BaseCurrencyAmount?: number;
+
+  // Additional fields from joins
   AccountCode?: string;
   AccountName?: string;
-  TransactionType?: string;
-  TaxName?: string;
+  CustomerFullName?: string;
+  SupplierName?: string;
   CostCenter1Name?: string;
   CostCenter2Name?: string;
   CostCenter3Name?: string;
@@ -116,297 +123,491 @@ export interface PaymentVoucherAttachment extends BasePaymentVoucher {
   DocTypeID: number;
   DocumentName: string;
   FilePath?: string;
-  FileContent?: string | ArrayBuffer | null; // Base64 encoded string
-  FileContentType?: string;
-  FileSize?: number;
-  DocumentDescription?: string;
-  IsRequired?: boolean;
-  DisplayOrder?: number;
-  UploadedDate?: string | Date;
-  UploadedByUserID?: number;
-
-  // Joined fields
-  DocTypeName?: string;
-
-  // For UI only - not sent to backend
-  file?: File;
-  fileUrl?: string; // For displaying preview
-}
-
-export interface PaymentVoucherStatistics {
-  statusCounts: {
-    PaymentStatus: string;
-    VoucherCount: number;
-    TotalAmount: number;
-  }[];
-  paymentTypeCounts: {
-    PaymentType: string;
-    VoucherCount: number;
-    TotalAmount: number;
-  }[];
-  supplierCounts: {
-    SupplierID: number;
-    SupplierName: string;
-    VoucherCount: number;
-    TotalAmount: number;
-  }[];
-  companyCounts: {
-    CompanyID: number;
-    CompanyName: string;
-    VoucherCount: number;
-    TotalAmount: number;
-  }[];
-}
-
-export interface PaymentVoucherSummaryReport {
-  CompanyID: number;
-  CompanyName: string;
-  PostingStatus: string;
-  VoucherCount: number;
-  TotalAmount: number;
-  AverageAmount: number;
-}
-
-// Search parameters
-export interface PaymentVoucherSearchParams {
-  searchText?: string;
-  filterSupplierID?: number;
-  filterBankID?: number;
-  filterPaymentType?: string;
-  filterPaymentStatus?: string;
-  filterCompanyID?: number;
-  filterFiscalYearID?: number;
-  dateFrom?: string | Date;
-  dateTo?: string | Date;
-}
-
-// Request parameters for payment voucher operations
-export interface PaymentVoucherRequest {
-  voucher: Partial<PaymentVoucher>;
-  paymentLines?: Partial<PaymentVoucherLine>[];
-  attachments?: Partial<PaymentVoucherAttachment>[];
-}
-
-export interface PaymentVoucherUpdateRequest {
-  voucher: Partial<PaymentVoucher> & { VoucherNo: string };
-  paymentLines?: Partial<PaymentVoucherLine>[];
-  attachments?: Partial<PaymentVoucherAttachment>[];
-}
-
-export interface PaymentVoucherApprovalRequest {
-  VoucherNo: string;
-  ApprovedBy?: number;
-  ApprovedOn?: string | Date;
-}
-
-export interface PaymentVoucherPostingRequest {
-  VoucherNo: string;
-  AutoPostToGL?: boolean;
-}
-
-export interface PaymentVoucherReversalRequest {
-  VoucherNo: string;
-  ReversalReason?: string;
-}
-
-export interface PaymentVoucherAttachmentRequest {
-  VoucherNo?: string;
-  PostingAttachmentID?: number;
-  DocTypeID: number;
-  DocumentName: string;
-  FilePath?: string;
   FileContent?: string | ArrayBuffer | null;
   FileContentType?: string;
   FileSize?: number;
   DocumentDescription?: string;
+  UploadedDate?: string;
+  UploadedByUserID?: number;
   IsRequired?: boolean;
   DisplayOrder?: number;
+
+  // Additional fields from joins
+  DocTypeName?: string;
+  UploadedByUserName?: string;
+
+  // For UI only - not sent to backend
+  file?: File;
+  fileUrl?: string;
 }
 
-// Payment types enum
+// Enums and supporting types
 export enum PaymentType {
   CASH = "Cash",
   CHEQUE = "Cheque",
   BANK_TRANSFER = "Bank Transfer",
+  ONLINE = "Online",
+  WIRE_TRANSFER = "Wire Transfer",
   CREDIT_CARD = "Credit Card",
-  ONLINE_PAYMENT = "Online Payment",
+  DEBIT_CARD = "Debit Card",
 }
 
-// Payment status enum
 export enum PaymentStatus {
   DRAFT = "Draft",
   PENDING = "Pending",
-  APPROVED = "Approved",
-  POSTED = "Posted",
+  PAID = "Paid",
+  REJECTED = "Rejected",
   CANCELLED = "Cancelled",
+  REVERSED = "Reversed",
 }
 
-// Reference types enum
-export enum ReferenceType {
-  INVOICE = "Invoice",
-  ADVANCE = "Advance",
-  EXPENSE = "Expense",
-  OTHER = "Other",
+export enum TransactionType {
+  DEBIT = "Debit",
+  CREDIT = "Credit",
 }
 
-// API response interface
+export enum ApprovalAction {
+  APPROVE = "Approve",
+  REJECT = "Reject",
+}
+
+// Supporting types for dropdowns
+export interface Account {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeID?: number;
+  AccountTypeName?: string;
+  IsActive?: boolean;
+  IsPostable?: boolean;
+  CurrencyID?: number;
+  Balance?: number;
+}
+
+export interface Company {
+  CompanyID: number;
+  CompanyName: string;
+  CompanyNo?: string;
+  IsActive?: boolean;
+}
+
+export interface FiscalYear {
+  FiscalYearID: number;
+  FYCode: string;
+  FYDescription: string;
+  StartDate: string | Date;
+  EndDate: string | Date;
+  IsActive?: boolean;
+  IsClosed?: boolean;
+}
+
+export interface Currency {
+  CurrencyID: number;
+  CurrencyCode: string;
+  CurrencyName: string;
+  ConversionRate?: number;
+  IsDefault?: boolean;
+}
+
+export interface Bank {
+  BankID: number;
+  BankCode: string;
+  BankName: string;
+  SwiftCode?: string;
+  CountryID?: number;
+  IsActive?: boolean;
+}
+
+export interface CostCenter {
+  CostCenter1ID?: number;
+  CostCenter2ID?: number;
+  CostCenter3ID?: number;
+  CostCenter4ID?: number;
+  Description: string;
+}
+
+export interface Customer {
+  CustomerID: number;
+  CustomerNo?: string;
+  CustomerFullName: string;
+  AccountID?: number;
+}
+
+export interface Supplier {
+  SupplierID: number;
+  SupplierNo?: string;
+  SupplierName: string;
+  AccountID?: number;
+  OutstandingBalance?: number;
+  PaymentTermID?: number;
+  VatRegNo?: string;
+  Email?: string;
+  PhoneNo?: string;
+  Address?: string;
+}
+
+export interface DocType {
+  DocTypeID: number;
+  Description: string;
+}
+
+export interface Tax {
+  TaxID: number;
+  TaxCode: string;
+  TaxName: string;
+  TaxRate: number;
+  IsActive?: boolean;
+}
+
+// Request/Response types
+export interface PaymentVoucherRequest {
+  voucher: Partial<PaymentVoucher>;
+  lines: Partial<PaymentVoucherLine>[];
+  attachments?: Partial<PaymentVoucherAttachment>[];
+}
+
+export interface PaymentVoucherResponse {
+  voucher: PaymentVoucher | null;
+  lines: PaymentVoucherLine[];
+  attachments: PaymentVoucherAttachment[];
+}
+
+export interface PaymentSearchFilters {
+  searchText?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  companyId?: number;
+  fiscalYearId?: number;
+  status?: PaymentStatus;
+  supplierId?: number;
+  paymentType?: PaymentType;
+  accountId?: number;
+}
+
+export interface PaymentSummaryReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  TotalDebits: number;
+  TotalCredits: number;
+  NetAmount: number;
+  VoucherCount: number;
+}
+
+export interface SupplierBalance {
+  SupplierID: number;
+  SupplierNo?: string;
+  SupplierName: string;
+  OutstandingBalance: number;
+  BalanceDate: Date;
+}
+
+export interface SupplierPaymentHistory {
+  VoucherNo: string;
+  TransactionDate: Date;
+  PostingDate: Date;
+  PaymentStatus: PaymentStatus;
+  ChequeNo?: string;
+  ChequeDate?: Date;
+  Narration?: string;
+  TotalAmount: number;
+  SupplierName: string;
+  CreatedBy: string;
+  CreatedOn: Date;
+}
+
+export interface PaymentStatistics {
+  TotalVouchers: number;
+  DraftVouchers: number;
+  PendingVouchers: number;
+  PaidVouchers: number;
+  RejectedVouchers: number;
+  TotalAmount: number;
+  MonthlyTrend: {
+    Month: string;
+    Amount: number;
+    Count: number;
+  }[];
+  SupplierDistribution: {
+    SupplierName: string;
+    Amount: number;
+    Percentage: number;
+  }[];
+  PaymentTypeDistribution: {
+    PaymentType: string;
+    Amount: number;
+    Count: number;
+  }[];
+}
+
+// API Response interfaces
 export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
-  VoucherNo?: string;
-  PostingID?: number;
-  NewPostingID?: number;
-  AttachmentID?: number;
-  NewAttachmentID?: number;
-  ReversalVoucherNo?: string;
   [key: string]: any;
   data?: T;
 }
 
-// Payment voucher status constants
-export const PAYMENT_VOUCHER_STATUS = {
-  DRAFT: "Draft",
-  PENDING: "Pending",
-  APPROVED: "Approved",
-  POSTED: "Posted",
-  CANCELLED: "Cancelled",
-} as const;
-
-// Payment type constants
-export const PAYMENT_TYPE = {
-  CASH: "Cash",
-  CHEQUE: "Cheque",
-  BANK_TRANSFER: "Bank Transfer",
-  CREDIT_CARD: "Credit Card",
-  ONLINE_PAYMENT: "Online Payment",
-} as const;
-
-// Reference type constants
-export const REFERENCE_TYPE = {
-  INVOICE: "Invoice",
-  ADVANCE: "Advance",
-  EXPENSE: "Expense",
-  OTHER: "Other",
-} as const;
-
-// Validation rules for payment vouchers
-export interface PaymentVoucherValidation {
-  requiresSupplier: boolean;
-  requiresBankDetails: boolean;
-  requiresChequeDetails: boolean;
-  requiresApproval: boolean;
-  allowsMultipleLines: boolean;
+export interface CreatePaymentVoucherResponse {
+  success: boolean;
+  message: string;
+  voucherNo?: string;
+  postingId?: number;
 }
 
-// Payment type configurations
-export const PAYMENT_TYPE_CONFIG: Record<PaymentType, PaymentVoucherValidation> = {
-  [PaymentType.CASH]: {
-    requiresSupplier: true,
-    requiresBankDetails: false,
-    requiresChequeDetails: false,
-    requiresApproval: true,
-    allowsMultipleLines: true,
-  },
-  [PaymentType.CHEQUE]: {
-    requiresSupplier: true,
-    requiresBankDetails: true,
-    requiresChequeDetails: true,
-    requiresApproval: true,
-    allowsMultipleLines: true,
-  },
-  [PaymentType.BANK_TRANSFER]: {
-    requiresSupplier: true,
-    requiresBankDetails: true,
-    requiresChequeDetails: false,
-    requiresApproval: true,
-    allowsMultipleLines: true,
-  },
-  [PaymentType.CREDIT_CARD]: {
-    requiresSupplier: true,
-    requiresBankDetails: false,
-    requiresChequeDetails: false,
-    requiresApproval: true,
-    allowsMultipleLines: true,
-  },
-  [PaymentType.ONLINE_PAYMENT]: {
-    requiresSupplier: true,
-    requiresBankDetails: false,
-    requiresChequeDetails: false,
-    requiresApproval: true,
-    allowsMultipleLines: true,
-  },
-};
-
-// Status transitions allowed for payment vouchers
-export const ALLOWED_STATUS_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
-  [PaymentStatus.DRAFT]: [PaymentStatus.PENDING, PaymentStatus.CANCELLED],
-  [PaymentStatus.PENDING]: [PaymentStatus.APPROVED, PaymentStatus.CANCELLED, PaymentStatus.DRAFT],
-  [PaymentStatus.APPROVED]: [PaymentStatus.POSTED, PaymentStatus.CANCELLED],
-  [PaymentStatus.POSTED]: [], // Terminal status (can only be reversed)
-  [PaymentStatus.CANCELLED]: [], // Terminal status
-};
-
-// Utility type guards
-export function isDraftVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.DRAFT;
+export interface ApprovalResponse {
+  success: boolean;
+  message: string;
 }
 
-export function isApprovedVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.APPROVED;
+export interface ReversalResponse {
+  success: boolean;
+  message: string;
+  reversalVoucherNo?: string;
 }
 
-export function isPostedVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.POSTED;
+export interface AttachmentResponse {
+  success: boolean;
+  message: string;
+  attachmentId?: number;
 }
 
-export function canEditVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.DRAFT || voucher.PaymentStatus === PaymentStatus.PENDING;
+export interface NextVoucherNumberResponse {
+  success: boolean;
+  message: string;
+  nextVoucherNo?: string;
 }
 
-export function canApproveVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.PENDING;
+export interface AccountBalanceResponse {
+  success: boolean;
+  message: string;
+  accountBalance?: number;
 }
 
-export function canPostVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.APPROVED;
+export interface SupplierBalanceResponse {
+  success: boolean;
+  message: string;
+  supplierBalance?: number;
+  supplierId?: number;
 }
 
-export function canReverseVoucher(voucher: PaymentVoucher): boolean {
-  return voucher.PaymentStatus === PaymentStatus.POSTED;
-}
+// Form validation schemas
+export interface PaymentVoucherFormData {
+  // Header information
+  voucherNo?: string;
+  transactionDate: Date;
+  postingDate?: Date;
+  companyId: number;
+  fiscalYearId: number;
+  currencyId: number;
+  exchangeRate?: number;
+  description?: string;
+  narration?: string;
 
-export function requiresChequeDetails(paymentType: PaymentType): boolean {
-  return PAYMENT_TYPE_CONFIG[paymentType]?.requiresChequeDetails || false;
-}
-
-export function requiresBankDetails(paymentType: PaymentType): boolean {
-  return PAYMENT_TYPE_CONFIG[paymentType]?.requiresBankDetails || false;
-}
-
-// Enhanced types for specific payment voucher views
-export interface PaymentVoucherListItem extends PaymentVoucher {
-  // Additional computed properties for list display
-  canEdit?: boolean;
-  canDelete?: boolean;
-  canApprove?: boolean;
-  canPost?: boolean;
-  canReverse?: boolean;
-  displayStatus?: string;
-  lineCount?: number;
-  attachmentCount?: number;
-}
-
-export interface PaymentVoucherSummary {
-  totalVouchers: number;
+  // Payment specific
+  paymentType: PaymentType;
+  paymentAccountId: number;
+  supplierId?: number;
+  paidTo?: string;
+  refNo?: string;
+  chequeNo?: string;
+  chequeDate?: Date;
+  bankId?: number;
   totalAmount: number;
-  draftCount: number;
-  draftAmount: number;
-  pendingCount: number;
-  pendingAmount: number;
-  approvedCount: number;
-  approvedAmount: number;
-  postedCount: number;
-  postedAmount: number;
-  cancelledCount: number;
-  cancelledAmount: number;
+
+  // Cost centers
+  costCenter1Id?: number;
+  costCenter2Id?: number;
+  costCenter3Id?: number;
+  costCenter4Id?: number;
+  copyCostCenters?: boolean;
+
+  // Tax information
+  taxId?: number;
+  isTaxInclusive?: boolean;
+
+  // Reference
+  referenceType?: string;
+  referenceId?: number;
+  referenceNo?: string;
+
+  // Voucher lines (debit entries)
+  lines: {
+    accountId: number;
+    amount: number;
+    description?: string;
+    customerId?: number;
+    lineSupplier?: number;
+    taxPercentage?: number;
+    lineCostCenter1Id?: number;
+    lineCostCenter2Id?: number;
+    lineCostCenter3Id?: number;
+    lineCostCenter4Id?: number;
+  }[];
+
+  // Attachments
+  attachments?: {
+    docTypeId: number;
+    documentName: string;
+    file?: File;
+    documentDescription?: string;
+    isRequired?: boolean;
+  }[];
+}
+
+// Error types
+export interface PaymentVoucherError {
+  field?: string;
+  message: string;
+  code?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: PaymentVoucherError[];
+}
+
+// Utility types
+export type PaymentVoucherLineInput = Omit<PaymentVoucherLine, "PostingID" | "VoucherNo" | keyof BasePaymentVoucher>;
+export type PaymentAttachmentInput = Omit<PaymentVoucherAttachment, "PostingAttachmentID" | "PostingID" | "UploadedDate" | "UploadedByUserID" | keyof BasePaymentVoucher>;
+export type PaymentVoucherInput = Omit<PaymentVoucher, "PostingID" | keyof BasePaymentVoucher>;
+
+// Default export types for common usage
+export type PaymentVoucherCreate = PaymentVoucherRequest;
+export type PaymentVoucherUpdate = PaymentVoucherRequest & { voucherNo: string };
+export type PaymentVoucherDetail = PaymentVoucherResponse;
+
+// Payment method specific interfaces
+export interface ChequePaymentDetails {
+  chequeNo: string;
+  chequeDate: Date;
+  bankId: number;
+  payeeInfo?: string;
+}
+
+export interface BankTransferDetails {
+  fromAccountId: number;
+  toAccountId: number;
+  transferReference?: string;
+  swiftCode?: string;
+  routingNumber?: string;
+}
+
+export interface OnlinePaymentDetails {
+  transactionId?: string;
+  paymentGateway?: string;
+  authorizationCode?: string;
+  processingFee?: number;
+}
+
+// Report specific types
+export interface PaymentAnalytics {
+  periodComparison: {
+    currentPeriod: {
+      amount: number;
+      count: number;
+      startDate: Date;
+      endDate: Date;
+    };
+    previousPeriod: {
+      amount: number;
+      count: number;
+      startDate: Date;
+      endDate: Date;
+    };
+    growthRate: number;
+  };
+  topSuppliers: {
+    supplierId: number;
+    supplierName: string;
+    totalPaid: number;
+    voucherCount: number;
+    lastPaymentDate: Date;
+  }[];
+  paymentTrends: {
+    date: Date;
+    amount: number;
+    count: number;
+  }[];
+  averagePaymentSize: number;
+  largestPayment: {
+    voucherNo: string;
+    amount: number;
+    supplierName: string;
+    date: Date;
+  };
+}
+
+// Workflow and approval types
+export interface PaymentApprovalWorkflow {
+  currentStage: string;
+  nextStage?: string;
+  approvalLevels: {
+    level: number;
+    approverRole: string;
+    approverUserId?: number;
+    approvedDate?: Date;
+    comments?: string;
+    status: "Pending" | "Approved" | "Rejected";
+  }[];
+  canApprove: boolean;
+  canReject: boolean;
+  requiresApproval: boolean;
+}
+
+// Import/Export types
+export interface PaymentVoucherImportTemplate {
+  transactionDate: string;
+  paymentType: string;
+  paymentAccount: string;
+  supplierCode?: string;
+  supplierName?: string;
+  description: string;
+  totalAmount: number;
+  chequeNo?: string;
+  chequeDate?: string;
+  accountCode: string;
+  accountAmount: number;
+  accountDescription?: string;
+}
+
+export interface PaymentVoucherExportData extends PaymentVoucher {
+  lines: PaymentVoucherLine[];
+  totalLineAmount: number;
+  attachmentCount: number;
+}
+
+// Audit trail types
+export interface PaymentAuditLog {
+  auditId: number;
+  voucherNo: string;
+  action: "Created" | "Updated" | "Approved" | "Rejected" | "Paid" | "Reversed" | "Deleted";
+  userId: number;
+  userName: string;
+  timestamp: Date;
+  oldValues?: Record<string, any>;
+  newValues?: Record<string, any>;
+  comments?: string;
+  ipAddress?: string;
+}
+
+// Integration types for external systems
+export interface BankIntegrationPayment {
+  voucherNo: string;
+  bankTransactionId: string;
+  bankReference: string;
+  processingDate: Date;
+  clearedDate?: Date;
+  bankFees?: number;
+  exchangeRateUsed?: number;
+  status: "Pending" | "Cleared" | "Failed" | "Returned";
+}
+
+export interface ERPIntegrationMapping {
+  erpVoucherNo: string;
+  externalSystemId: string;
+  externalReference: string;
+  syncStatus: "Pending" | "Synced" | "Failed";
+  lastSyncDate: Date;
+  errorMessage?: string;
 }
