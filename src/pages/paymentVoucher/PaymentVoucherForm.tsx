@@ -1,168 +1,193 @@
-// src/pages/paymentVoucher/PaymentVoucherForm.tsx
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form } from "@/components/ui/form";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Trash2, Loader2, Save, XCircle, Upload, FileText, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, Upload, FileText, AlertCircle, Calculator, Building, Network, CreditCard, Receipt } from "lucide-react";
+import { paymentVoucherService } from "@/services/paymentVoucherService";
+import { accountService } from "@/services/accountService";
+import { companyService } from "@/services/companyService";
+import { fiscalYearService } from "@/services/fiscalYearService";
+import { currencyService } from "@/services/currencyService";
+import { bankService } from "@/services/bankService";
+import { supplierService } from "@/services/supplierService";
+import { taxService } from "@/services/taxService";
+import { docTypeService } from "@/services/docTypeService";
+import { costCenterService } from "@/services/costCenterService";
+import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
-import { paymentVoucherService, PaymentVoucher, PaymentVoucherLine, PaymentVoucherAttachment, PaymentType, PaymentStatus } from "@/services/paymentVoucherService";
-import { Company } from "@/types/customerTypes";
-import { Supplier } from "@/types/supplierTypes";
-import { accountService, companyService, costCenterService, Currency, currencyService, fiscalYearService, supplierService, bankService } from "@/services";
-import { taxService, Tax } from "@/services/taxService";
+import { PaymentVoucher, PaymentVoucherLine, PaymentVoucherAttachment, PaymentType, PaymentStatus, TransactionType } from "@/types/paymentVoucherTypes";
 import { Account } from "@/types/accountTypes";
-import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
+import { Company } from "@/services/companyService";
 import { FiscalYear } from "@/types/fiscalYearTypes";
-import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { Currency } from "@/services/currencyService";
 import { Bank } from "@/types/bankTypes";
+import { Tax } from "@/services/taxService";
+import { DocType } from "@/services/docTypeService";
+import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
+import { Supplier } from "@/types/supplierTypes";
 
-// Define the Zod schema for a single Payment Line
-const paymentLineSchema = z.object({
-  PostingID: z.number().optional(),
-  Line_No: z.number().optional(),
-  AccountID: z.number().min(1, "Account is required."),
-  Description: z.string().max(500, "Description cannot exceed 500 characters.").optional(),
-  DebitAmount: z.number().min(0, "Debit amount cannot be negative.").default(0),
-  CreditAmount: z.number().min(0, "Credit amount cannot be negative.").default(0),
-  TaxID: z.number().nullable().optional(),
-  TaxPercentage: z.number().nullable().optional(),
-  TaxAmount: z.number().nullable().optional(),
-  BaseAmount: z.number().nullable().optional(),
-  CostCenter1ID: z.number().nullable().optional(),
-  CostCenter2ID: z.number().nullable().optional(),
-  CostCenter3ID: z.number().nullable().optional(),
-  CostCenter4ID: z.number().nullable().optional(),
+// Enhanced schema for payment vouchers
+const voucherLineSchema = z.object({
+  accountId: z.string().min(1, "Account is required"),
+  amount: z.coerce.number().min(0.01, "Amount must be greater than 0"),
+  description: z.string().optional(),
+  customerId: z.string().optional(),
+  supplierId: z.string().optional(),
+  taxPercentage: z.coerce.number().min(0).max(100).optional(),
+  // Line-level cost centers
+  lineCostCenter1Id: z.string().optional(),
+  lineCostCenter2Id: z.string().optional(),
+  lineCostCenter3Id: z.string().optional(),
+  lineCostCenter4Id: z.string().optional(),
 });
 
-// Define the Zod schema for attachments
 const attachmentSchema = z.object({
-  PostingAttachmentID: z.number().optional(),
-  DocTypeID: z.number().min(1, "Document type is required."),
-  DocumentName: z.string().min(1, "Document name is required."),
-  DocumentDescription: z.string().optional(),
-  IsRequired: z.boolean().default(false),
-  DisplayOrder: z.number().default(0),
-  file: z.any().optional(), // File object
-  fileUrl: z.string().optional(), // For display in edit mode
+  docTypeId: z.string().min(1, "Document type is required"),
+  documentName: z.string().min(1, "Document name is required"),
+  documentDescription: z.string().optional(),
+  isRequired: z.boolean().optional(),
+  file: z.any().optional(),
 });
 
-// Define the Zod schema for the entire Payment Voucher form
-const paymentVoucherFormSchema = z.object({
-  // Header Information
-  VoucherNo: z.string().max(50, "Voucher No. cannot exceed 50 characters.").optional(),
-  TransactionDate: z.date({ required_error: "Transaction Date is required." }),
-  PostingDate: z.date({ required_error: "Posting Date is required." }),
-  CompanyID: z.number().min(1, "Company is required."),
-  FiscalYearID: z.number().min(1, "Fiscal Year is required."),
-  SupplierID: z.number().min(1, "Supplier is required."),
-  PaymentType: z.nativeEnum(PaymentType, { required_error: "Payment Type is required." }),
-  PaymentStatus: z.nativeEnum(PaymentStatus).default(PaymentStatus.DRAFT),
-  TotalAmount: z.number().min(0.01, "Total amount must be greater than 0."),
-  CurrencyID: z.number().min(1, "Currency is required."),
-  ExchangeRate: z.number().min(0.0001, "Exchange Rate must be greater than 0.").default(1.0),
-  BaseCurrencyAmount: z.number().optional(),
+const paymentVoucherSchema = z
+  .object({
+    voucherNo: z.string().optional(),
+    transactionDate: z.date({ required_error: "Transaction date is required" }),
+    postingDate: z.date().optional(),
+    companyId: z.string().min(1, "Company is required"),
+    fiscalYearId: z.string().min(1, "Fiscal year is required"),
+    currencyId: z.string().min(1, "Currency is required"),
+    exchangeRate: z.coerce.number().min(0.0001, "Exchange rate must be greater than 0").optional(),
+    description: z.string().optional(),
+    narration: z.string().optional(),
 
-  // Bank/Cheque Details
-  BankID: z.number().optional(),
-  BankAccountNo: z.string().max(50).optional(),
-  ChequeNo: z.string().max(50).optional(),
-  ChequeDate: z.date().optional(),
-  TransactionReference: z.string().max(100).optional(),
+    // Payment specific fields
+    paymentType: z.nativeEnum(PaymentType, { required_error: "Payment type is required" }),
+    paymentAccountId: z.string().min(1, "Payment account is required"),
+    supplierId: z.string().optional(),
+    paidTo: z.string().optional(),
+    refNo: z.string().optional(),
+    totalAmount: z.coerce.number().min(0.01, "Total amount must be greater than 0"),
 
-  // GL Account Details
-  BankAccountID: z.number().min(1, "Bank/Cash Account is required."),
-  PayableAccountID: z.number().optional(),
+    // Cheque details (conditional)
+    chequeNo: z.string().optional(),
+    chequeDate: z.date().optional(),
+    bankId: z.string().optional(),
 
-  // Description and Notes
-  Description: z.string().max(500, "Description cannot exceed 500 characters.").optional(),
-  Narration: z.string().max(1000, "Narration cannot exceed 1000 characters.").optional(),
-  InternalNotes: z.string().max(1000, "Internal Notes cannot exceed 1000 characters.").optional(),
+    // Tax fields
+    taxId: z.string().optional(),
+    isTaxInclusive: z.boolean().optional(),
 
-  // Cost Center Information
-  CostCenter1ID: z.number().optional(),
-  CostCenter2ID: z.number().optional(),
-  CostCenter3ID: z.number().optional(),
-  CostCenter4ID: z.number().optional(),
+    // Voucher-level cost centers
+    costCenter1Id: z.string().optional(),
+    costCenter2Id: z.string().optional(),
+    costCenter3Id: z.string().optional(),
+    costCenter4Id: z.string().optional(),
 
-  // Tax Information
-  TaxID: z.number().optional(),
-  TaxPercentage: z.number().optional(),
-  TaxAmount: z.number().optional(),
-  IsTaxInclusive: z.boolean().default(false),
-  BaseAmount: z.number().optional(),
+    lines: z.array(voucherLineSchema).min(1, "At least one voucher line is required"),
+    attachments: z.array(attachmentSchema).optional(),
+  })
+  .refine(
+    (data) => {
+      // Conditional validation for cheque payments
+      if (data.paymentType === PaymentType.CHEQUE) {
+        return data.chequeNo && data.chequeDate && data.bankId;
+      }
+      return true;
+    },
+    {
+      message: "Cheque number, date, and bank are required for cheque payments",
+      path: ["chequeNo"],
+    }
+  )
+  .refine(
+    (data) => {
+      // Conditional validation for bank transfers
+      if (data.paymentType === PaymentType.BANK_TRANSFER) {
+        return data.bankId;
+      }
+      return true;
+    },
+    {
+      message: "Bank is required for bank transfer payments",
+      path: ["bankId"],
+    }
+  );
 
-  // Reference Information
-  ReferenceType: z.string().max(50).optional(),
-  ReferenceID: z.number().optional(),
-  ReferenceNo: z.string().max(50).optional(),
+type PaymentVoucherFormValues = z.infer<typeof paymentVoucherSchema>;
 
-  // Additional Parameters
-  AutoPostToGL: z.boolean().default(false),
-  IsRecurring: z.boolean().default(false),
-  RecurrencePattern: z.string().max(50).optional(),
-
-  // Child Records
-  PaymentLines: z.array(paymentLineSchema).optional(),
-  Attachments: z.array(attachmentSchema).optional(),
-});
-
-type PaymentVoucherFormValues = z.infer<typeof paymentVoucherFormSchema>;
-
-export const PaymentVoucherForm: React.FC = () => {
-  const { voucherNo } = useParams<{ voucherNo: string }>();
+const PaymentVoucherForm = () => {
+  const { id } = useParams<{ id: string }>();
+  const isEdit = id !== "new" && id !== undefined;
   const navigate = useNavigate();
 
-  const isEditMode = !!voucherNo;
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // State variables
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(isEdit);
+  const [voucher, setVoucher] = useState<PaymentVoucher | null>(null);
 
-  // Lookup data states
+  // Reference data
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [suppliers, setSuppliers] = useState<Pick<Supplier, "SupplierID" | "SupplierNo" | "SupplierName">[]>([]);
   const [taxes, setTaxes] = useState<Tax[]>([]);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
+
+  // Cost center data
   const [costCenters1, setCostCenters1] = useState<CostCenter1[]>([]);
   const [costCenters2, setCostCenters2] = useState<CostCenter2[]>([]);
   const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
   const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
 
+  // Initialize form
   const form = useForm<PaymentVoucherFormValues>({
-    resolver: zodResolver(paymentVoucherFormSchema),
+    resolver: zodResolver(paymentVoucherSchema),
     defaultValues: {
-      TransactionDate: new Date(),
-      PostingDate: new Date(),
-      PaymentType: PaymentType.CASH,
-      PaymentStatus: PaymentStatus.DRAFT,
-      ExchangeRate: 1.0,
-      IsTaxInclusive: false,
-      AutoPostToGL: false,
-      IsRecurring: false,
-      PaymentLines: [],
-      Attachments: [],
+      voucherNo: "",
+      transactionDate: new Date(),
+      companyId: "",
+      fiscalYearId: "",
+      currencyId: "",
+      exchangeRate: 1,
+      description: "",
+      narration: "",
+      paymentType: PaymentType.CASH,
+      paymentAccountId: "",
+      supplierId: "",
+      paidTo: "",
+      refNo: "",
+      totalAmount: 0,
+      chequeNo: "",
+      bankId: "",
+      taxId: "",
+      isTaxInclusive: false,
+      costCenter1Id: "",
+      costCenter2Id: "",
+      costCenter3Id: "",
+      costCenter4Id: "",
+      lines: [{ accountId: "", amount: 0 }],
+      attachments: [],
     },
   });
 
+  // Field arrays for dynamic sections
   const {
-    fields: paymentLineFields,
-    append: appendPaymentLine,
-    remove: removePaymentLine,
+    fields: lineFields,
+    append: appendLine,
+    remove: removeLine,
   } = useFieldArray({
     control: form.control,
-    name: "PaymentLines",
+    name: "lines",
   });
 
   const {
@@ -171,947 +196,796 @@ export const PaymentVoucherForm: React.FC = () => {
     remove: removeAttachment,
   } = useFieldArray({
     control: form.control,
-    name: "Attachments",
+    name: "attachments",
   });
 
-  // Watch specific fields for conditional logic
-  const paymentType = form.watch("PaymentType");
-  const selectedSupplier = form.watch("SupplierID");
-  const currencyId = form.watch("CurrencyID");
-  const exchangeRate = form.watch("ExchangeRate");
-  const totalAmount = form.watch("TotalAmount");
-
-  // Calculate base currency amount
+  // Initialize and fetch data
   useEffect(() => {
-    if (totalAmount && exchangeRate) {
-      form.setValue("BaseCurrencyAmount", totalAmount * exchangeRate);
-    }
-  }, [totalAmount, exchangeRate, form]);
-
-  // Fetch initial data (lookups and existing voucher in edit mode)
-  useEffect(() => {
-    const fetchInitialData = async () => {
+    const initializeForm = async () => {
       try {
-        setLoading(true);
-        // Fetch lookup data in parallel
-        const [companiesData, suppliersData, fiscalYearsData, currenciesData, accountsData, banksData, taxesData, cc1Data, cc2Data, cc3Data, cc4Data] = await Promise.all([
-          companyService.getAllCompanies(),
-          supplierService.getAllSuppliers(),
-          fiscalYearService.getFiscalYearsForDropdown(),
-          currencyService.getAllCurrencies(),
-          accountService.getAllAccounts(),
-          bankService.getAllBanks(),
-          taxService.getAllTaxes(),
-          costCenterService.getCostCentersByLevel(1),
-          costCenterService.getCostCentersByLevel(2),
-          costCenterService.getCostCentersByLevel(3),
-          costCenterService.getCostCentersByLevel(4),
-        ]);
+        await fetchReferenceData();
 
-        setCompanies(companiesData);
-        setSuppliers(suppliersData);
-        setFiscalYears(fiscalYearsData);
-        setCurrencies(currenciesData);
-        setAccounts(accountsData);
-        setBanks(banksData);
-        setTaxes(taxesData);
-        setCostCenters1(cc1Data);
-        setCostCenters2(cc2Data as CostCenter2[]);
-        setCostCenters3(cc3Data as CostCenter3[]);
-        setCostCenters4(cc4Data as CostCenter4[]);
+        // If editing, fetch the voucher data
+        if (isEdit && id) {
+          const voucherData = await paymentVoucherService.getPaymentVoucherForEdit(id);
 
-        // Set default currency if not in edit mode
-        const defaultCurrency = currenciesData.find((c) => c.IsDefault);
-        if (!isEditMode && defaultCurrency) {
-          form.setValue("CurrencyID", defaultCurrency.CurrencyID);
-        }
+          if (voucherData.voucher) {
+            setVoucher(voucherData.voucher);
 
-        if (isEditMode && voucherNo) {
-          // Fetch existing voucher data
-          const voucherDetails = await paymentVoucherService.getPaymentVoucherByVoucherNo(voucherNo);
-          if (voucherDetails.voucher) {
-            const voucher = voucherDetails.voucher;
-            const lines = voucherDetails.lines;
-            const attachments = voucherDetails.attachments;
-
+            // Set form values including cost centers
             form.reset({
-              VoucherNo: voucher.VoucherNo,
-              TransactionDate: voucher.TransactionDate ? new Date(voucher.TransactionDate) : new Date(),
-              PostingDate: voucher.PostingDate ? new Date(voucher.PostingDate) : new Date(),
-              CompanyID: voucher.CompanyID,
-              FiscalYearID: voucher.FiscalYearID,
-              SupplierID: voucher.SupplierID,
-              PaymentType: voucher.PaymentType as PaymentType,
-              PaymentStatus: voucher.PaymentStatus as PaymentStatus,
-              TotalAmount: voucher.TotalAmount,
-              CurrencyID: voucher.CurrencyID,
-              ExchangeRate: voucher.ExchangeRate,
-              BaseCurrencyAmount: voucher.BaseCurrencyAmount,
-              BankID: voucher.BankID,
-              BankAccountNo: voucher.BankAccountNo,
-              ChequeNo: voucher.ChequeNo,
-              ChequeDate: voucher.ChequeDate ? new Date(voucher.ChequeDate) : undefined,
-              TransactionReference: voucher.TransactionReference,
-              BankAccountID: voucher.BankAccountID,
-              PayableAccountID: voucher.PayableAccountID,
-              Description: voucher.Description,
-              Narration: voucher.Narration,
-              InternalNotes: voucher.InternalNotes,
-              CostCenter1ID: voucher.CostCenter1ID,
-              CostCenter2ID: voucher.CostCenter2ID,
-              CostCenter3ID: voucher.CostCenter3ID,
-              CostCenter4ID: voucher.CostCenter4ID,
-              TaxID: voucher.TaxID,
-              TaxPercentage: voucher.TaxPercentage,
-              TaxAmount: voucher.TaxAmount,
-              IsTaxInclusive: voucher.IsTaxInclusive,
-              BaseAmount: voucher.BaseAmount,
-              ReferenceType: voucher.ReferenceType,
-              ReferenceID: voucher.ReferenceID,
-              ReferenceNo: voucher.ReferenceNo,
-              AutoPostToGL: voucher.AutoPostToGL,
-              IsRecurring: voucher.IsRecurring,
-              RecurrencePattern: voucher.RecurrencePattern,
-              PaymentLines: lines.map((line) => ({
-                PostingID: line.PostingID,
-                Line_No: line.Line_No,
-                AccountID: line.AccountID,
-                Description: line.Description,
-                DebitAmount: line.DebitAmount,
-                CreditAmount: line.CreditAmount,
-                TaxID: line.TaxID,
-                TaxPercentage: line.TaxPercentage,
-                TaxAmount: line.TaxAmount,
-                BaseAmount: line.BaseAmount,
-                CostCenter1ID: line.CostCenter1ID,
-                CostCenter2ID: line.CostCenter2ID,
-                CostCenter3ID: line.CostCenter3ID,
-                CostCenter4ID: line.CostCenter4ID,
+              voucherNo: voucherData.voucher.VoucherNo,
+              transactionDate: new Date(voucherData.voucher.TransactionDate),
+              postingDate: voucherData.voucher.PostingDate ? new Date(voucherData.voucher.PostingDate) : undefined,
+              companyId: voucherData.voucher.CompanyID.toString(),
+              fiscalYearId: voucherData.voucher.FiscalYearID.toString(),
+              currencyId: voucherData.voucher.CurrencyID.toString(),
+              exchangeRate: voucherData.voucher.ExchangeRate || 1,
+              description: voucherData.voucher.Description || "",
+              narration: voucherData.voucher.Narration || "",
+              paymentType: voucherData.voucher.PaymentType,
+              paymentAccountId: voucherData.voucher.PaymentAccountID.toString(),
+              supplierId: voucherData.voucher.SupplierID?.toString() || "",
+              paidTo: voucherData.voucher.PaidTo || "",
+              refNo: voucherData.voucher.RefNo || "",
+              totalAmount: voucherData.voucher.TotalAmount,
+              chequeNo: voucherData.voucher.ChequeNo || "",
+              chequeDate: voucherData.voucher.ChequeDate ? new Date(voucherData.voucher.ChequeDate) : undefined,
+              bankId: voucherData.voucher.BankID?.toString() || "",
+              taxId: voucherData.voucher.TaxID?.toString() || "",
+              isTaxInclusive: voucherData.voucher.IsTaxInclusive || false,
+              // Cost centers
+              costCenter1Id: voucherData.voucher.CostCenter1ID?.toString() || "",
+              costCenter2Id: voucherData.voucher.CostCenter2ID?.toString() || "",
+              costCenter3Id: voucherData.voucher.CostCenter3ID?.toString() || "",
+              costCenter4Id: voucherData.voucher.CostCenter4ID?.toString() || "",
+              lines: voucherData.lines.map((line) => ({
+                accountId: line.AccountID.toString(),
+                amount: line.DebitAmount,
+                description: line.LineDescription || "",
+                customerId: line.CustomerID?.toString() || "",
+                supplierId: line.LineSupplierID?.toString() || "",
+                taxPercentage: line.TaxPercentage || undefined,
+                // Line-level cost centers
+                lineCostCenter1Id: line.LineCostCenter1ID?.toString() || "",
+                lineCostCenter2Id: line.LineCostCenter2ID?.toString() || "",
+                lineCostCenter3Id: line.LineCostCenter3ID?.toString() || "",
+                lineCostCenter4Id: line.LineCostCenter4ID?.toString() || "",
               })),
-              Attachments: attachments.map((attachment) => ({
-                PostingAttachmentID: attachment.PostingAttachmentID,
-                DocTypeID: attachment.DocTypeID,
-                DocumentName: attachment.DocumentName,
-                DocumentDescription: attachment.DocumentDescription,
-                IsRequired: attachment.IsRequired,
-                DisplayOrder: attachment.DisplayOrder,
-                fileUrl: attachment.fileUrl,
+              attachments: voucherData.attachments.map((attachment) => ({
+                docTypeId: attachment.DocTypeID.toString(),
+                documentName: attachment.DocumentName,
+                documentDescription: attachment.DocumentDescription || "",
+                isRequired: attachment.IsRequired || false,
               })),
             });
-
-            // Disable form if not in Draft or Pending status
-            if (voucher.PaymentStatus !== PaymentStatus.DRAFT && voucher.PaymentStatus !== PaymentStatus.PENDING) {
-              toast.error("This payment voucher cannot be edited in its current status.");
-            }
           } else {
             toast.error("Payment voucher not found");
             navigate("/payment-vouchers");
           }
         }
       } catch (error) {
-        console.error("Error fetching initial data:", error);
-        toast.error("Failed to load form data");
-        navigate("/payment-vouchers");
+        console.error("Error initializing form:", error);
+        toast.error("Error loading form data");
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
       }
     };
 
-    fetchInitialData();
-  }, [voucherNo, isEditMode, form, navigate]);
+    initializeForm();
+  }, [id, isEdit, navigate, form]);
 
-  // Handle file upload for attachments
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Basic validation
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        toast.error("File size cannot exceed 10MB");
+  // Fetch reference data including cost centers
+  const fetchReferenceData = async () => {
+    try {
+      const [accountsData, companiesData, fiscalYearsData, currenciesData, banksData, suppliersData, taxesData, docTypesData, costCenters1Data] = await Promise.all([
+        accountService.getAllAccounts(),
+        companyService.getCompaniesForDropdown(true),
+        fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+        currencyService.getCurrenciesForDropdown(),
+        bankService.getAllBanks(),
+        supplierService.getSuppliersForDropdown(true),
+        taxService.getAllTaxes(),
+        docTypeService.getAllDocTypes(),
+        costCenterService.getCostCentersByLevel(1),
+      ]);
+
+      setAccounts(accountsData.filter((account) => account.IsActive && account.IsPostable));
+      setCompanies(companiesData);
+      setFiscalYears(fiscalYearsData);
+      setCurrencies(currenciesData);
+      setBanks(banksData.filter((bank) => bank.IsActive));
+      setSuppliers(suppliersData);
+      setTaxes(taxesData);
+      setDocTypes(docTypesData);
+      setCostCenters1(costCenters1Data as CostCenter1[]);
+    } catch (error) {
+      console.error("Error fetching reference data:", error);
+      toast.error("Error loading reference data");
+    }
+  };
+
+  // Load child cost centers when parent changes
+  const loadChildCostCenters = async (level: number, parentIds: { CostCenter1ID?: number; CostCenter2ID?: number; CostCenter3ID?: number }) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setCostCenters2(childCostCenters as CostCenter2[]);
+          break;
+        case 3:
+          setCostCenters3(childCostCenters as CostCenter3[]);
+          break;
+        case 4:
+          setCostCenters4(childCostCenters as CostCenter4[]);
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading cost centers level ${level}:`, error);
+    }
+  };
+
+  // Watch for cost center hierarchy changes
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "costCenter1Id" && value.costCenter1Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id);
+        loadChildCostCenters(2, { CostCenter1ID: costCenter1Id });
+        // Reset child selections
+        form.setValue("costCenter2Id", "");
+        form.setValue("costCenter3Id", "");
+        form.setValue("costCenter4Id", "");
+        setCostCenters3([]);
+        setCostCenters4([]);
+      } else if (name === "costCenter2Id" && value.costCenter2Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id || "0");
+        const costCenter2Id = parseInt(value.costCenter2Id);
+        loadChildCostCenters(3, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id });
+        // Reset child selections
+        form.setValue("costCenter3Id", "");
+        form.setValue("costCenter4Id", "");
+        setCostCenters4([]);
+      } else if (name === "costCenter3Id" && value.costCenter3Id) {
+        const costCenter1Id = parseInt(value.costCenter1Id || "0");
+        const costCenter2Id = parseInt(value.costCenter2Id || "0");
+        const costCenter3Id = parseInt(value.costCenter3Id);
+        loadChildCostCenters(4, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id, CostCenter3ID: costCenter3Id });
+        // Reset child selections
+        form.setValue("costCenter4Id", "");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Submit handler for the voucher form
+  const onSubmit = async (data: PaymentVoucherFormValues) => {
+    setLoading(true);
+
+    try {
+      // Validate that total amount equals sum of line amounts
+      const totalLineAmount = data.lines.reduce((sum, line) => sum + line.amount, 0);
+
+      if (Math.abs(totalLineAmount - data.totalAmount) > 0.01) {
+        toast.error("Total amount must equal the sum of line amounts");
+        setLoading(false);
         return;
       }
 
-      appendAttachment({
-        DocTypeID: 1, // Default document type
-        DocumentName: file.name,
-        DocumentDescription: "",
-        IsRequired: false,
-        DisplayOrder: attachmentFields.length,
-        file: file,
-      });
-    }
-  };
-
-  const onSubmit = async (values: PaymentVoucherFormValues) => {
-    setIsSubmitting(true);
-    try {
-      // Validate payment type specific requirements
-      if (values.PaymentType === PaymentType.CHEQUE) {
-        if (!values.ChequeNo || !values.BankID) {
-          toast.error("Cheque number and bank are required for cheque payments");
-          return;
-        }
-      }
-
-      if (values.PaymentType === PaymentType.BANK_TRANSFER) {
-        if (!values.BankID || !values.TransactionReference) {
-          toast.error("Bank and transaction reference are required for bank transfers");
-          return;
-        }
-      }
-
-      const voucherData: Partial<PaymentVoucher> = {
-        VoucherNo: values.VoucherNo,
-        TransactionDate: values.TransactionDate,
-        PostingDate: values.PostingDate,
-        CompanyID: values.CompanyID,
-        FiscalYearID: values.FiscalYearID,
-        SupplierID: values.SupplierID,
-        PaymentType: values.PaymentType,
-        PaymentStatus: values.PaymentStatus,
-        TotalAmount: values.TotalAmount,
-        CurrencyID: values.CurrencyID,
-        ExchangeRate: values.ExchangeRate,
-        BaseCurrencyAmount: values.BaseCurrencyAmount,
-        BankID: values.BankID,
-        BankAccountNo: values.BankAccountNo,
-        ChequeNo: values.ChequeNo,
-        ChequeDate: values.ChequeDate,
-        TransactionReference: values.TransactionReference,
-        BankAccountID: values.BankAccountID,
-        PayableAccountID: values.PayableAccountID,
-        Description: values.Description,
-        Narration: values.Narration,
-        InternalNotes: values.InternalNotes,
-        CostCenter1ID: values.CostCenter1ID,
-        CostCenter2ID: values.CostCenter2ID,
-        CostCenter3ID: values.CostCenter3ID,
-        CostCenter4ID: values.CostCenter4ID,
-        TaxID: values.TaxID,
-        TaxPercentage: values.TaxPercentage,
-        TaxAmount: values.TaxAmount,
-        IsTaxInclusive: values.IsTaxInclusive,
-        BaseAmount: values.BaseAmount,
-        ReferenceType: values.ReferenceType,
-        ReferenceID: values.ReferenceID,
-        ReferenceNo: values.ReferenceNo,
-        AutoPostToGL: values.AutoPostToGL,
-        IsRecurring: values.IsRecurring,
-        RecurrencePattern: values.RecurrencePattern,
+      // Prepare voucher data with cost centers
+      const voucherData = {
+        VoucherNo: data.voucherNo,
+        TransactionDate: data.transactionDate.toISOString(),
+        PostingDate: data.postingDate?.toISOString() || data.transactionDate.toISOString(),
+        CompanyID: parseInt(data.companyId),
+        FiscalYearID: parseInt(data.fiscalYearId),
+        CurrencyID: parseInt(data.currencyId),
+        ExchangeRate: data.exchangeRate || 1,
+        Description: data.description?.trim() || undefined,
+        Narration: data.narration?.trim() || undefined,
+        PaymentType: data.paymentType,
+        PaymentAccountID: parseInt(data.paymentAccountId),
+        SupplierID: data.supplierId ? parseInt(data.supplierId) : undefined,
+        PaidTo: data.paidTo?.trim() || undefined,
+        RefNo: data.refNo?.trim() || undefined,
+        TotalAmount: data.totalAmount,
+        ChequeNo: data.chequeNo?.trim() || undefined,
+        ChequeDate: data.chequeDate?.toISOString() || undefined,
+        BankID: data.bankId ? parseInt(data.bankId) : undefined,
+        TaxID: data.taxId ? parseInt(data.taxId) : undefined,
+        IsTaxInclusive: data.isTaxInclusive || false,
+        PaymentStatus: PaymentStatus.DRAFT,
+        // Voucher-level cost centers
+        CostCenter1ID: data.costCenter1Id ? parseInt(data.costCenter1Id) : undefined,
+        CostCenter2ID: data.costCenter2Id ? parseInt(data.costCenter2Id) : undefined,
+        CostCenter3ID: data.costCenter3Id ? parseInt(data.costCenter3Id) : undefined,
+        CostCenter4ID: data.costCenter4Id ? parseInt(data.costCenter4Id) : undefined,
       };
 
-      const mappedPaymentLines: Partial<PaymentVoucherLine>[] =
-        values.PaymentLines?.map((line, index) => ({
-          PostingID: line.PostingID,
-          Line_No: line.Line_No || index + 1,
-          AccountID: line.AccountID,
-          Description: line.Description,
-          DebitAmount: line.DebitAmount,
-          CreditAmount: line.CreditAmount,
-          TaxID: line.TaxID,
-          TaxPercentage: line.TaxPercentage,
-          TaxAmount: line.TaxAmount,
-          BaseAmount: line.BaseAmount,
-          CostCenter1ID: line.CostCenter1ID,
-          CostCenter2ID: line.CostCenter2ID,
-          CostCenter3ID: line.CostCenter3ID,
-          CostCenter4ID: line.CostCenter4ID,
-        })) || [];
+      // Prepare lines data with line-level cost centers
+      const linesData = data.lines.map((line) => ({
+        AccountID: parseInt(line.accountId),
+        TransactionType: TransactionType.DEBIT,
+        DebitAmount: line.amount,
+        CreditAmount: 0,
+        BaseAmount: line.amount,
+        TaxPercentage: line.taxPercentage || 0,
+        LineTaxAmount: line.taxPercentage ? (line.amount * line.taxPercentage) / 100 : 0,
+        LineDescription: line.description?.trim() || undefined,
+        CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
+        LineSupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
+        // Line-level cost centers (these override voucher-level if specified)
+        LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
+        LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
+        LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
+        LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
+      }));
 
-      const mappedAttachments: Partial<PaymentVoucherAttachment>[] =
-        values.Attachments?.map((attachment) => ({
-          PostingAttachmentID: attachment.PostingAttachmentID,
-          DocTypeID: attachment.DocTypeID,
-          DocumentName: attachment.DocumentName,
-          DocumentDescription: attachment.DocumentDescription,
-          IsRequired: attachment.IsRequired,
-          DisplayOrder: attachment.DisplayOrder,
+      // Prepare attachments data
+      const attachmentsData =
+        data.attachments?.map((attachment) => ({
+          DocTypeID: parseInt(attachment.docTypeId),
+          DocumentName: attachment.documentName.trim(),
+          DocumentDescription: attachment.documentDescription?.trim() || undefined,
+          IsRequired: attachment.isRequired || false,
           file: attachment.file,
         })) || [];
 
-      if (isEditMode) {
-        const updateRequest = {
-          voucher: { ...voucherData, VoucherNo: voucherNo! },
-          paymentLines: mappedPaymentLines,
-          attachments: mappedAttachments,
-        };
-        const response = await paymentVoucherService.updatePaymentVoucher(updateRequest);
-        if (response.Status === 1) {
-          toast.success("Payment voucher updated successfully");
-          navigate(`/payment-vouchers/${voucherNo}`);
+      if (isEdit && voucher) {
+        // Update existing voucher
+        const result = await paymentVoucherService.updatePaymentVoucher({
+          voucherNo: voucher.VoucherNo,
+          voucher: voucherData,
+          lines: linesData,
+          attachments: attachmentsData,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          navigate("/payment-vouchers");
         } else {
-          toast.error(response.Message || "Failed to update payment voucher");
+          toast.error(result.message);
         }
       } else {
-        const createRequest = {
+        // Create new voucher
+        const result = await paymentVoucherService.createPaymentVoucher({
           voucher: voucherData,
-          paymentLines: mappedPaymentLines,
-          attachments: mappedAttachments,
-        };
-        const response = await paymentVoucherService.createPaymentVoucher(createRequest);
-        if (response.Status === 1) {
-          toast.success("Payment voucher created successfully");
-          navigate(`/payment-vouchers/${response.VoucherNo}`);
+          lines: linesData,
+          attachments: attachmentsData,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          navigate("/payment-vouchers");
         } else {
-          toast.error(response.Message || "Failed to create payment voucher");
+          toast.error(result.message);
         }
       }
     } catch (error) {
-      console.error("Error submitting payment voucher:", error);
-      toast.error("Failed to save payment voucher");
+      console.error("Error saving voucher:", error);
+      toast.error("Failed to save voucher");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
+  // Add new voucher line
+  const addVoucherLine = () => {
+    appendLine({ accountId: "", amount: 0 });
+  };
+
+  // Remove voucher line
+  const removeVoucherLine = (index: number) => {
+    if (lineFields.length > 1) {
+      removeLine(index);
+    }
+  };
+
+  // Add new attachment
+  const addAttachment = () => {
+    appendAttachment({ docTypeId: "", documentName: "", isRequired: false });
+  };
+
+  // Remove attachment
+  const removeAttachmentItem = (index: number) => {
+    removeAttachment(index);
+  };
+
+  // Handle file upload
+  const handleFileUpload = (index: number, file: File | null) => {
+    if (file) {
+      form.setValue(`attachments.${index}.file`, file);
+      if (!form.getValues(`attachments.${index}.documentName`)) {
+        form.setValue(`attachments.${index}.documentName`, file.name);
+      }
+    }
+  };
+
+  // Calculate totals
+  const lines = form.watch("lines");
+  const totalAmount = Number(form.watch("totalAmount")) || 0;
+  const totalLineAmount = lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+  const difference = Math.abs(totalAmount - totalLineAmount);
+
+  // Watch payment type to show/hide conditional fields
+  const paymentType = form.watch("paymentType");
+
+  // Cancel button handler
+  const handleCancel = () => {
+    navigate("/payment-vouchers");
+  };
+
+  if (initialLoading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const canEdit = !isEditMode || form.watch("PaymentStatus") === PaymentStatus.DRAFT || form.watch("PaymentStatus") === PaymentStatus.PENDING;
-
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">{isEditMode ? "Edit Payment Voucher" : "New Payment Voucher"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <Tabs defaultValue="header" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="header">Header Details</TabsTrigger>
-                  <TabsTrigger value="lines">Payment Lines ({paymentLineFields.length})</TabsTrigger>
-                  <TabsTrigger value="attachments">Attachments ({attachmentFields.length})</TabsTrigger>
-                </TabsList>
+      <div className="flex items-center space-x-2">
+        <Button variant="outline" size="icon" onClick={() => navigate("/payment-vouchers")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-2xl font-semibold">{isEdit ? "Edit Payment Voucher" : "Create Payment Voucher"}</h1>
+      </div>
 
-                <TabsContent value="header" className="space-y-6">
-                  {/* Basic Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="VoucherNo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Voucher Number</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled={isEditMode || !canEdit} value={field.value || ""} placeholder="Auto-generated" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="TransactionDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Transaction Date</FormLabel>
-                          <div>
-                            <DatePicker value={field.value} onChange={field.onChange} disabled={!canEdit} />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="PostingDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Posting Date</FormLabel>
-                          <div>
-                            <DatePicker value={field.value} onChange={field.onChange} disabled={!canEdit} />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="CompanyID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Company</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Company" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {companies.map((company) => (
-                                <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
-                                  {company.CompanyName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="FiscalYearID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fiscal Year</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Fiscal Year" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {fiscalYears.map((fy) => (
-                                <SelectItem key={fy.FiscalYearID} value={fy.FiscalYearID.toString()}>
-                                  {fy.FYDescription}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="SupplierID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Supplier</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Supplier" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {suppliers.map((supplier) => (
-                                <SelectItem key={supplier.SupplierID} value={supplier.SupplierID.toString()}>
-                                  {supplier.SupplierName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Header Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Voucher Information</CardTitle>
+              <CardDescription>Enter the basic voucher details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField form={form} name="voucherNo" label="Voucher Number" placeholder="Auto-generated" disabled={isEdit} description="Unique voucher number" />
+                <FormField form={form} name="transactionDate" label="Transaction Date" type="date" required description="Date of the transaction" />
+                <FormField form={form} name="postingDate" label="Posting Date" type="date" description="Date for posting (defaults to transaction date)" />
+              </div>
 
-                  {/* Payment Information */}
-                  <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="PaymentType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Payment Type</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Payment Type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {Object.values(PaymentType).map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="TotalAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total Amount</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="CurrencyID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {currencies.map((currency) => (
-                                <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
-                                  {currency.CurrencyName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="ExchangeRate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Exchange Rate</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.0001" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 1)} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="BankAccountID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Bank/Cash Account</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Account" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {accounts
-                                //.filter((acc) => acc.AccountType === "Bank" || acc.AccountType === "Cash")
-                                .map((account) => (
-                                  <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                                    {account.AccountCode} - {account.AccountName}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField
+                  form={form}
+                  name="companyId"
+                  label="Company"
+                  type="select"
+                  options={companies.map((company) => ({
+                    label: company.CompanyName,
+                    value: company.CompanyID.toString(),
+                  }))}
+                  placeholder="Select company"
+                  required
+                  description="Company for this voucher"
+                />
+                <FormField
+                  form={form}
+                  name="fiscalYearId"
+                  label="Fiscal Year"
+                  type="select"
+                  options={fiscalYears.map((fy) => ({
+                    label: fy.FYDescription,
+                    value: fy.FiscalYearID.toString(),
+                  }))}
+                  placeholder="Select fiscal year"
+                  required
+                  description="Fiscal year for this voucher"
+                />
+                <FormField
+                  form={form}
+                  name="currencyId"
+                  label="Currency"
+                  type="select"
+                  options={currencies.map((currency) => ({
+                    label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
+                    value: currency.CurrencyID.toString(),
+                  }))}
+                  placeholder="Select currency"
+                  required
+                  description="Currency for this voucher"
+                />
+              </div>
 
-                  {/* Bank/Cheque Details - Show based on payment type */}
-                  {(paymentType === PaymentType.CHEQUE || paymentType === PaymentType.BANK_TRANSFER) && (
-                    <>
-                      <Separator />
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="BankID"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Bank {paymentType === PaymentType.CHEQUE ? "*" : ""}</FormLabel>
-                              <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={!canEdit}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select Bank" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {banks.map((bank) => (
-                                    <SelectItem key={bank.BankID} value={bank.BankID.toString()}>
-                                      {bank.BankName}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        {paymentType === PaymentType.CHEQUE && (
-                          <>
-                            <FormField
-                              control={form.control}
-                              name="ChequeNo"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Cheque Number *</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} value={field.value || ""} disabled={!canEdit} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="ChequeDate"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Cheque Date</FormLabel>
-                                  <div>
-                                    <DatePicker value={field.value} onChange={field.onChange} disabled={!canEdit} />
-                                  </div>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </>
-                        )}
-                        {paymentType === PaymentType.BANK_TRANSFER && (
-                          <FormField
-                            control={form.control}
-                            name="TransactionReference"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Transaction Reference *</FormLabel>
-                                <FormControl>
-                                  <Input {...field} value={field.value || ""} disabled={!canEdit} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        )}
-                        <FormField
-                          control={form.control}
-                          name="BankAccountNo"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Bank Account Number</FormLabel>
-                              <FormControl>
-                                <Input {...field} value={field.value || ""} disabled={!canEdit} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </>
-                  )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField form={form} name="description" label="Description" placeholder="Enter voucher description" description="Brief description of the voucher" />
+                <FormField form={form} name="exchangeRate" label="Exchange Rate" type="number" step="0.0001" placeholder="1.0000" description="Exchange rate to base currency" />
+              </div>
 
-                  {/* Description and Notes */}
+              <FormField form={form} name="narration" label="Narration" type="textarea" placeholder="Enter detailed narration" description="Detailed description or notes" />
+            </CardContent>
+          </Card>
+
+          {/* Payment Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment Details
+              </CardTitle>
+              <CardDescription>Configure payment specific information</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField
+                  form={form}
+                  name="paymentType"
+                  label="Payment Type"
+                  type="select"
+                  options={paymentVoucherService.getPaymentTypes().map((type) => ({
+                    label: type.label,
+                    value: type.value,
+                  }))}
+                  placeholder="Select payment type"
+                  required
+                  description="Method of payment"
+                />
+                <FormField
+                  form={form}
+                  name="paymentAccountId"
+                  label="Payment Account"
+                  type="select"
+                  options={accounts.map((account) => ({
+                    label: `${account.AccountCode} - ${account.AccountName}`,
+                    value: account.AccountID.toString(),
+                  }))}
+                  placeholder="Select payment account"
+                  required
+                  description="Account to credit (bank/cash account)"
+                />
+                <FormField form={form} name="totalAmount" label="Total Amount" type="number" step="0.01" placeholder="0.00" required description="Total payment amount" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  form={form}
+                  name="supplierId"
+                  label="Supplier"
+                  type="select"
+                  options={suppliers.map((supplier) => ({
+                    label: `${supplier.SupplierNo} - ${supplier.SupplierName}`,
+                    value: supplier.SupplierID.toString(),
+                  }))}
+                  placeholder="Select supplier"
+                  description="Supplier to pay"
+                />
+                <FormField form={form} name="paidTo" label="Paid To" placeholder="Enter payee name" description="Name of the person/entity paid" />
+              </div>
+
+              <FormField form={form} name="refNo" label="Reference Number" placeholder="Enter reference number" description="External reference number" />
+
+              {/* Conditional fields based on payment type */}
+              {(paymentType === PaymentType.CHEQUE || paymentType === PaymentType.BANK_TRANSFER) && (
+                <>
                   <Separator />
                   <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="Description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} value={field.value || ""} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Building className="h-5 w-5" />
+                      {paymentType === PaymentType.CHEQUE ? "Cheque Details" : "Bank Transfer Details"}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <FormField
+                        form={form}
+                        name="bankId"
+                        label="Bank"
+                        type="select"
+                        options={banks.map((bank) => ({
+                          label: bank.BankName,
+                          value: bank.BankID.toString(),
+                        }))}
+                        placeholder="Select bank"
+                        required={paymentType === PaymentType.CHEQUE || paymentType === PaymentType.BANK_TRANSFER}
+                        description="Bank for this payment"
+                      />
+                      {paymentType === PaymentType.CHEQUE && (
+                        <>
+                          <FormField
+                            form={form}
+                            name="chequeNo"
+                            label="Cheque Number"
+                            placeholder="Enter cheque number"
+                            required={paymentType === PaymentType.CHEQUE}
+                            description="Cheque number"
+                          />
+                          <FormField form={form} name="chequeDate" label="Cheque Date" type="date" required={paymentType === PaymentType.CHEQUE} description="Date on the cheque" />
+                        </>
                       )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="Narration"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Narration</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} value={field.value || ""} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="InternalNotes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Internal Notes</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} value={field.value || ""} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Reference Information */}
-                  <Separator />
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="ReferenceType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Reference Type</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""} disabled={!canEdit}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Reference Type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Invoice">Invoice</SelectItem>
-                              <SelectItem value="Advance">Advance</SelectItem>
-                              <SelectItem value="Expense">Expense</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="ReferenceNo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Reference Number</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="ReferenceID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Reference ID</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)} value={field.value || ""} disabled={!canEdit} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Additional Options */}
-                  <Separator />
-                  <div className="flex flex-wrap gap-6">
-                    <FormField
-                      control={form.control}
-                      name="AutoPostToGL"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>Auto Post to GL</FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="IsRecurring"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>Recurring Payment</FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="lines" className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">Payment Lines</h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        appendPaymentLine({
-                          AccountID: 0,
-                          Description: "",
-                          DebitAmount: 0,
-                          CreditAmount: 0,
-                        })
-                      }
-                      disabled={!canEdit}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Line
-                    </Button>
-                  </div>
-
-                  {paymentLineFields.map((field, index) => (
-                    <Card key={field.id} className="p-4 relative">
-                      <div className="absolute top-2 right-2">
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removePaymentLine(index)} disabled={!canEdit}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`PaymentLines.${index}.AccountID`}
-                          render={({ field: lineField }) => (
-                            <FormItem>
-                              <FormLabel>Account</FormLabel>
-                              <Select onValueChange={(value) => lineField.onChange(parseInt(value))} value={lineField.value?.toString()} disabled={!canEdit}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select Account" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {accounts.map((account) => (
-                                    <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                                      {account.AccountCode} - {account.AccountName}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`PaymentLines.${index}.DebitAmount`}
-                          render={({ field: lineField }) => (
-                            <FormItem>
-                              <FormLabel>Debit Amount</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" {...lineField} onChange={(e) => lineField.onChange(parseFloat(e.target.value) || 0)} disabled={!canEdit} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`PaymentLines.${index}.CreditAmount`}
-                          render={({ field: lineField }) => (
-                            <FormItem>
-                              <FormLabel>Credit Amount</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" {...lineField} onChange={(e) => lineField.onChange(parseFloat(e.target.value) || 0)} disabled={!canEdit} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`PaymentLines.${index}.Description`}
-                          render={({ field: lineField }) => (
-                            <FormItem className="md:col-span-2 lg:col-span-3">
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Input {...lineField} value={lineField.value || ""} disabled={!canEdit} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </Card>
-                  ))}
-
-                  {paymentLineFields.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">No payment lines added. The system will create default entries based on the payment information.</div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="attachments" className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold">Attachments</h3>
-                    <div>
-                      <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" disabled={!canEdit} />
-                      <Button type="button" variant="outline" onClick={() => document.getElementById("file-upload")?.click()} disabled={!canEdit}>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload File
-                      </Button>
                     </div>
                   </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-                  {attachmentFields.map((field, index) => (
-                    <Card key={field.id} className="p-4 relative">
-                      <div className="absolute top-2 right-2">
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeAttachment(index)} disabled={!canEdit}>
-                          <X className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0">
-                          <AttachmentThumbnail fileName={field.DocumentName || "Document"} fileType={(field as any).file?.type} fileUrl={(field as any).fileUrl} />
-                        </div>
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name={`Attachments.${index}.DocumentName`}
-                            render={({ field: attachField }) => (
-                              <FormItem>
-                                <FormLabel>Document Name</FormLabel>
-                                <FormControl>
-                                  <Input {...attachField} value={attachField.value || ""} disabled={!canEdit} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`Attachments.${index}.DocumentDescription`}
-                            render={({ field: attachField }) => (
-                              <FormItem>
-                                <FormLabel>Description</FormLabel>
-                                <FormControl>
-                                  <Input {...attachField} value={attachField.value || ""} disabled={!canEdit} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+          {/* Cost Center Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Network className="h-5 w-5 text-primary" />
+                Cost Centers
+              </CardTitle>
+              <CardDescription>
+                Configure cost center allocation
+                <Badge variant="secondary" className="ml-2">
+                  Voucher Level
+                </Badge>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <FormField
+                  form={form}
+                  name="costCenter1Id"
+                  label="Cost Center Level 1"
+                  type="select"
+                  options={costCenters1.map((cc) => ({
+                    label: cc.Description,
+                    value: cc.CostCenter1ID.toString(),
+                  }))}
+                  placeholder="Select level 1"
+                  description="Primary cost center"
+                />
+                <FormField
+                  form={form}
+                  name="costCenter2Id"
+                  label="Cost Center Level 2"
+                  type="select"
+                  options={costCenters2.map((cc) => ({
+                    label: cc.Description,
+                    value: cc.CostCenter2ID.toString(),
+                  }))}
+                  placeholder="Select level 2"
+                  description="Secondary cost center"
+                  disabled={!form.watch("costCenter1Id")}
+                />
+                <FormField
+                  form={form}
+                  name="costCenter3Id"
+                  label="Cost Center Level 3"
+                  type="select"
+                  options={costCenters3.map((cc) => ({
+                    label: cc.Description,
+                    value: cc.CostCenter3ID.toString(),
+                  }))}
+                  placeholder="Select level 3"
+                  description="Tertiary cost center"
+                  disabled={!form.watch("costCenter2Id")}
+                />
+                <FormField
+                  form={form}
+                  name="costCenter4Id"
+                  label="Cost Center Level 4"
+                  type="select"
+                  options={costCenters4.map((cc) => ({
+                    label: cc.Description,
+                    value: cc.CostCenter4ID.toString(),
+                  }))}
+                  placeholder="Select level 4"
+                  description="Quaternary cost center"
+                  disabled={!form.watch("costCenter3Id")}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-                  {attachmentFields.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">No attachments uploaded. Click "Upload File" to add supporting documents.</div>
-                  )}
-                </TabsContent>
-              </Tabs>
+          {/* Tax Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tax Information</CardTitle>
+              <CardDescription>Configure tax settings</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  form={form}
+                  name="taxId"
+                  label="Tax"
+                  type="select"
+                  options={taxes.map((tax) => ({
+                    label: `${tax.TaxCode} - ${tax.TaxName} (${tax.TaxRate}%)`,
+                    value: tax.TaxID.toString(),
+                  }))}
+                  placeholder="Select tax"
+                  description="Applicable tax"
+                />
+                <FormField form={form} name="isTaxInclusive" label="Tax Inclusive" type="switch" description="Whether amounts include tax" />
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Form Actions */}
-              <div className="flex justify-end space-x-2 pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => navigate("/payment-vouchers")} disabled={isSubmitting}>
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || !canEdit}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <Save className="mr-2 h-4 w-4" />
-                  {isEditMode ? "Update Payment Voucher" : "Create Payment Voucher"}
+          {/* Voucher Lines */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Voucher Lines</CardTitle>
+                  <CardDescription>Add debit entries with optional line-level cost centers</CardDescription>
+                </div>
+                <Button type="button" variant="outline" onClick={addVoucherLine}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Line
                 </Button>
               </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Account</TableHead>
+                      <TableHead className="w-[120px]">Amount</TableHead>
+                      <TableHead className="w-[150px]">Description</TableHead>
+                      <TableHead className="w-[150px]">Cost Centers</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineFields.map((field, index) => (
+                      <TableRow key={field.id}>
+                        <TableCell>
+                          <FormField
+                            form={form}
+                            name={`lines.${index}.accountId`}
+                            type="select"
+                            options={accounts.map((account) => ({
+                              label: `${account.AccountCode} - ${account.AccountName}`,
+                              value: account.AccountID.toString(),
+                            }))}
+                            placeholder="Select account"
+                            className="min-w-[180px]"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormField form={form} name={`lines.${index}.amount`} type="number" step="0.01" placeholder="0.00" className="w-[100px]" />
+                        </TableCell>
+                        <TableCell>
+                          <FormField form={form} name={`lines.${index}.description`} placeholder="Line description" className="min-w-[130px]" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <FormField
+                              form={form}
+                              name={`lines.${index}.lineCostCenter1Id`}
+                              type="select"
+                              options={costCenters1.map((cc) => ({
+                                label: cc.Description,
+                                value: cc.CostCenter1ID.toString(),
+                              }))}
+                              placeholder="CC Level 1"
+                              className="min-w-[130px] text-xs"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeVoucherLine(index)} disabled={lineFields.length === 1}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Balance Summary */}
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Calculator className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Balance Summary:</span>
+                    </div>
+                    <div className="text-sm">
+                      Total Amount: <span className="font-mono">{totalAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="text-sm">
+                      Line Total: <span className="font-mono">{totalLineAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="text-sm">
+                      Difference: <span className={`font-mono ${difference > 0.01 ? "text-red-600" : "text-green-600"}`}>{difference.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  {difference > 0.01 && (
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Out of Balance
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Attachments */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Attachments</CardTitle>
+                  <CardDescription>Upload supporting documents</CardDescription>
+                </div>
+                <Button type="button" variant="outline" onClick={addAttachment}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Attachment
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {attachmentFields.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="mx-auto h-12 w-12 mb-4" />
+                  <p>No attachments added. Click "Add Attachment" to upload documents.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {attachmentFields.map((field, index) => (
+                    <div key={field.id} className="border rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField
+                          form={form}
+                          name={`attachments.${index}.docTypeId`}
+                          label="Document Type"
+                          type="select"
+                          options={docTypes.map((docType) => ({
+                            label: docType.Description,
+                            value: docType.DocTypeID.toString(),
+                          }))}
+                          placeholder="Select document type"
+                        />
+                        <FormField form={form} name={`attachments.${index}.documentName`} label="Document Name" placeholder="Enter document name" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField form={form} name={`attachments.${index}.documentDescription`} label="Description" placeholder="Enter description" />
+                        <FormField form={form} name={`attachments.${index}.isRequired`} label="Required" type="switch" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <input type="file" id={`file-${index}`} className="hidden" onChange={(e) => handleFileUpload(index, e.target.files?.[0] || null)} />
+                          <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`file-${index}`)?.click()}>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Choose File
+                          </Button>
+                          {form.watch(`attachments.${index}.file`) && (
+                            <span className="text-sm text-muted-foreground">{(form.watch(`attachments.${index}.file`) as File)?.name}</span>
+                          )}
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachmentItem(index)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Form Actions */}
+          <Card>
+            <CardFooter className="flex justify-between">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading || difference > 0.01}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Voucher
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
     </div>
   );
 };

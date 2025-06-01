@@ -1,44 +1,47 @@
-// src/services/paymentVoucherService.ts
+// src/services/journalVoucherService.ts
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
 import {
-  PaymentVoucher,
-  PaymentVoucherLine,
-  PaymentVoucherAttachment,
-  PaymentVoucherRequest,
-  PaymentVoucherResponse,
-  PaymentSearchFilters,
-  PaymentSummaryReport,
-  SupplierBalance,
-  SupplierPaymentHistory,
-  PaymentStatistics,
-  CreatePaymentVoucherResponse,
+  JournalVoucher,
+  JournalVoucherLine,
+  JournalVoucherAttachment,
+  JournalVoucherRequest,
+  JournalVoucherResponse,
+  JournalSearchFilters,
+  JournalSummaryReport,
+  TrialBalanceValidation,
+  AccountBalance,
+  JournalStatistics,
+  CreateJournalVoucherResponse,
   ApprovalResponse,
   ReversalResponse,
   AttachmentResponse,
   NextVoucherNumberResponse,
   AccountBalanceResponse,
-  SupplierBalanceResponse,
-  PaymentStatus,
-  PaymentType,
+  TrialBalanceResponse,
+  JournalStatus,
+  JournalType,
   ApprovalAction,
+  TransactionType,
   Account,
   Company,
   FiscalYear,
   Currency,
-  Bank,
   CostCenter,
   Customer,
   Supplier,
   DocType,
   Tax,
-} from "../types/paymentVoucherTypes";
+  JournalEntryTemplate,
+  JournalRegisterReport,
+  AccountLedgerReport,
+} from "../types/journalVoucherTypes";
 
 /**
- * Service for payment voucher operations
+ * Service for journal voucher operations
  */
-class PaymentVoucherService extends BaseService {
+class JournalVoucherService extends BaseService {
   constructor() {
-    super("/Master/PaymentVoucher");
+    super("/Master/JournalVoucher");
   }
 
   /**
@@ -64,7 +67,7 @@ class PaymentVoucherService extends BaseService {
    * @param attachment - The attachment with file data
    * @returns Processed attachment ready for API
    */
-  private async processAttachmentFile(attachment: Partial<PaymentVoucherAttachment>): Promise<Partial<PaymentVoucherAttachment>> {
+  private async processAttachmentFile(attachment: Partial<JournalVoucherAttachment>): Promise<Partial<JournalVoucherAttachment>> {
     const processedAttachment = { ...attachment };
 
     if (attachment.file) {
@@ -80,11 +83,11 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Validate payment voucher data before submission
+   * Validate journal voucher data before submission
    * @param data - The voucher data to validate
    * @returns Validation result
    */
-  private validatePaymentVoucherData(data: PaymentVoucherRequest): { isValid: boolean; errors: string[] } {
+  private validateJournalVoucherData(data: JournalVoucherRequest): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     if (!data.voucher.TransactionDate) {
@@ -103,27 +106,16 @@ class PaymentVoucherService extends BaseService {
       errors.push("Currency is required");
     }
 
-    if (!data.voucher.PaymentType) {
-      errors.push("Payment type is required");
-    }
-
-    if (!data.voucher.PaymentAccountID) {
-      errors.push("Payment account is required");
-    }
-
-    if (!data.voucher.TotalAmount || data.voucher.TotalAmount <= 0) {
-      errors.push("Total amount must be greater than zero");
-    }
-
     if (!data.lines || data.lines.length === 0) {
-      errors.push("At least one voucher line is required");
+      errors.push("At least one journal line is required");
     }
 
     if (data.lines && data.lines.length > 0) {
-      const totalLineAmount = data.lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
+      const totalDebits = data.lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
+      const totalCredits = data.lines.reduce((sum, line) => sum + (line.CreditAmount || 0), 0);
 
-      if (Math.abs(totalLineAmount - (data.voucher.TotalAmount || 0)) > 0.01) {
-        errors.push("Total line amounts must equal the payment amount");
+      if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        errors.push("Total debits must equal total credits");
       }
 
       data.lines.forEach((line, index) => {
@@ -131,27 +123,25 @@ class PaymentVoucherService extends BaseService {
           errors.push(`Line ${index + 1}: Account is required`);
         }
 
-        if (!line.DebitAmount || line.DebitAmount <= 0) {
-          errors.push(`Line ${index + 1}: Amount must be greater than zero`);
+        const hasDebit = (line.DebitAmount || 0) > 0;
+        const hasCredit = (line.CreditAmount || 0) > 0;
+
+        if (!hasDebit && !hasCredit) {
+          errors.push(`Line ${index + 1}: Either debit or credit amount must be greater than zero`);
+        }
+
+        if (hasDebit && hasCredit) {
+          errors.push(`Line ${index + 1}: Cannot have both debit and credit amounts on the same line`);
+        }
+
+        if (hasDebit && line.TransactionType !== TransactionType.DEBIT) {
+          errors.push(`Line ${index + 1}: Transaction type must be 'Debit' when debit amount is specified`);
+        }
+
+        if (hasCredit && line.TransactionType !== TransactionType.CREDIT) {
+          errors.push(`Line ${index + 1}: Transaction type must be 'Credit' when credit amount is specified`);
         }
       });
-    }
-
-    // Payment type specific validations
-    if (data.voucher.PaymentType === PaymentType.CHEQUE) {
-      if (!data.voucher.ChequeNo) {
-        errors.push("Cheque number is required for cheque payments");
-      }
-      if (!data.voucher.ChequeDate) {
-        errors.push("Cheque date is required for cheque payments");
-      }
-      if (!data.voucher.BankID) {
-        errors.push("Bank is required for cheque payments");
-      }
-    }
-
-    if (data.voucher.PaymentType === PaymentType.BANK_TRANSFER && !data.voucher.BankID) {
-      errors.push("Bank is required for bank transfer payments");
     }
 
     return {
@@ -160,16 +150,16 @@ class PaymentVoucherService extends BaseService {
     };
   }
 
-  // CORE PAYMENT VOUCHER OPERATIONS
+  // CORE JOURNAL VOUCHER OPERATIONS
 
   /**
-   * Create a new payment voucher
+   * Create a new journal voucher
    * @param data - The voucher data including lines and attachments
    * @returns Response with status and voucher details
    */
-  async createPaymentVoucher(data: PaymentVoucherRequest): Promise<CreatePaymentVoucherResponse> {
+  async createJournalVoucher(data: JournalVoucherRequest): Promise<CreateJournalVoucherResponse> {
     // Validate data
-    const validation = this.validatePaymentVoucherData(data);
+    const validation = this.validateJournalVoucherData(data);
     if (!validation.isValid) {
       return {
         success: false,
@@ -184,7 +174,7 @@ class PaymentVoucherService extends BaseService {
     }
 
     const request: BaseRequest = {
-      mode: 1, // Mode 1: Create New Payment Voucher
+      mode: 1, // Mode 1: Create New Journal Voucher
       parameters: {
         ...data.voucher,
         VoucherLinesJSON: JSON.stringify(data.lines),
@@ -197,10 +187,10 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment voucher created successfully");
+      this.showSuccess("Journal voucher created successfully");
       return {
         success: true,
-        message: response.message || "Payment voucher created successfully",
+        message: response.message || "Journal voucher created successfully",
         voucherNo: response.VoucherNo,
         postingId: response.PostingID,
       };
@@ -208,18 +198,18 @@ class PaymentVoucherService extends BaseService {
 
     return {
       success: false,
-      message: response.message || "Failed to create payment voucher",
+      message: response.message || "Failed to create journal voucher",
     };
   }
 
   /**
-   * Update an existing payment voucher
+   * Update an existing journal voucher
    * @param data - The voucher data including lines and attachments
    * @returns Response with status
    */
-  async updatePaymentVoucher(data: PaymentVoucherRequest & { voucherNo: string }): Promise<CreatePaymentVoucherResponse> {
+  async updateJournalVoucher(data: JournalVoucherRequest & { voucherNo: string }): Promise<CreateJournalVoucherResponse> {
     // Validate data
-    const validation = this.validatePaymentVoucherData(data);
+    const validation = this.validateJournalVoucherData(data);
     if (!validation.isValid) {
       return {
         success: false,
@@ -234,7 +224,7 @@ class PaymentVoucherService extends BaseService {
     }
 
     const request: BaseRequest = {
-      mode: 2, // Mode 2: Update Existing Payment Voucher
+      mode: 2, // Mode 2: Update Existing Journal Voucher
       parameters: {
         ...data.voucher,
         VoucherNo: data.voucherNo,
@@ -248,51 +238,52 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment voucher updated successfully");
+      this.showSuccess("Journal voucher updated successfully");
       return {
         success: true,
-        message: response.message || "Payment voucher updated successfully",
+        message: response.message || "Journal voucher updated successfully",
       };
     }
 
     return {
       success: false,
-      message: response.message || "Failed to update payment voucher",
+      message: response.message || "Failed to update journal voucher",
     };
   }
 
   /**
-   * Get all payment vouchers with optional filtering
+   * Get all journal vouchers with optional filtering
    * @param filters - Optional search and filter criteria
-   * @returns Array of payment vouchers
+   * @returns Array of journal vouchers
    */
-  async getAllPaymentVouchers(filters?: PaymentSearchFilters): Promise<PaymentVoucher[]> {
+  async getAllJournalVouchers(filters?: JournalSearchFilters): Promise<JournalVoucher[]> {
     const request: BaseRequest = {
-      mode: 3, // Mode 3: Get All Payment Vouchers
+      mode: 3, // Mode 3: Get All Journal Vouchers
       parameters: {
         FilterCompanyID: filters?.companyId,
         FilterFiscalYearID: filters?.fiscalYearId,
         FilterStatus: filters?.status,
         FilterSupplierID: filters?.supplierId,
-        FilterPaymentType: filters?.paymentType,
+        FilterAccountID: filters?.accountId,
         FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
         FilterDateTo: filters?.dateTo?.toISOString().split("T")[0],
+        JournalType: filters?.journalType,
       },
     };
 
-    const response = await this.execute<PaymentVoucher[]>(request);
+    const response = await this.execute<JournalVoucher[]>(request);
     return response.success ? response.data || [] : [];
   }
 
   /**
-   * Get payment voucher by voucher number (including lines and attachments)
+   * Get journal voucher by voucher number (including lines and attachments)
    * @param voucherNo - The voucher number
    * @param companyId - Optional company ID filter
    * @returns Voucher with lines and attachments
    */
-  async getPaymentVoucherByNumber(voucherNo: string, companyId?: number): Promise<PaymentVoucherResponse> {
+  async getJournalVoucherByNumber(voucherNo: string, companyId?: number): Promise<JournalVoucherResponse> {
     const request: BaseRequest = {
-      mode: 4, // Mode 4: Get Payment Voucher by Voucher Number
+      mode: 4, // Mode 4: Get Journal Voucher by Voucher Number
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
@@ -303,7 +294,7 @@ class PaymentVoucherService extends BaseService {
 
     if (response.success) {
       // Process attachments to create file URLs
-      const attachments = (response.table3 || []).map((attachment: PaymentVoucherAttachment) => {
+      const attachments = (response.table3 || []).map((attachment: JournalVoucherAttachment) => {
         if (attachment.FileContent && attachment.FileContentType) {
           attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;
         }
@@ -321,14 +312,14 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Delete a payment voucher
+   * Delete a journal voucher
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @returns Response with status
    */
-  async deletePaymentVoucher(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
+  async deleteJournalVoucher(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
     const request: BaseRequest = {
-      mode: 5, // Mode 5: Delete Payment Voucher
+      mode: 5, // Mode 5: Delete Journal Voucher
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
@@ -340,59 +331,59 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment voucher deleted successfully");
+      this.showSuccess("Journal voucher deleted successfully");
       return {
         success: true,
-        message: response.message || "Payment voucher deleted successfully",
+        message: response.message || "Journal voucher deleted successfully",
       };
     }
 
     return {
       success: false,
-      message: response.message || "Failed to delete payment voucher",
+      message: response.message || "Failed to delete journal voucher",
     };
   }
 
   // SEARCH AND FILTERING
 
   /**
-   * Search payment vouchers
+   * Search journal vouchers
    * @param filters - Search criteria and filters
    * @returns Array of matching vouchers
    */
-  async searchPaymentVouchers(filters: PaymentSearchFilters): Promise<PaymentVoucher[]> {
+  async searchJournalVouchers(filters: JournalSearchFilters): Promise<JournalVoucher[]> {
     const request: BaseRequest = {
-      mode: 6, // Mode 6: Search Payment Vouchers
+      mode: 6, // Mode 6: Search Journal Vouchers
       parameters: {
         SearchText: filters.searchText,
         FilterCompanyID: filters.companyId,
         FilterFiscalYearID: filters.fiscalYearId,
         FilterStatus: filters.status,
         FilterSupplierID: filters.supplierId,
-        FilterPaymentType: filters.paymentType,
+        FilterAccountID: filters.accountId,
         FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
         FilterDateTo: filters.dateTo?.toISOString().split("T")[0],
-        FilterAccountID: filters.accountId,
+        JournalType: filters.journalType,
       },
     };
 
-    const response = await this.execute<PaymentVoucher[]>(request);
+    const response = await this.execute<JournalVoucher[]>(request);
     return response.success ? response.data || [] : [];
   }
 
   // APPROVAL WORKFLOW
 
   /**
-   * Approve or reject a payment voucher
+   * Approve or reject a journal voucher
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @param action - Approve or Reject
    * @param comments - Optional approval comments
    * @returns Response with status
    */
-  async approveOrRejectPaymentVoucher(voucherNo: string, companyId: number, action: ApprovalAction, comments?: string): Promise<ApprovalResponse> {
+  async approveOrRejectJournalVoucher(voucherNo: string, companyId: number, action: ApprovalAction, comments?: string): Promise<ApprovalResponse> {
     const request: BaseRequest = {
-      mode: 7, // Mode 7: Approve/Reject Payment Voucher
+      mode: 7, // Mode 7: Approve/Reject Journal Voucher
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
@@ -406,26 +397,26 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess(`Payment voucher ${action.toLowerCase()}d successfully`);
+      this.showSuccess(`Journal voucher ${action.toLowerCase()}d successfully`);
       return {
         success: true,
-        message: response.message || `Payment voucher ${action.toLowerCase()}d successfully`,
+        message: response.message || `Journal voucher ${action.toLowerCase()}d successfully`,
       };
     }
 
     return {
       success: false,
-      message: response.message || `Failed to ${action.toLowerCase()} payment voucher`,
+      message: response.message || `Failed to ${action.toLowerCase()} journal voucher`,
     };
   }
 
   /**
-   * Submit payment voucher for approval
+   * Submit journal voucher for approval
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @returns Response with status
    */
-  async submitPaymentVoucherForApproval(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
+  async submitJournalVoucherForApproval(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
     const request: BaseRequest = {
       mode: 14, // Mode 14: Submit Voucher for Approval
       parameters: {
@@ -439,31 +430,31 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment voucher submitted for approval successfully");
+      this.showSuccess("Journal voucher submitted for approval successfully");
       return {
         success: true,
-        message: response.message || "Payment voucher submitted for approval successfully",
+        message: response.message || "Journal voucher submitted for approval successfully",
       };
     }
 
     return {
       success: false,
-      message: response.message || "Failed to submit payment voucher for approval",
+      message: response.message || "Failed to submit journal voucher for approval",
     };
   }
 
   // REVERSAL OPERATIONS
 
   /**
-   * Reverse a paid payment voucher
+   * Reverse a posted journal voucher
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @param reason - Reason for reversal
    * @returns Response with reversal details
    */
-  async reversePaymentVoucher(voucherNo: string, companyId: number, reason: string): Promise<ReversalResponse> {
+  async reverseJournalVoucher(voucherNo: string, companyId: number, reason: string): Promise<ReversalResponse> {
     const request: BaseRequest = {
-      mode: 8, // Mode 8: Reverse Payment Voucher
+      mode: 8, // Mode 8: Reverse Journal Voucher
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
@@ -476,28 +467,28 @@ class PaymentVoucherService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
-      this.showSuccess("Payment voucher reversed successfully");
+      this.showSuccess("Journal voucher reversed successfully");
       return {
         success: true,
-        message: response.message || "Payment voucher reversed successfully",
+        message: response.message || "Journal voucher reversed successfully",
         reversalVoucherNo: response.ReversalVoucherNo,
       };
     }
 
     return {
       success: false,
-      message: response.message || "Failed to reverse payment voucher",
+      message: response.message || "Failed to reverse journal voucher",
     };
   }
 
   // ATTACHMENT MANAGEMENT
 
   /**
-   * Add attachment to payment voucher
+   * Add attachment to journal voucher
    * @param attachment - The attachment data
    * @returns Response with attachment ID
    */
-  async addPaymentVoucherAttachment(attachment: Partial<PaymentVoucherAttachment> & { PostingID: number }): Promise<AttachmentResponse> {
+  async addJournalVoucherAttachment(attachment: Partial<JournalVoucherAttachment> & { PostingID: number }): Promise<AttachmentResponse> {
     const processedAttachment = await this.processAttachmentFile(attachment);
 
     const request: BaseRequest = {
@@ -527,11 +518,11 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Update payment voucher attachment
+   * Update journal voucher attachment
    * @param attachment - The attachment data to update
    * @returns Response with status
    */
-  async updatePaymentVoucherAttachment(attachment: Partial<PaymentVoucherAttachment> & { PostingAttachmentID: number }): Promise<AttachmentResponse> {
+  async updateJournalVoucherAttachment(attachment: Partial<JournalVoucherAttachment> & { PostingAttachmentID: number }): Promise<AttachmentResponse> {
     const processedAttachment = await this.processAttachmentFile(attachment);
 
     const request: BaseRequest = {
@@ -560,11 +551,11 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Delete payment voucher attachment
+   * Delete journal voucher attachment
    * @param attachmentId - The attachment ID
    * @returns Response with status
    */
-  async deletePaymentVoucherAttachment(attachmentId: number): Promise<AttachmentResponse> {
+  async deleteJournalVoucherAttachment(attachmentId: number): Promise<AttachmentResponse> {
     const request: BaseRequest = {
       mode: 17, // Mode 17: Delete Single Attachment
       parameters: {
@@ -595,7 +586,7 @@ class PaymentVoucherService extends BaseService {
    * @param postingId - The posting ID
    * @returns Array of attachments
    */
-  async getPaymentVoucherAttachmentsByPostingId(postingId: number): Promise<PaymentVoucherAttachment[]> {
+  async getJournalVoucherAttachmentsByPostingId(postingId: number): Promise<JournalVoucherAttachment[]> {
     const request: BaseRequest = {
       mode: 18, // Mode 18: Get Attachments by Posting ID
       parameters: {
@@ -603,11 +594,11 @@ class PaymentVoucherService extends BaseService {
       },
     };
 
-    const response = await this.execute<PaymentVoucherAttachment[]>(request);
+    const response = await this.execute<JournalVoucherAttachment[]>(request);
 
     if (response.success) {
       // Process attachments to create file URLs
-      const attachments = (response.data || []).map((attachment: PaymentVoucherAttachment) => {
+      const attachments = (response.data || []).map((attachment: JournalVoucherAttachment) => {
         if (attachment.FileContent && attachment.FileContentType) {
           attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;
         }
@@ -620,66 +611,16 @@ class PaymentVoucherService extends BaseService {
     return [];
   }
 
-  // SUPPLIER MANAGEMENT
-
-  /**
-   * Get supplier outstanding balance
-   * @param supplierId - The supplier ID
-   * @param balanceDate - Optional date to calculate balance as of
-   * @returns Supplier balance information
-   */
-  async getSupplierOutstandingBalance(supplierId: number, balanceDate?: Date): Promise<SupplierBalance | null> {
-    const request: BaseRequest = {
-      mode: 19, // Mode 19: Get Supplier Outstanding Balance
-      parameters: {
-        SupplierID: supplierId,
-        BalanceDate: balanceDate?.toISOString(),
-      },
-    };
-
-    const response = await this.execute(request, false);
-
-    if (response.success) {
-      return {
-        SupplierID: response.SupplierID || supplierId,
-        OutstandingBalance: response.SupplierBalance || 0,
-        BalanceDate: balanceDate || new Date(),
-      } as SupplierBalance;
-    }
-
-    return null;
-  }
-
-  /**
-   * Get payment history for a supplier
-   * @param supplierId - The supplier ID
-   * @param filters - Optional date filters
-   * @returns Array of payment history records
-   */
-  async getSupplierPaymentHistory(supplierId: number, filters?: { dateFrom?: Date; dateTo?: Date }): Promise<SupplierPaymentHistory[]> {
-    const request: BaseRequest = {
-      mode: 20, // Mode 20: Get Payment Vouchers by Supplier
-      parameters: {
-        SupplierID: supplierId,
-        FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
-        FilterDateTo: filters?.dateTo?.toISOString().split("T")[0],
-      },
-    };
-
-    const response = await this.execute<SupplierPaymentHistory[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
   // REPORTS AND UTILITIES
 
   /**
-   * Get payment summary report
+   * Get journal summary report
    * @param filters - Date and company filters
    * @returns Summary report data
    */
-  async getPaymentSummaryReport(filters: { dateFrom?: Date; dateTo?: Date; companyId?: number; fiscalYearId?: number }): Promise<PaymentSummaryReport[]> {
+  async getJournalSummaryReport(filters: { dateFrom?: Date; dateTo?: Date; companyId?: number; fiscalYearId?: number }): Promise<JournalSummaryReport[]> {
     const request: BaseRequest = {
-      mode: 10, // Mode 10: Get Payment Summary Report
+      mode: 10, // Mode 10: Get Journal Summary Report
       parameters: {
         FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
         FilterDateTo: filters.dateTo?.toISOString().split("T")[0],
@@ -688,7 +629,26 @@ class PaymentVoucherService extends BaseService {
       },
     };
 
-    const response = await this.execute<PaymentSummaryReport[]>(request);
+    const response = await this.execute<JournalSummaryReport[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Validate trial balance for journal vouchers
+   * @param filters - Date and company filters
+   * @returns Array of unbalanced vouchers
+   */
+  async validateTrialBalance(filters: { dateFrom?: Date; dateTo?: Date; companyId?: number }): Promise<TrialBalanceValidation[]> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Trial Balance Validation
+      parameters: {
+        FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
+        FilterDateTo: filters.dateTo?.toISOString().split("T")[0],
+        FilterCompanyID: filters.companyId,
+      },
+    };
+
+    const response = await this.execute<TrialBalanceValidation[]>(request);
     return response.success ? response.data || [] : [];
   }
 
@@ -699,7 +659,7 @@ class PaymentVoucherService extends BaseService {
    * @param postingId - Optional posting ID to exclude from check
    * @returns Whether voucher number exists
    */
-  async checkPaymentVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<boolean> {
+  async checkJournalVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<boolean> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Check if Voucher Number exists
       parameters: {
@@ -720,7 +680,7 @@ class PaymentVoucherService extends BaseService {
    * @param transactionDate - The transaction date
    * @returns Next voucher number
    */
-  async getNextPaymentVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<string> {
+  async getNextJournalVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<string> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get Next Voucher Number
       parameters: {
@@ -754,12 +714,12 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Get payment voucher for editing
+   * Get journal voucher for editing
    * @param voucherNo - The voucher number
    * @param companyId - Optional company ID
    * @returns Voucher data for editing
    */
-  async getPaymentVoucherForEdit(voucherNo: string, companyId?: number): Promise<PaymentVoucherResponse> {
+  async getJournalVoucherForEdit(voucherNo: string, companyId?: number): Promise<JournalVoucherResponse> {
     const request: BaseRequest = {
       mode: 9, // Mode 9: Get Voucher for Edit
       parameters: {
@@ -772,7 +732,7 @@ class PaymentVoucherService extends BaseService {
 
     if (response.success) {
       // Process attachments to create file URLs
-      const attachments = (response.table3 || []).map((attachment: PaymentVoucherAttachment) => {
+      const attachments = (response.table3 || []).map((attachment: JournalVoucherAttachment) => {
         if (attachment.FileContent && attachment.FileContentType) {
           attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;
         }
@@ -790,33 +750,137 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Get payment types for dropdown
-   * @returns Array of payment types
+   * Get journal types for dropdown
+   * @returns Array of journal types
    */
-  getPaymentTypes(): { value: PaymentType; label: string }[] {
+  async getJournalTypes(): Promise<{ JournalType: string; Description: string }[]> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Get Journal Types for Dropdown
+      parameters: {},
+    };
+
+    const response = await this.execute(request, false);
+    return response.success ? response.data || [] : [];
+  }
+
+  // HELPER METHODS FOR DROPDOWNS AND MASTER DATA
+
+  /**
+   * Get journal statuses for dropdown
+   * @returns Array of journal statuses
+   */
+  getJournalStatuses(): { value: JournalStatus; label: string }[] {
     return [
-      { value: PaymentType.CASH, label: "Cash" },
-      { value: PaymentType.CHEQUE, label: "Cheque" },
-      { value: PaymentType.BANK_TRANSFER, label: "Bank Transfer" },
-      { value: PaymentType.ONLINE, label: "Online Payment" },
-      { value: PaymentType.WIRE_TRANSFER, label: "Wire Transfer" },
-      { value: PaymentType.CREDIT_CARD, label: "Credit Card" },
-      { value: PaymentType.DEBIT_CARD, label: "Debit Card" },
+      { value: JournalStatus.DRAFT, label: "Draft" },
+      { value: JournalStatus.PENDING, label: "Pending Approval" },
+      { value: JournalStatus.POSTED, label: "Posted" },
+      { value: JournalStatus.REJECTED, label: "Rejected" },
     ];
   }
 
   /**
-   * Get payment statuses for dropdown
-   * @returns Array of payment statuses
+   * Get journal types for dropdown with descriptions
+   * @returns Array of journal types
    */
-  getPaymentStatuses(): { value: PaymentStatus; label: string }[] {
+  getJournalTypeOptions(): { value: JournalType; label: string; description: string }[] {
     return [
-      { value: PaymentStatus.DRAFT, label: "Draft" },
-      { value: PaymentStatus.PENDING, label: "Pending Approval" },
-      { value: PaymentStatus.PAID, label: "Paid" },
-      { value: PaymentStatus.REJECTED, label: "Rejected" },
-      { value: PaymentStatus.CANCELLED, label: "Cancelled" },
-      { value: PaymentStatus.REVERSED, label: "Reversed" },
+      {
+        value: JournalType.GENERAL,
+        label: "General",
+        description: "General journal entries for day-to-day transactions",
+      },
+      {
+        value: JournalType.ADJUSTING,
+        label: "Adjusting",
+        description: "Period-end adjusting entries for accruals and deferrals",
+      },
+      {
+        value: JournalType.CLOSING,
+        label: "Closing",
+        description: "Year-end closing entries to transfer balances",
+      },
+      {
+        value: JournalType.REVERSING,
+        label: "Reversing",
+        description: "Entries that reverse previous adjusting entries",
+      },
+    ];
+  }
+
+  // TEMPLATE AND AUTOMATION METHODS
+
+  /**
+   * Get common journal entry templates
+   * @returns Array of predefined templates
+   */
+  getJournalEntryTemplates(): JournalEntryTemplate[] {
+    return [
+      {
+        templateId: "accrual_expense",
+        templateName: "Accrued Expense",
+        description: "Record accrued expenses at period end",
+        journalType: JournalType.ADJUSTING,
+        lines: [
+          {
+            accountCode: "6001",
+            accountName: "Operating Expenses",
+            transactionType: TransactionType.DEBIT,
+            isAmount: true,
+            description: "Accrued expense",
+          },
+          {
+            accountCode: "3002",
+            accountName: "Accrued Liabilities",
+            transactionType: TransactionType.CREDIT,
+            isAmount: true,
+            description: "Accrued liability",
+          },
+        ],
+      },
+      {
+        templateId: "prepaid_expense",
+        templateName: "Prepaid Expense",
+        description: "Record prepaid expenses",
+        journalType: JournalType.GENERAL,
+        lines: [
+          {
+            accountCode: "1005",
+            accountName: "Prepaid Expenses",
+            transactionType: TransactionType.DEBIT,
+            isAmount: true,
+            description: "Prepaid expense",
+          },
+          {
+            accountCode: "1001",
+            accountName: "Cash",
+            transactionType: TransactionType.CREDIT,
+            isAmount: true,
+            description: "Cash payment",
+          },
+        ],
+      },
+      {
+        templateId: "depreciation",
+        templateName: "Depreciation Expense",
+        description: "Record monthly depreciation",
+        journalType: JournalType.ADJUSTING,
+        lines: [
+          {
+            accountCode: "6002",
+            accountName: "Depreciation Expense",
+            transactionType: TransactionType.DEBIT,
+            isAmount: true,
+            description: "Monthly depreciation",
+          },
+          {
+            accountCode: "1502",
+            accountName: "Accumulated Depreciation",
+            transactionType: TransactionType.CREDIT,
+            isAmount: true,
+            description: "Accumulated depreciation",
+          },
+        ],
+      },
     ];
   }
 
@@ -839,52 +903,72 @@ class PaymentVoucherService extends BaseService {
   }
 
   /**
-   * Calculate payment due date based on payment terms
-   * @param transactionDate - The transaction date
-   * @param paymentTermDays - Number of days for payment
-   * @returns Due date
+   * Calculate running balance for account ledger
+   * @param openingBalance - The opening balance
+   * @param transactions - Array of transactions
+   * @returns Array of transactions with running balances
    */
-  calculateDueDate(transactionDate: Date, paymentTermDays: number): Date {
-    const dueDate = new Date(transactionDate);
-    dueDate.setDate(dueDate.getDate() + paymentTermDays);
-    return dueDate;
+  calculateRunningBalances(openingBalance: number, transactions: { debitAmount: number; creditAmount: number }[]): ((typeof transactions)[0] & { runningBalance: number })[] {
+    let runningBalance = openingBalance;
+
+    return transactions.map((transaction) => {
+      runningBalance += transaction.debitAmount - transaction.creditAmount;
+      return {
+        ...transaction,
+        runningBalance,
+      };
+    });
   }
 
   /**
-   * Validate cheque details
-   * @param chequeNo - Cheque number
-   * @param chequeDate - Cheque date
-   * @param bankId - Bank ID
-   * @returns Validation result
+   * Validate journal entry balance
+   * @param lines - Array of journal lines
+   * @returns Whether the entry is balanced
    */
-  validateChequeDetails(chequeNo: string, chequeDate: Date, bankId: number): { isValid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    if (!chequeNo || chequeNo.trim().length === 0) {
-      errors.push("Cheque number is required");
-    }
-
-    if (!chequeDate) {
-      errors.push("Cheque date is required");
-    }
-
-    if (!bankId) {
-      errors.push("Bank is required");
-    }
-
-    if (chequeDate && chequeDate > new Date()) {
-      errors.push("Cheque date cannot be in the future");
-    }
+  validateJournalBalance(lines: Partial<JournalVoucherLine>[]): { isBalanced: boolean; variance: number } {
+    const totalDebits = lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
+    const totalCredits = lines.reduce((sum, line) => sum + (line.CreditAmount || 0), 0);
+    const variance = Math.abs(totalDebits - totalCredits);
 
     return {
-      isValid: errors.length === 0,
-      errors,
+      isBalanced: variance <= 0.01,
+      variance,
+    };
+  }
+
+  /**
+   * Generate journal entry from template
+   * @param template - The template to use
+   * @param amounts - Array of amounts for template placeholders
+   * @param baseData - Base voucher data
+   * @returns Generated journal voucher request
+   */
+  generateJournalFromTemplate(template: JournalEntryTemplate, amounts: number[], baseData: Partial<JournalVoucher>): JournalVoucherRequest {
+    const lines: Partial<JournalVoucherLine>[] = template.lines.map((templateLine, index) => {
+      const amount = templateLine.isAmount ? amounts[index] || 0 : templateLine.fixedAmount || 0;
+
+      return {
+        AccountID: 0, // Would need to resolve from account code
+        TransactionType: templateLine.transactionType,
+        DebitAmount: templateLine.transactionType === TransactionType.DEBIT ? amount : 0,
+        CreditAmount: templateLine.transactionType === TransactionType.CREDIT ? amount : 0,
+        LineDescription: templateLine.description,
+      };
+    });
+
+    return {
+      voucher: {
+        ...baseData,
+        JournalType: template.journalType,
+        Description: template.description,
+      },
+      lines,
     };
   }
 }
 
 // Export a singleton instance
-export const paymentVoucherService = new PaymentVoucherService();
+export const journalVoucherService = new JournalVoucherService();
 
 // Also export the class for potential inheritance or testing
-export { PaymentVoucherService };
+export { JournalVoucherService };

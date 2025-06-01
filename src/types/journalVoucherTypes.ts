@@ -1,0 +1,623 @@
+// src/types/journalVoucherTypes.ts
+
+export interface BaseJournalVoucher {
+  CreatedBy?: string;
+  CreatedOn?: string;
+  UpdatedBy?: string;
+  UpdatedOn?: string;
+  DeletedBy?: string;
+  DeletedOn?: string;
+  RecordStatus?: boolean;
+}
+
+export interface JournalVoucher extends BaseJournalVoucher {
+  PostingID?: number;
+  VoucherNo: string;
+  VoucherType?: string;
+  TransactionDate: string | Date;
+  PostingDate?: string | Date;
+  CompanyID: number;
+  FiscalYearID: number;
+  CurrencyID: number;
+  ExchangeRate?: number;
+  Description?: string;
+  Narration?: string;
+
+  // Journal Specific Fields
+  ChequeNo?: string;
+  ChequeDate?: string | Date;
+  InvoiceNo?: string;
+  InvoiceDate?: string | Date;
+  PaidTo?: string;
+  RefNo?: string;
+  SupplierID?: number;
+  TaxRegNo?: string;
+  City?: string;
+  PostingStatus?: JournalStatus;
+  JournalType?: JournalType;
+
+  // Cost Center Parameters
+  CostCenter1ID?: number;
+  CostCenter2ID?: number;
+  CostCenter3ID?: number;
+  CostCenter4ID?: number;
+  CopyCostCenters?: boolean;
+
+  // Tax Parameters
+  TaxID?: number;
+  IsTaxInclusive?: boolean;
+
+  // Reference Information
+  ReferenceType?: string;
+  ReferenceID?: number;
+  ReferenceNo?: string;
+
+  // Additional fields from joins
+  CompanyName?: string;
+  FYDescription?: string;
+  CurrencyName?: string;
+  SupplierName?: string;
+  CostCenter1Name?: string;
+  CostCenter2Name?: string;
+  CostCenter3Name?: string;
+  CostCenter4Name?: string;
+
+  // Calculated fields
+  TotalDebit?: number;
+  TotalCredit?: number;
+  BalanceVariance?: number;
+
+  // Approval fields
+  ApprovedBy?: number;
+  ApprovedOn?: string;
+  ApprovedByUserName?: string;
+
+  // Reversal fields
+  IsReversed?: boolean;
+  ReversedBy?: number;
+  ReversedOn?: string;
+  ReversedByUserName?: string;
+  ReversalReason?: string;
+  ReversalPostingID?: number;
+}
+
+export interface JournalVoucherLine extends BaseJournalVoucher {
+  PostingID?: number;
+  VoucherNo?: string;
+  AccountID: number;
+  TransactionType: TransactionType;
+  DebitAmount: number;
+  CreditAmount: number;
+  BaseAmount?: number;
+  TaxPercentage?: number;
+  LineTaxAmount?: number;
+  LineDescription?: string;
+
+  // Line-specific journal fields
+  LineInvoiceNo?: string;
+  LineInvoiceDate?: string | Date;
+  LineSupplierID?: number;
+  LineTRN?: string;
+  LineCity?: string;
+
+  // Line-specific cost centers
+  LineCostCenter1ID?: number;
+  LineCostCenter2ID?: number;
+  LineCostCenter3ID?: number;
+  LineCostCenter4ID?: number;
+
+  // Customer assignment
+  CustomerID?: number;
+
+  // Currency conversion
+  BaseCurrencyAmount?: number;
+
+  // Additional fields from joins
+  AccountCode?: string;
+  AccountName?: string;
+  CustomerFullName?: string;
+  LineSupplierName?: string;
+  CostCenter1Name?: string;
+  CostCenter2Name?: string;
+  CostCenter3Name?: string;
+  CostCenter4Name?: string;
+}
+
+export interface JournalVoucherAttachment extends BaseJournalVoucher {
+  PostingAttachmentID: number;
+  PostingID: number;
+  DocTypeID: number;
+  DocumentName: string;
+  FilePath?: string;
+  FileContent?: string | ArrayBuffer | null;
+  FileContentType?: string;
+  FileSize?: number;
+  DocumentDescription?: string;
+  UploadedDate?: string;
+  UploadedByUserID?: number;
+  IsRequired?: boolean;
+  DisplayOrder?: number;
+
+  // Additional fields from joins
+  DocTypeName?: string;
+  UploadedByUserName?: string;
+
+  // For UI only - not sent to backend
+  file?: File;
+  fileUrl?: string;
+}
+
+// Enums and supporting types
+export enum JournalStatus {
+  DRAFT = "Draft",
+  PENDING = "Pending",
+  POSTED = "Posted",
+  REJECTED = "Rejected",
+}
+
+export enum JournalType {
+  GENERAL = "General",
+  ADJUSTING = "Adjusting",
+  CLOSING = "Closing",
+  REVERSING = "Reversing",
+}
+
+export enum TransactionType {
+  DEBIT = "Debit",
+  CREDIT = "Credit",
+}
+
+export enum ApprovalAction {
+  APPROVE = "Approve",
+  REJECT = "Reject",
+}
+
+// Supporting types for dropdowns and master data
+export interface Account {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  AccountTypeID?: number;
+  AccountTypeName?: string;
+  IsActive?: boolean;
+  IsPostable?: boolean;
+  CurrencyID?: number;
+  Balance?: number;
+}
+
+export interface Company {
+  CompanyID: number;
+  CompanyName: string;
+  CompanyNo?: string;
+  IsActive?: boolean;
+}
+
+export interface FiscalYear {
+  FiscalYearID: number;
+  FYCode: string;
+  FYDescription: string;
+  StartDate: string | Date;
+  EndDate: string | Date;
+  IsActive?: boolean;
+  IsClosed?: boolean;
+}
+
+export interface Currency {
+  CurrencyID: number;
+  CurrencyCode: string;
+  CurrencyName: string;
+  ConversionRate?: number;
+  IsDefault?: boolean;
+}
+
+export interface CostCenter {
+  CostCenter1ID?: number;
+  CostCenter2ID?: number;
+  CostCenter3ID?: number;
+  CostCenter4ID?: number;
+  Description: string;
+}
+
+export interface Customer {
+  CustomerID: number;
+  CustomerNo?: string;
+  CustomerFullName: string;
+  AccountID?: number;
+}
+
+export interface Supplier {
+  SupplierID: number;
+  SupplierNo?: string;
+  SupplierName: string;
+  AccountID?: number;
+  TaxRegNo?: string;
+  Email?: string;
+  PhoneNo?: string;
+  Address?: string;
+}
+
+export interface DocType {
+  DocTypeID: number;
+  Description: string;
+}
+
+export interface Tax {
+  TaxID: number;
+  TaxCode: string;
+  TaxName: string;
+  TaxRate: number;
+  IsActive?: boolean;
+}
+
+// Request/Response types
+export interface JournalVoucherRequest {
+  voucher: Partial<JournalVoucher>;
+  lines: Partial<JournalVoucherLine>[];
+  attachments?: Partial<JournalVoucherAttachment>[];
+}
+
+export interface JournalVoucherResponse {
+  voucher: JournalVoucher | null;
+  lines: JournalVoucherLine[];
+  attachments: JournalVoucherAttachment[];
+}
+
+export interface JournalSearchFilters {
+  searchText?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  companyId?: number;
+  fiscalYearId?: number;
+  status?: JournalStatus;
+  journalType?: JournalType;
+  supplierId?: number;
+  accountId?: number;
+}
+
+export interface JournalSummaryReport {
+  AccountID: number;
+  AccountCode: string;
+  AccountName: string;
+  TotalDebits: number;
+  TotalCredits: number;
+  NetAmount: number;
+  VoucherCount: number;
+}
+
+export interface TrialBalanceValidation {
+  VoucherNo: string;
+  TotalDebits: number;
+  TotalCredits: number;
+  Variance: number;
+}
+
+export interface AccountBalance {
+  AccountID: number;
+  AccountCode?: string;
+  AccountName?: string;
+  Balance: number;
+  BalanceDate: Date;
+}
+
+export interface JournalStatistics {
+  TotalVouchers: number;
+  DraftVouchers: number;
+  PendingVouchers: number;
+  PostedVouchers: number;
+  RejectedVouchers: number;
+  TotalAmount: number;
+  MonthlyTrend: {
+    Month: string;
+    Amount: number;
+    Count: number;
+  }[];
+  JournalTypeDistribution: {
+    JournalType: string;
+    Count: number;
+    Amount: number;
+  }[];
+  AccountDistribution: {
+    AccountName: string;
+    DebitAmount: number;
+    CreditAmount: number;
+    NetAmount: number;
+  }[];
+}
+
+// API Response interfaces
+export interface ApiResponse<T = any> {
+  Status: number;
+  Message: string;
+  [key: string]: any;
+  data?: T;
+}
+
+export interface CreateJournalVoucherResponse {
+  success: boolean;
+  message: string;
+  voucherNo?: string;
+  postingId?: number;
+}
+
+export interface ApprovalResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ReversalResponse {
+  success: boolean;
+  message: string;
+  reversalVoucherNo?: string;
+}
+
+export interface AttachmentResponse {
+  success: boolean;
+  message: string;
+  attachmentId?: number;
+}
+
+export interface NextVoucherNumberResponse {
+  success: boolean;
+  message: string;
+  nextVoucherNo?: string;
+}
+
+export interface AccountBalanceResponse {
+  success: boolean;
+  message: string;
+  accountBalance?: number;
+}
+
+export interface TrialBalanceResponse {
+  success: boolean;
+  message: string;
+  unbalancedVouchers?: TrialBalanceValidation[];
+}
+
+// Form validation schemas
+export interface JournalVoucherFormData {
+  // Header information
+  voucherNo?: string;
+  transactionDate: Date;
+  postingDate?: Date;
+  companyId: number;
+  fiscalYearId: number;
+  currencyId: number;
+  exchangeRate?: number;
+  description?: string;
+  narration?: string;
+
+  // Journal specific fields
+  chequeNo?: string;
+  chequeDate?: Date;
+  invoiceNo?: string;
+  invoiceDate?: Date;
+  paidTo?: string;
+  refNo?: string;
+  supplierId?: number;
+  taxRegNo?: string;
+  city?: string;
+  journalType?: JournalType;
+
+  // Cost centers
+  costCenter1Id?: number;
+  costCenter2Id?: number;
+  costCenter3Id?: number;
+  costCenter4Id?: number;
+  copyCostCenters?: boolean;
+
+  // Tax information
+  taxId?: number;
+  isTaxInclusive?: boolean;
+
+  // Reference information
+  referenceType?: string;
+  referenceId?: number;
+  referenceNo?: string;
+
+  // Journal lines (both debits and credits)
+  lines: {
+    accountId: number;
+    transactionType: TransactionType;
+    debitAmount?: number;
+    creditAmount?: number;
+    description?: string;
+    lineInvoiceNo?: string;
+    lineInvoiceDate?: Date;
+    lineSupplier?: number;
+    lineTRN?: string;
+    lineCity?: string;
+    customerId?: number;
+    taxPercentage?: number;
+    lineCostCenter1Id?: number;
+    lineCostCenter2Id?: number;
+    lineCostCenter3Id?: number;
+    lineCostCenter4Id?: number;
+  }[];
+
+  // Attachments
+  attachments?: {
+    docTypeId: number;
+    documentName: string;
+    file?: File;
+    documentDescription?: string;
+    isRequired?: boolean;
+  }[];
+}
+
+// Error types
+export interface JournalVoucherError {
+  field?: string;
+  message: string;
+  code?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: JournalVoucherError[];
+}
+
+// Utility types
+export type JournalVoucherLineInput = Omit<JournalVoucherLine, "PostingID" | "VoucherNo" | keyof BaseJournalVoucher>;
+export type JournalAttachmentInput = Omit<JournalVoucherAttachment, "PostingAttachmentID" | "PostingID" | "UploadedDate" | "UploadedByUserID" | keyof BaseJournalVoucher>;
+export type JournalVoucherInput = Omit<JournalVoucher, "PostingID" | keyof BaseJournalVoucher>;
+
+// Default export types for common usage
+export type JournalVoucherCreate = JournalVoucherRequest;
+export type JournalVoucherUpdate = JournalVoucherRequest & { voucherNo: string };
+export type JournalVoucherDetail = JournalVoucherResponse;
+
+// Journal entry templates for common transactions
+export interface JournalEntryTemplate {
+  templateId: string;
+  templateName: string;
+  description: string;
+  journalType: JournalType;
+  lines: {
+    accountCode: string;
+    accountName: string;
+    transactionType: TransactionType;
+    isAmount?: boolean; // If true, user needs to enter amount
+    fixedAmount?: number; // If set, amount is predefined
+    description?: string;
+  }[];
+}
+
+// Recurring journal entry types
+export interface RecurringJournalEntry {
+  recurringId: number;
+  templateName: string;
+  frequency: "Monthly" | "Quarterly" | "Annually";
+  startDate: Date;
+  endDate?: Date;
+  nextRunDate: Date;
+  isActive: boolean;
+  template: JournalVoucherFormData;
+  lastProcessedDate?: Date;
+  processedCount: number;
+}
+
+// Audit trail types
+export interface JournalAuditLog {
+  auditId: number;
+  voucherNo: string;
+  action: "Created" | "Updated" | "Approved" | "Rejected" | "Posted" | "Reversed" | "Deleted";
+  userId: number;
+  userName: string;
+  timestamp: Date;
+  oldValues?: Record<string, any>;
+  newValues?: Record<string, any>;
+  comments?: string;
+  ipAddress?: string;
+}
+
+// Report types
+export interface JournalRegisterReport {
+  fromDate: Date;
+  toDate: Date;
+  companyId?: number;
+  journalType?: JournalType;
+  status?: JournalStatus;
+  entries: {
+    voucherNo: string;
+    transactionDate: Date;
+    journalType: JournalType;
+    description: string;
+    totalAmount: number;
+    status: JournalStatus;
+    createdBy: string;
+  }[];
+  totals: {
+    totalVouchers: number;
+    totalAmount: number;
+    draftCount: number;
+    postedCount: number;
+  };
+}
+
+export interface AccountLedgerReport {
+  accountId: number;
+  accountCode: string;
+  accountName: string;
+  fromDate: Date;
+  toDate: Date;
+  openingBalance: number;
+  transactions: {
+    date: Date;
+    voucherNo: string;
+    description: string;
+    debitAmount: number;
+    creditAmount: number;
+    runningBalance: number;
+  }[];
+  closingBalance: number;
+  totalDebits: number;
+  totalCredits: number;
+}
+
+// Integration types
+export interface JournalImportData {
+  transactionDate: string;
+  accountCode: string;
+  debitAmount?: number;
+  creditAmount?: number;
+  description: string;
+  reference?: string;
+  costCenter1?: string;
+  costCenter2?: string;
+  costCenter3?: string;
+  costCenter4?: string;
+}
+
+export interface JournalExportData extends JournalVoucher {
+  lines: JournalVoucherLine[];
+  totalDebits: number;
+  totalCredits: number;
+  attachmentCount: number;
+  isBalanced: boolean;
+}
+
+// Workflow types
+export interface JournalApprovalWorkflow {
+  currentStage: string;
+  nextStage?: string;
+  approvalLevels: {
+    level: number;
+    approverRole: string;
+    approverUserId?: number;
+    approvedDate?: Date;
+    comments?: string;
+    status: "Pending" | "Approved" | "Rejected";
+  }[];
+  canApprove: boolean;
+  canReject: boolean;
+  requiresApproval: boolean;
+}
+
+// Period closing types
+export interface PeriodClosingEntry {
+  closingId: number;
+  fiscalYearId: number;
+  periodEndDate: Date;
+  closingVoucherNo: string;
+  status: "Draft" | "Processing" | "Completed" | "Cancelled";
+  createdBy: string;
+  createdDate: Date;
+  processedAccounts: number;
+  totalAccounts: number;
+  retainedEarningsAccountId: number;
+}
+
+// Year-end adjustments
+export interface YearEndAdjustment {
+  adjustmentId: number;
+  adjustmentType: "Depreciation" | "Accrual" | "Prepayment" | "Provision" | "Other";
+  description: string;
+  calculatedAmount: number;
+  isAutoGenerated: boolean;
+  sourceModule?: string;
+  journalTemplate: JournalVoucherFormData;
+  isProcessed: boolean;
+  processedDate?: Date;
+  processedVoucherNo?: string;
+}

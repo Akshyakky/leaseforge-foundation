@@ -33,7 +33,7 @@ const paymentVoucherRoutes = (
 
     {/* Edit Existing Payment Voucher */}
     <Route
-      path="payment-vouchers/edit/:voucherNo"
+      path="payment-vouchers/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
           <PaymentVoucherForm />
@@ -43,7 +43,7 @@ const paymentVoucherRoutes = (
 
     {/* View Payment Voucher Details */}
     <Route
-      path="payment-vouchers/:voucherNo"
+      path="payment-vouchers/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
           <PaymentVoucherDetails />

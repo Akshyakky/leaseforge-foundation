@@ -29,5 +29,5 @@ export * from "./pettyCashService";
 export * from "./fiscalYearService";
 export * from "./generalLedgerService";
 export * from "./bankService";
-export { PaymentType as VoucherPaymentType, PaymentStatus as VoucherPaymentStatus } from "./paymentVoucherService";
+export * from "./paymentVoucherService";
 // Add any new services to this file for easy importing
