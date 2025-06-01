@@ -1,1046 +1,713 @@
-// src/pages/pettyCash/PettyCashForm.tsx
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form } from "@/components/ui/form";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, Loader2, Save, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, Upload, FileText, AlertCircle, Calculator } from "lucide-react";
+import { pettyCashService } from "@/services/pettyCashService";
+import { accountService } from "@/services/accountService";
+import { companyService } from "@/services/companyService";
+import { fiscalYearService } from "@/services/fiscalYearService";
+import { currencyService } from "@/services/currencyService";
+import { bankService } from "@/services/bankService";
+import { supplierService } from "@/services/supplierService";
+import { taxService } from "@/services/taxService";
+import { docTypeService } from "@/services/docTypeService";
+import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
-import { pettyCashService, PettyCashEntry, PettyCashVoucher } from "@/services/pettyCashService";
-import { Company } from "@/types/customerTypes";
-import { accountService, companyService, costCenterService, Currency, currencyService, fiscalYearService } from "@/services";
-import { taxService, Tax } from "@/services/taxService";
+import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, TransactionType } from "@/types/pettyCashTypes";
 import { Account } from "@/types/accountTypes";
-import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
+import { Company } from "@/services/companyService";
 import { FiscalYear } from "@/types/fiscalYearTypes";
+import { Currency } from "@/services/currencyService";
+import { Bank } from "@/types/bankTypes";
+import { Tax } from "@/services/taxService";
+import { DocType } from "@/services/docTypeService";
 
-// Define the Zod schema for a single PettyCashEntry (debit/credit line) with tax support
-const pettyCashEntrySchema = z.object({
-  AccountID: z.number().min(1, "Account is required."),
-  InputAmount: z.number().min(0.01, "Amount must be greater than 0."), // Changed from Amount to InputAmount
-  TaxID: z.number().nullable().optional(),
-  IsTaxInclusive: z.boolean().default(false),
-  Description: z.string().max(500, "Description cannot exceed 500 characters.").nullable().optional(),
-  Narration: z.string().max(1000, "Narration cannot exceed 1000 characters.").nullable().optional(),
-  CostCenter1ID: z.number().nullable().optional(),
-  CostCenter2ID: z.number().nullable().optional(),
-  CostCenter3ID: z.number().nullable().optional(),
-  CostCenter4ID: z.number().nullable().optional(),
+// Create the schema for petty cash voucher form validation
+const voucherLineSchema = z.object({
+  accountId: z.string().min(1, "Account is required"),
+  transactionType: z.enum(["Debit", "Credit"], { required_error: "Transaction type is required" }),
+  amount: z.coerce.number().min(0.01, "Amount must be greater than 0"),
+  description: z.string().optional(),
+  customerId: z.string().optional(),
+  supplierId: z.string().optional(),
+  taxPercentage: z.coerce.number().min(0).max(100).optional(),
 });
 
-// Define the Zod schema for the entire Petty Cash Voucher form
-const pettyCashFormSchema = z
-  .object({
-    VoucherNo: z.string().max(50, "Voucher No. cannot exceed 50 characters.").nullable().optional(),
-    TransactionDate: z.date({ required_error: "Transaction Date is required." }),
-    PostingDate: z.date({ required_error: "Posting Date is required." }),
-    CompanyID: z.number().min(1, "Company is required."),
-    FiscalYearID: z.number().min(1, "Fiscal Year is required."),
-    CurrencyID: z.number().min(1, "Currency is required."),
-    ExchangeRate: z.number().min(0.0001, "Exchange Rate must be greater than 0."),
-    Description: z.string().max(500, "Description cannot exceed 500 characters.").nullable().optional(),
-    Narration: z.string().max(1000, "Narration cannot exceed 1000 characters.").nullable().optional(),
-    PostingStatus: z.string().max(50, "Posting Status cannot exceed 50 characters.").nullable().optional(),
-    ReceiptNo: z.string().max(50, "Receipt No. cannot exceed 50 characters.").nullable().optional(),
+const attachmentSchema = z.object({
+  docTypeId: z.string().min(1, "Document type is required"),
+  documentName: z.string().min(1, "Document name is required"),
+  documentDescription: z.string().optional(),
+  isRequired: z.boolean().optional(),
+  file: z.any().optional(),
+});
 
-    DebitEntries: z.array(pettyCashEntrySchema).min(1, "At least one debit entry is required."),
-    CreditEntries: z.array(pettyCashEntrySchema).min(1, "At least one credit entry is required."),
-  })
-  .refine(
-    (data) => {
-      const totalDebits = data.DebitEntries.reduce((sum, entry) => sum + entry.InputAmount, 0);
-      const totalCredits = data.CreditEntries.reduce((sum, entry) => sum + entry.InputAmount, 0);
-      return Math.abs(totalDebits - totalCredits) < 0.0001; // Allow for floating point inaccuracies
-    },
-    {
-      message: "Total Debit Amount must equal Total Credit Amount.",
-      path: ["TotalAmountMismatch"], // This path makes the error global for the form
-    }
-  );
+const pettyCashVoucherSchema = z.object({
+  voucherNo: z.string().optional(),
+  transactionDate: z.date({ required_error: "Transaction date is required" }),
+  postingDate: z.date().optional(),
+  companyId: z.string().min(1, "Company is required"),
+  fiscalYearId: z.string().min(1, "Fiscal year is required"),
+  currencyId: z.string().min(1, "Currency is required"),
+  exchangeRate: z.coerce.number().min(0.0001, "Exchange rate must be greater than 0").optional(),
+  description: z.string().optional(),
+  narration: z.string().optional(),
+  paidTo: z.string().optional(),
+  invoiceNo: z.string().optional(),
+  refNo: z.string().optional(),
+  chequeNo: z.string().optional(),
+  chequeDate: z.date().optional(),
+  bankId: z.string().optional(),
+  taxId: z.string().optional(),
+  isTaxInclusive: z.boolean().optional(),
+  lines: z.array(voucherLineSchema).min(1, "At least one voucher line is required"),
+  attachments: z.array(attachmentSchema).optional(),
+});
 
-type PettyCashFormValues = z.infer<typeof pettyCashFormSchema>;
+type PettyCashVoucherFormValues = z.infer<typeof pettyCashVoucherSchema>;
 
-export const PettyCashForm: React.FC = () => {
-  const { id } = useParams<{ id: string }>(); // id is VoucherNo in edit mode
+const PettyCashForm = () => {
+  const { id } = useParams<{ id: string }>();
+  const isEdit = id !== "new" && id !== undefined;
   const navigate = useNavigate();
-  const { t } = useTranslation();
 
-  const isEditMode = !!id; // True if 'id' (VoucherNo) is present
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // State variables
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(isEdit);
+  const [voucher, setVoucher] = useState<PettyCashVoucher | null>(null);
 
-  // Lookup data states
+  // Reference data
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
   const [taxes, setTaxes] = useState<Tax[]>([]);
-  const [costCenters1, setCostCenters1] = useState<CostCenter1[]>([]);
-  const [costCenters2, setCostCenters2] = useState<CostCenter2[]>([]);
-  const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
-  const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
 
-  const form = useForm<PettyCashFormValues>({
-    resolver: zodResolver(pettyCashFormSchema),
+  // Initialize form
+  const form = useForm<PettyCashVoucherFormValues>({
+    resolver: zodResolver(pettyCashVoucherSchema),
     defaultValues: {
-      TransactionDate: new Date(),
-      PostingDate: new Date(),
-      ExchangeRate: 1.0,
-      PostingStatus: "Draft",
-      DebitEntries: [],
-      CreditEntries: [],
+      voucherNo: "",
+      transactionDate: new Date(),
+      companyId: "",
+      fiscalYearId: "",
+      currencyId: "",
+      exchangeRate: 1,
+      description: "",
+      narration: "",
+      paidTo: "",
+      invoiceNo: "",
+      refNo: "",
+      chequeNo: "",
+      bankId: "",
+      taxId: "",
+      isTaxInclusive: false,
+      lines: [{ accountId: "", transactionType: "Debit" as TransactionType, amount: 0 }],
+      attachments: [],
     },
   });
 
+  // Field arrays for dynamic sections
   const {
-    fields: debitFields,
-    append: appendDebit,
-    remove: removeDebit,
+    fields: lineFields,
+    append: appendLine,
+    remove: removeLine,
   } = useFieldArray({
     control: form.control,
-    name: "DebitEntries",
+    name: "lines",
   });
 
   const {
-    fields: creditFields,
-    append: appendCredit,
-    remove: removeCredit,
+    fields: attachmentFields,
+    append: appendAttachment,
+    remove: removeAttachment,
   } = useFieldArray({
     control: form.control,
-    name: "CreditEntries",
+    name: "attachments",
   });
 
-  // Fetch initial data (lookups and existing voucher in edit mode)
+  // Initialize and fetch data
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const initializeForm = async () => {
       try {
-        setLoading(true);
-        // Fetch lookup data in parallel
-        const [companiesData, fiscalYearsData, currenciesData, accountsData, taxesData, cc1Data, cc2Data, cc3Data, cc4Data] = await Promise.all([
-          companyService.getAllCompanies(),
-          fiscalYearService.getFiscalYearsForDropdown(),
-          currencyService.getAllCurrencies(),
-          accountService.getAllAccounts(),
-          taxService.getAllTaxes(), // Fetch taxes for dropdown
-          costCenterService.getCostCentersByLevel(1),
-          costCenterService.getCostCentersByLevel(2),
-          costCenterService.getCostCentersByLevel(3),
-          costCenterService.getCostCentersByLevel(4),
-        ]);
+        await fetchReferenceData();
 
-        setCompanies(companiesData);
-        setFiscalYears(fiscalYearsData);
-        setCurrencies(currenciesData);
-        setAccounts(accountsData);
-        setTaxes(taxesData);
-        setCostCenters1(cc1Data);
-        setCostCenters2(cc2Data as CostCenter2[]);
-        setCostCenters3(cc3Data as CostCenter3[]);
-        setCostCenters4(cc4Data as CostCenter4[]);
+        // If editing, fetch the voucher data
+        if (isEdit && id) {
+          const voucherData = await pettyCashService.getVoucherForEdit(id);
 
-        // Set default currency if not in edit mode or if currency isn't set
-        const defaultCurrency = currenciesData.find((c) => c.IsDefault);
-        if (!isEditMode && defaultCurrency) {
-          form.setValue("CurrencyID", defaultCurrency.CurrencyID);
-        }
+          if (voucherData.voucher) {
+            setVoucher(voucherData.voucher);
 
-        if (isEditMode) {
-          // Fetch existing voucher data
-          const voucherDetails = await pettyCashService.getPettyCashVoucherByVoucherNo(id!);
-          if (voucherDetails.voucher) {
-            const voucher = voucherDetails.voucher;
-            const lines = voucherDetails.postingLines;
-
+            // Set form values
             form.reset({
-              VoucherNo: voucher.VoucherNo,
-              TransactionDate: voucher.TransactionDate ? new Date(voucher.TransactionDate) : new Date(),
-              PostingDate: voucher.PostingDate ? new Date(voucher.PostingDate) : new Date(),
-              CompanyID: voucher.CompanyID,
-              FiscalYearID: voucher.FiscalYearID,
-              CurrencyID: voucher.CurrencyID,
-              ExchangeRate: voucher.ExchangeRate,
-              Description: voucher.Description,
-              Narration: voucher.Narration,
-              PostingStatus: voucher.PostingStatus,
-              ReceiptNo: voucher.ReceiptNo,
-              DebitEntries: lines
-                .filter((line) => line.TransactionType === "Debit")
-                .map((line) => ({
-                  AccountID: line.AccountID,
-                  InputAmount: line.BaseAmount || line.DebitAmount, // Use BaseAmount if available, fallback to DebitAmount
-                  TaxID: line.TaxID,
-                  IsTaxInclusive: line.IsTaxInclusive || false,
-                  Description: line.LineDescription,
-                  Narration: line.LineNarration,
-                  CostCenter1ID: line.CostCenter1ID,
-                  CostCenter2ID: line.CostCenter2ID,
-                  CostCenter3ID: line.CostCenter3ID,
-                  CostCenter4ID: line.CostCenter4ID,
-                })),
-              CreditEntries: lines
-                .filter((line) => line.TransactionType === "Credit")
-                .map((line) => ({
-                  AccountID: line.AccountID,
-                  InputAmount: line.BaseAmount || line.CreditAmount, // Use BaseAmount if available, fallback to CreditAmount
-                  TaxID: line.TaxID,
-                  IsTaxInclusive: line.IsTaxInclusive || false,
-                  Description: line.LineDescription,
-                  Narration: line.LineNarration,
-                  CostCenter1ID: line.CostCenter1ID,
-                  CostCenter2ID: line.CostCenter2ID,
-                  CostCenter3ID: line.CostCenter3ID,
-                  CostCenter4ID: line.CostCenter4ID,
-                })),
+              voucherNo: voucherData.voucher.VoucherNo,
+              transactionDate: new Date(voucherData.voucher.TransactionDate),
+              postingDate: voucherData.voucher.PostingDate ? new Date(voucherData.voucher.PostingDate) : undefined,
+              companyId: voucherData.voucher.CompanyID.toString(),
+              fiscalYearId: voucherData.voucher.FiscalYearID.toString(),
+              currencyId: voucherData.voucher.CurrencyID.toString(),
+              exchangeRate: voucherData.voucher.ExchangeRate || 1,
+              description: voucherData.voucher.Description || "",
+              narration: voucherData.voucher.Narration || "",
+              paidTo: voucherData.voucher.PaidTo || "",
+              invoiceNo: voucherData.voucher.InvoiceNo || "",
+              refNo: voucherData.voucher.RefNo || "",
+              chequeNo: voucherData.voucher.ChequeNo || "",
+              chequeDate: voucherData.voucher.ChequeDate ? new Date(voucherData.voucher.ChequeDate) : undefined,
+              bankId: voucherData.voucher.BankID?.toString() || "",
+              taxId: voucherData.voucher.TaxID?.toString() || "",
+              isTaxInclusive: voucherData.voucher.IsTaxInclusive || false,
+              lines: voucherData.lines.map((line) => ({
+                accountId: line.AccountID.toString(),
+                transactionType: line.TransactionType,
+                amount: line.TransactionType === "Debit" ? line.DebitAmount : line.CreditAmount,
+                description: line.LineDescription || "",
+                customerId: line.CustomerID?.toString() || "",
+                supplierId: line.SupplierID?.toString() || "",
+                taxPercentage: line.TaxPercentage || undefined,
+              })),
+              attachments: voucherData.attachments.map((attachment) => ({
+                docTypeId: attachment.DocTypeID.toString(),
+                documentName: attachment.DocumentName,
+                documentDescription: attachment.DocumentDescription || "",
+                isRequired: attachment.IsRequired || false,
+              })),
             });
-            // Disable form if not in Draft status
-            if (voucher.PostingStatus !== "Draft") {
-              form.setError("PostingStatus", {
-                type: "manual",
-                message: "This voucher is not in Draft status and cannot be edited.",
-              });
-              form.setFocus("VoucherNo");
-            }
           } else {
-            toast.error(t("pettyCash.voucherNotFound"));
+            toast.error("Voucher not found");
             navigate("/petty-cash");
+          }
+        } else {
+          // For new voucher, get next voucher number
+          const selectedCompanyId = form.watch("companyId");
+          const selectedFiscalYearId = form.watch("fiscalYearId");
+          if (selectedCompanyId && selectedFiscalYearId) {
+            const nextVoucherNo = await pettyCashService.getNextVoucherNumber(parseInt(selectedCompanyId), parseInt(selectedFiscalYearId));
+            if (nextVoucherNo) {
+              form.setValue("voucherNo", nextVoucherNo);
+            }
           }
         }
       } catch (error) {
-        console.error("Error fetching initial data:", error);
-        toast.error(t("common.errorLoadingData"));
-        navigate("/petty-cash");
+        console.error("Error initializing form:", error);
+        toast.error("Error loading form data");
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
       }
     };
 
-    fetchInitialData();
-  }, [id, isEditMode, form, navigate, t]);
+    initializeForm();
+  }, [id, isEdit, navigate, form]);
 
-  // Calculate total debits and credits for display
-  const totalDebits = useMemo(() => {
-    return form.watch("DebitEntries")?.reduce((sum, entry) => sum + (entry.InputAmount || 0), 0) || 0;
-  }, [form.watch("DebitEntries")]);
-
-  const totalCredits = useMemo(() => {
-    return form.watch("CreditEntries")?.reduce((sum, entry) => sum + (entry.InputAmount || 0), 0) || 0;
-  }, [form.watch("CreditEntries")]);
-
-  const onSubmit = async (values: PettyCashFormValues) => {
-    setIsSubmitting(true);
+  // Fetch reference data
+  const fetchReferenceData = async () => {
     try {
-      const voucherData: Omit<PettyCashVoucher, "PostingID" | "TotalAmount"> = {
-        VoucherNo: values.VoucherNo,
-        TransactionDate: values.TransactionDate,
-        PostingDate: values.PostingDate,
-        CompanyID: values.CompanyID,
-        FiscalYearID: values.FiscalYearID,
-        CurrencyID: values.CurrencyID,
-        ExchangeRate: values.ExchangeRate,
-        Description: values.Description,
-        Narration: values.Narration,
-        PostingStatus: values.PostingStatus,
-        ReceiptNo: values.ReceiptNo,
-      };
+      const [accountsData, companiesData, fiscalYearsData, currenciesData, banksData, taxesData, docTypesData] = await Promise.all([
+        accountService.getAllAccounts(),
+        companyService.getCompaniesForDropdown(true),
+        fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+        currencyService.getCurrenciesForDropdown(),
+        bankService.getAllBanks(),
+        taxService.getAllTaxes(),
+        docTypeService.getAllDocTypes(),
+      ]);
 
-      const mappedDebitEntries: PettyCashEntry[] = values.DebitEntries.map((entry) => ({
-        AccountID: entry.AccountID,
-        InputAmount: entry.InputAmount, // Use InputAmount for compatibility with SP
-        TaxID: entry.TaxID,
-        IsTaxInclusive: entry.IsTaxInclusive,
-        Description: entry.Description,
-        Narration: entry.Narration,
-        CostCenter1ID: entry.CostCenter1ID,
-        CostCenter2ID: entry.CostCenter2ID,
-        CostCenter3ID: entry.CostCenter3ID,
-        CostCenter4ID: entry.CostCenter4ID,
-      }));
-
-      const mappedCreditEntries: PettyCashEntry[] = values.CreditEntries.map((entry) => ({
-        AccountID: entry.AccountID,
-        InputAmount: entry.InputAmount, // Use InputAmount for compatibility with SP
-        TaxID: entry.TaxID,
-        IsTaxInclusive: entry.IsTaxInclusive,
-        Description: entry.Description,
-        Narration: entry.Narration,
-        CostCenter1ID: entry.CostCenter1ID,
-        CostCenter2ID: entry.CostCenter2ID,
-        CostCenter3ID: entry.CostCenter3ID,
-        CostCenter4ID: entry.CostCenter4ID,
-      }));
-
-      if (isEditMode) {
-        const updateRequest = {
-          voucher: voucherData,
-          debitEntries: mappedDebitEntries,
-          creditEntries: mappedCreditEntries,
-        };
-        const response = await pettyCashService.updatePettyCashVoucher(updateRequest);
-        if (response.Status === 1) {
-          toast.success(t("pettyCash.updateSuccess"));
-          navigate(`/petty-cash/${values.VoucherNo}`);
-        } else {
-          toast.error(response.Message || t("pettyCash.updateError"));
-        }
-      } else {
-        const createRequest = {
-          voucher: voucherData,
-          debitEntries: mappedDebitEntries,
-          creditEntries: mappedCreditEntries,
-        };
-        const response = await pettyCashService.createPettyCashVoucher(createRequest);
-        if (response.Status === 1) {
-          toast.success(t("pettyCash.createSuccess"));
-          navigate(`/petty-cash/${response.VoucherNo}`);
-        } else {
-          toast.error(response.Message || t("pettyCash.createError"));
-        }
-      }
+      setAccounts(accountsData.filter((account) => account.IsActive && account.IsPostable));
+      setCompanies(companiesData);
+      setFiscalYears(fiscalYearsData);
+      setCurrencies(currenciesData);
+      setBanks(banksData.filter((bank) => bank.IsActive));
+      setTaxes(taxesData);
+      setDocTypes(docTypesData);
     } catch (error) {
-      console.error("Error submitting petty cash voucher:", error);
-      toast.error(t("common.submitError"));
-    } finally {
-      setIsSubmitting(false);
+      console.error("Error fetching reference data:", error);
+      toast.error("Error loading reference data");
     }
   };
 
-  if (loading) {
+  // Watch for company/fiscal year changes to generate voucher number
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if ((name === "companyId" || name === "fiscalYearId") && !isEdit) {
+        const companyId = value.companyId;
+        const fiscalYearId = value.fiscalYearId;
+
+        if (companyId && fiscalYearId) {
+          pettyCashService.getNextVoucherNumber(parseInt(companyId), parseInt(fiscalYearId), value.transactionDate).then((nextVoucherNo) => {
+            if (nextVoucherNo) {
+              form.setValue("voucherNo", nextVoucherNo);
+            }
+          });
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, isEdit]);
+
+  // Submit handler for the voucher form
+  const onSubmit = async (data: PettyCashVoucherFormValues) => {
+    setLoading(true);
+
+    try {
+      // Validate that debits equal credits
+      const totalDebits = data.lines.filter((line) => line.transactionType === "Debit").reduce((sum, line) => sum + line.amount, 0);
+      const totalCredits = data.lines.filter((line) => line.transactionType === "Credit").reduce((sum, line) => sum + line.amount, 0);
+
+      if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        toast.error("Total debits must equal total credits");
+        setLoading(false);
+        return;
+      }
+
+      // Prepare voucher data
+      const voucherData = {
+        VoucherNo: data.voucherNo,
+        TransactionDate: data.transactionDate.toISOString(),
+        PostingDate: data.postingDate?.toISOString() || data.transactionDate.toISOString(),
+        CompanyID: parseInt(data.companyId),
+        FiscalYearID: parseInt(data.fiscalYearId),
+        CurrencyID: parseInt(data.currencyId),
+        ExchangeRate: data.exchangeRate || 1,
+        Description: data.description?.trim() || undefined,
+        Narration: data.narration?.trim() || undefined,
+        PaidTo: data.paidTo?.trim() || undefined,
+        InvoiceNo: data.invoiceNo?.trim() || undefined,
+        RefNo: data.refNo?.trim() || undefined,
+        ChequeNo: data.chequeNo?.trim() || undefined,
+        ChequeDate: data.chequeDate?.toISOString() || undefined,
+        BankID: data.bankId ? parseInt(data.bankId) : undefined,
+        TaxID: data.taxId ? parseInt(data.taxId) : undefined,
+        IsTaxInclusive: data.isTaxInclusive || false,
+      };
+
+      // Prepare lines data
+      const linesData = data.lines.map((line) => ({
+        AccountID: parseInt(line.accountId),
+        TransactionType: line.transactionType as TransactionType,
+        DebitAmount: line.transactionType === "Debit" ? line.amount : 0,
+        CreditAmount: line.transactionType === "Credit" ? line.amount : 0,
+        BaseAmount: line.amount,
+        TaxPercentage: line.taxPercentage || 0,
+        LineTaxAmount: line.taxPercentage ? (line.amount * line.taxPercentage) / 100 : 0,
+        LineDescription: line.description?.trim() || undefined,
+        CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
+        SupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
+      }));
+
+      // Prepare attachments data
+      const attachmentsData =
+        data.attachments?.map((attachment) => ({
+          DocTypeID: parseInt(attachment.docTypeId),
+          DocumentName: attachment.documentName.trim(),
+          DocumentDescription: attachment.documentDescription?.trim() || undefined,
+          IsRequired: attachment.isRequired || false,
+          file: attachment.file,
+        })) || [];
+
+      if (isEdit && voucher) {
+        // Update existing voucher
+        const result = await pettyCashService.updateVoucher({
+          voucherNo: voucher.VoucherNo,
+          voucher: voucherData,
+          lines: linesData,
+          attachments: attachmentsData,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          navigate("/petty-cash");
+        } else {
+          toast.error(result.message);
+        }
+      } else {
+        // Create new voucher
+        const result = await pettyCashService.createVoucher({
+          voucher: voucherData,
+          lines: linesData,
+          attachments: attachmentsData,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          navigate("/petty-cash");
+        } else {
+          toast.error(result.message);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving voucher:", error);
+      toast.error("Failed to save voucher");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add new voucher line
+  const addVoucherLine = () => {
+    appendLine({ accountId: "", transactionType: "Debit", amount: 0 });
+  };
+
+  // Remove voucher line
+  const removeVoucherLine = (index: number) => {
+    if (lineFields.length > 1) {
+      removeLine(index);
+    }
+  };
+
+  // Add new attachment
+  const addAttachment = () => {
+    appendAttachment({ docTypeId: "", documentName: "", isRequired: false });
+  };
+
+  // Remove attachment
+  const removeAttachmentItem = (index: number) => {
+    removeAttachment(index);
+  };
+
+  // Handle file upload
+  const handleFileUpload = (index: number, file: File | null) => {
+    if (file) {
+      form.setValue(`attachments.${index}.file`, file);
+      if (!form.getValues(`attachments.${index}.documentName`)) {
+        form.setValue(`attachments.${index}.documentName`, file.name);
+      }
+    }
+  };
+
+  // Calculate totals
+  const lines = form.watch("lines");
+  const totalDebits = lines.filter((line) => line.transactionType === "Debit").reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+  const totalCredits = lines.filter((line) => line.transactionType === "Credit").reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+  const difference = totalDebits - totalCredits;
+
+  // Cancel button handler
+  const handleCancel = () => {
+    navigate("/petty-cash");
+  };
+
+  if (initialLoading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const totalAmountMismatchError = form.formState.errors.root?.TotalAmountMismatch;
-  const isFormDisabled = form.formState.errors.PostingStatus?.type === "manual";
-
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">{isEditMode ? t("pettyCash.editVoucher") : t("pettyCash.newVoucher")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Header Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="flex items-center space-x-2">
+        <Button variant="outline" size="icon" onClick={() => navigate("/petty-cash")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-2xl font-semibold">{isEdit ? "Edit Petty Cash Voucher" : "Create Petty Cash Voucher"}</h1>
+      </div>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Header Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Voucher Information</CardTitle>
+              <CardDescription>Enter the basic voucher details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField form={form} name="voucherNo" label="Voucher Number" placeholder="Auto-generated" disabled={isEdit} description="Unique voucher number" />
+                <FormField form={form} name="transactionDate" label="Transaction Date" type="date" required description="Date of the transaction" />
+                <FormField form={form} name="postingDate" label="Posting Date" type="date" description="Date for posting (defaults to transaction date)" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
-                  control={form.control}
-                  name="VoucherNo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.voucherNo")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} disabled={isEditMode || isFormDisabled} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  form={form}
+                  name="companyId"
+                  label="Company"
+                  type="select"
+                  options={companies.map((company) => ({
+                    label: company.CompanyName,
+                    value: company.CompanyID.toString(),
+                  }))}
+                  placeholder="Select company"
+                  required
+                  description="Company for this voucher"
                 />
                 <FormField
-                  control={form.control}
-                  name="TransactionDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.transactionDate")}</FormLabel>
-                      <div>
-                        <DatePicker value={field.value} onChange={field.onChange} disabled={isFormDisabled} />
+                  form={form}
+                  name="fiscalYearId"
+                  label="Fiscal Year"
+                  type="select"
+                  options={fiscalYears.map((fy) => ({
+                    label: fy.FYDescription,
+                    value: fy.FiscalYearID.toString(),
+                  }))}
+                  placeholder="Select fiscal year"
+                  required
+                  description="Fiscal year for this voucher"
+                />
+                <FormField
+                  form={form}
+                  name="currencyId"
+                  label="Currency"
+                  type="select"
+                  options={currencies.map((currency) => ({
+                    label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
+                    value: currency.CurrencyID.toString(),
+                  }))}
+                  placeholder="Select currency"
+                  required
+                  description="Currency for this voucher"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField form={form} name="description" label="Description" placeholder="Enter voucher description" description="Brief description of the voucher" />
+                <FormField form={form} name="paidTo" label="Paid To" placeholder="Enter payee name" description="Name of the person/entity paid" />
+              </div>
+
+              <FormField form={form} name="narration" label="Narration" type="textarea" placeholder="Enter detailed narration" description="Detailed description or notes" />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField form={form} name="invoiceNo" label="Invoice Number" placeholder="Enter invoice number" description="Related invoice number" />
+                <FormField form={form} name="refNo" label="Reference Number" placeholder="Enter reference number" description="External reference number" />
+                <FormField form={form} name="exchangeRate" label="Exchange Rate" type="number" step="0.0001" placeholder="1.0000" description="Exchange rate to base currency" />
+              </div>
+
+              {/* Bank and Cheque Details */}
+              <Separator />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField
+                  form={form}
+                  name="bankId"
+                  label="Bank"
+                  type="select"
+                  options={banks.map((bank) => ({
+                    label: bank.BankName,
+                    value: bank.BankID.toString(),
+                  }))}
+                  placeholder="Select bank"
+                  description="Bank for cheque payments"
+                />
+                <FormField form={form} name="chequeNo" label="Cheque Number" placeholder="Enter cheque number" description="Cheque number if applicable" />
+                <FormField form={form} name="chequeDate" label="Cheque Date" type="date" description="Date on the cheque" />
+              </div>
+
+              {/* Tax Information */}
+              <Separator />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  form={form}
+                  name="taxId"
+                  label="Tax"
+                  type="select"
+                  options={taxes.map((tax) => ({
+                    label: `${tax.TaxCode} - ${tax.TaxName} (${tax.TaxRate}%)`,
+                    value: tax.TaxID.toString(),
+                  }))}
+                  placeholder="Select tax"
+                  description="Applicable tax"
+                />
+                <FormField form={form} name="isTaxInclusive" label="Tax Inclusive" type="switch" description="Whether amounts include tax" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Voucher Lines */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Voucher Lines</CardTitle>
+                  <CardDescription>Add debit and credit entries</CardDescription>
+                </div>
+                <Button type="button" variant="outline" onClick={addVoucherLine}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Line
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">Account</TableHead>
+                      <TableHead className="w-[120px]">Type</TableHead>
+                      <TableHead className="w-[120px]">Amount</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineFields.map((field, index) => (
+                      <TableRow key={field.id}>
+                        <TableCell>
+                          <FormField
+                            form={form}
+                            name={`lines.${index}.accountId`}
+                            type="select"
+                            options={accounts.map((account) => ({
+                              label: `${account.AccountCode} - ${account.AccountName}`,
+                              value: account.AccountID.toString(),
+                            }))}
+                            placeholder="Select account"
+                            className="min-w-[200px]"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormField
+                            form={form}
+                            name={`lines.${index}.transactionType`}
+                            type="select"
+                            options={[
+                              { label: "Debit", value: "Debit" },
+                              { label: "Credit", value: "Credit" },
+                            ]}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormField form={form} name={`lines.${index}.amount`} type="number" step="0.01" placeholder="0.00" className="w-[100px]" />
+                        </TableCell>
+                        <TableCell>
+                          <FormField form={form} name={`lines.${index}.description`} placeholder="Line description" className="min-w-[150px]" />
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeVoucherLine(index)} disabled={lineFields.length === 1}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Balance Summary */}
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Calculator className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Balance Summary:</span>
+                    </div>
+                    <div className="text-sm">
+                      Debits: <span className="font-mono">{totalDebits.toFixed(2)}</span>
+                    </div>
+                    <div className="text-sm">
+                      Credits: <span className="font-mono">{totalCredits.toFixed(2)}</span>
+                    </div>
+                    <div className="text-sm">
+                      Difference: <span className={`font-mono ${Math.abs(difference) > 0.01 ? "text-red-600" : "text-green-600"}`}>{difference.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  {Math.abs(difference) > 0.01 && (
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Out of Balance
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Attachments */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Attachments</CardTitle>
+                  <CardDescription>Upload supporting documents</CardDescription>
+                </div>
+                <Button type="button" variant="outline" onClick={addAttachment}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Attachment
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {attachmentFields.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="mx-auto h-12 w-12 mb-4" />
+                  <p>No attachments added. Click "Add Attachment" to upload documents.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {attachmentFields.map((field, index) => (
+                    <div key={field.id} className="border rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField
+                          form={form}
+                          name={`attachments.${index}.docTypeId`}
+                          label="Document Type"
+                          type="select"
+                          options={docTypes.map((docType) => ({
+                            label: docType.Description,
+                            value: docType.DocTypeID.toString(),
+                          }))}
+                          placeholder="Select document type"
+                        />
+                        <FormField form={form} name={`attachments.${index}.documentName`} label="Document Name" placeholder="Enter document name" />
                       </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="PostingDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.postingDate")}</FormLabel>
-                      <div>
-                        <DatePicker value={field.value} onChange={field.onChange} disabled={isFormDisabled} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <FormField form={form} name={`attachments.${index}.documentDescription`} label="Description" placeholder="Enter description" />
+                        <FormField form={form} name={`attachments.${index}.isRequired`} label="Required" type="switch" />
                       </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="CompanyID"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.company")}</FormLabel>
-                      <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={isFormDisabled}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t("pettyCash.selectCompany")} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {companies.map((company) => (
-                            <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
-                              {company.CompanyName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="FiscalYearID"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.fiscalYear")}</FormLabel>
-                      <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={isFormDisabled}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t("pettyCash.selectFiscalYear")} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {fiscalYears.map((fy) => (
-                            <SelectItem key={fy.FiscalYearID} value={fy.FiscalYearID.toString()}>
-                              {fy.FYDescription}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="CurrencyID"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.currency")}</FormLabel>
-                      <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()} disabled={isFormDisabled}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t("pettyCash.selectCurrency")} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency.CurrencyID} value={currency.CurrencyID.toString()}>
-                              {currency.CurrencyName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="ExchangeRate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.exchangeRate")}</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.0001" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value))} disabled={isFormDisabled} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="ReceiptNo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.receiptNo")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} disabled={isFormDisabled} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="PostingStatus"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("pettyCash.postingStatus")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} disabled readOnly />
-                      </FormControl>
-                      {form.formState.errors.PostingStatus && <FormMessage>{form.formState.errors.PostingStatus.message}</FormMessage>}
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <input type="file" id={`file-${index}`} className="hidden" onChange={(e) => handleFileUpload(index, e.target.files?.[0] || null)} />
+                          <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`file-${index}`)?.click()}>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Choose File
+                          </Button>
+                          {form.watch(`attachments.${index}.file`) && (
+                            <span className="text-sm text-muted-foreground">{(form.watch(`attachments.${index}.file`) as File)?.name}</span>
+                          )}
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachmentItem(index)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-              <FormField
-                control={form.control}
-                name="Description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("pettyCash.description")}</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} value={field.value || ""} disabled={isFormDisabled} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          {/* Form Actions */}
+          <Card>
+            <CardFooter className="flex justify-between">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading || Math.abs(difference) > 0.01}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Voucher
+                  </>
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="Narration"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("pettyCash.narration")}</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} value={field.value || ""} disabled={isFormDisabled} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Separator />
-
-              {/* Debit Entries Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">{t("pettyCash.debitEntries")}</h3>
-                {debitFields.map((field, index) => (
-                  <Card key={field.id} className="p-4 relative">
-                    <div className="absolute top-2 right-2">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeDebit(index)} disabled={isFormDisabled}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.AccountID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.account")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectAccount")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {accounts.map((account) => (
-                                  <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                                    {account.AccountCode} - {account.AccountName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.InputAmount`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.amount")}</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...entryField} onChange={(e) => entryField.onChange(parseFloat(e.target.value))} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.TaxID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.tax")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectTax")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">No Tax</SelectItem>
-                                {taxes.map((tax) => (
-                                  <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
-                                    {tax.TaxCode} - {tax.TaxName} ({tax.TaxRate}%)
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.IsTaxInclusive`}
-                        render={({ field: entryField }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox checked={entryField.value} onCheckedChange={entryField.onChange} disabled={isFormDisabled} />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>{t("pettyCash.taxInclusive")}</FormLabel>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.Description`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.lineDescription")}</FormLabel>
-                            <FormControl>
-                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.Narration`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.lineNarration")}</FormLabel>
-                            <FormControl>
-                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {/* Cost Center Fields for Debit Entries */}
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.CostCenter1ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter1")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters1.map((cc) => (
-                                  <SelectItem key={cc.CostCenter1ID} value={cc.CostCenter1ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.CostCenter2ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter2")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters2.map((cc) => (
-                                  <SelectItem key={cc.CostCenter2ID} value={cc.CostCenter2ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.CostCenter3ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter3")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters3.map((cc) => (
-                                  <SelectItem key={cc.CostCenter3ID} value={cc.CostCenter3ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`DebitEntries.${index}.CostCenter4ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter4")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters4.map((cc) => (
-                                  <SelectItem key={cc.CostCenter4ID} value={cc.CostCenter4ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </Card>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => appendDebit({ AccountID: 0, InputAmount: 0, TaxID: undefined, IsTaxInclusive: false, Description: "", Narration: "" })}
-                  disabled={isFormDisabled}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Debit Entry
-                </Button>
-              </div>
-
-              <Separator />
-
-              {/* Credit Entries Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">{t("pettyCash.creditEntries")}</h3>
-                {creditFields.map((field, index) => (
-                  <Card key={field.id} className="p-4 relative">
-                    <div className="absolute top-2 right-2">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeCredit(index)} disabled={isFormDisabled}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.AccountID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.account")}</FormLabel>
-                            <Select onValueChange={(value) => entryField.onChange(parseInt(value))} value={entryField.value?.toString()} disabled={isFormDisabled}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectAccount")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {accounts.map((account) => (
-                                  <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                                    {account.AccountCode} - {account.AccountName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.InputAmount`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.amount")}</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...entryField} onChange={(e) => entryField.onChange(parseFloat(e.target.value))} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.TaxID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.tax")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectTax")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">No Tax</SelectItem>
-                                {taxes.map((tax) => (
-                                  <SelectItem key={tax.TaxID} value={tax.TaxID.toString()}>
-                                    {tax.TaxCode} - {tax.TaxName} ({tax.TaxRate}%)
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.IsTaxInclusive`}
-                        render={({ field: entryField }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox checked={entryField.value} onCheckedChange={entryField.onChange} disabled={isFormDisabled} />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>{t("pettyCash.taxInclusive")}</FormLabel>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.Description`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.lineDescription")}</FormLabel>
-                            <FormControl>
-                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.Narration`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.lineNarration")}</FormLabel>
-                            <FormControl>
-                              <Input {...entryField} value={entryField.value || ""} disabled={isFormDisabled} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {/* Cost Center Fields for Credit Entries */}
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.CostCenter1ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter1")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters1.map((cc) => (
-                                  <SelectItem key={cc.CostCenter1ID} value={cc.CostCenter1ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.CostCenter2ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter2")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters2.map((cc) => (
-                                  <SelectItem key={cc.CostCenter2ID} value={cc.CostCenter2ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.CostCenter3ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter3")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters3.map((cc) => (
-                                  <SelectItem key={cc.CostCenter3ID} value={cc.CostCenter3ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`CreditEntries.${index}.CostCenter4ID`}
-                        render={({ field: entryField }) => (
-                          <FormItem>
-                            <FormLabel>{t("pettyCash.costCenter4")}</FormLabel>
-                            <Select
-                              onValueChange={(value) => entryField.onChange(value ? parseInt(value) : undefined)}
-                              value={entryField.value?.toString()}
-                              disabled={isFormDisabled}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("pettyCash.selectCostCenter")} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="0">None</SelectItem>
-                                {costCenters4.map((cc) => (
-                                  <SelectItem key={cc.CostCenter4ID} value={cc.CostCenter4ID.toString()}>
-                                    {cc.Description}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </Card>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => appendCredit({ AccountID: 0, InputAmount: 0, TaxID: undefined, IsTaxInclusive: false, Description: "", Narration: "" })}
-                  disabled={isFormDisabled}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Credit Entry
-                </Button>
-              </div>
-
-              <Separator />
-
-              {/* Totals and Error */}
-              <div className="flex justify-between items-center text-lg font-semibold">
-                <span>
-                  {t("pettyCash.totalDebits")}: {totalDebits.toFixed(2)}
-                </span>
-                <span>
-                  {t("pettyCash.totalCredits")}: {totalCredits.toFixed(2)}
-                </span>
-                {totalDebits !== totalCredits && <span className="text-red-500">{t("pettyCash.balanceMismatch")}</span>}
-              </div>
-              {totalAmountMismatchError && <p className="text-sm font-medium text-destructive mt-2">{totalAmountMismatchError.message}</p>}
-
-              {/* Form Actions */}
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => navigate("/petty-cash")} disabled={isSubmitting}>
-                  <XCircle className="mr-2 h-4 w-4" /> {t("common.cancel")}
-                </Button>
-                <Button type="submit" disabled={isSubmitting || isFormDisabled}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <Save className="mr-2 h-4 w-4" /> {isEditMode ? t("common.update") : t("common.create")}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
     </div>
   );
 };

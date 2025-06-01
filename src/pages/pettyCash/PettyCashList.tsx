@@ -1,134 +1,173 @@
-// src/pages/pettyCash/PettyCashList.tsx
-import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, Calendar, DollarSign, FileText, Eye, RefreshCw, CheckCircle, Clock } from "lucide-react";
-import { pettyCashService, PettyCashVoucher, PettyCashSearchParams } from "@/services/pettyCashService";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Loader2, MoreHorizontal, Search, Plus, Receipt, FileText, CheckCircle, Clock, XCircle, Eye, Edit, Trash2, Calendar } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import _ from "lodash";
-import { useNavigate } from "react-router-dom";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { pettyCashService } from "@/services/pettyCashService";
+import { companyService } from "@/services/companyService";
+import { fiscalYearService } from "@/services/fiscalYearService";
+import { PettyCashVoucher, VoucherStatus, PettyCashSearchFilters } from "@/types/pettyCashTypes";
+import { Company } from "@/services/companyService";
+import { FiscalYear } from "@/types/fiscalYearTypes";
+import { debounce } from "lodash";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
-const PettyCashList: React.FC = () => {
+const PettyCashList = () => {
   const navigate = useNavigate();
 
   // State variables
   const [searchTerm, setSearchTerm] = useState("");
   const [vouchers, setVouchers] = useState<PettyCashVoucher[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVoucher, setSelectedVoucher] = useState<PettyCashVoucher | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
-  const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("all");
 
-  // Filters
-  // Removed selectedExpenseCategory as it's no longer a direct filter in SP search.
-  // Instead, the SP now has filterAccountID. You'll need to decide how to map categories to accounts.
-  // For now, I'm removing it to align with the SP, but you might want to reintroduce a way to filter by account.
-  const [selectedPostingStatus, setSelectedPostingStatus] = useState<string>("");
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  // Filter states
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [selectedFiscalYearId, setSelectedFiscalYearId] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
-  // Fetch all vouchers - now uses PettyCashSearchParams correctly
-  const fetchVouchers = useCallback(
-    async (search?: string, filters?: PettyCashSearchParams) => {
-      try {
-        setLoading(true);
-        let vouchersData: PettyCashVoucher[] = [];
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchVouchers();
+    fetchReferenceData();
+  }, []);
 
-        const searchParams: PettyCashSearchParams = {
-          searchText: search,
-          filterPostingStatus: filters?.filterPostingStatus,
-          filterFromDate: filters?.filterFromDate,
-          filterToDate: filters?.filterToDate,
-          filterCompanyID: filters?.filterCompanyID, // Add if you plan to filter by Company
-          filterFiscalYearID: filters?.filterFiscalYearID, // Add if you plan to filter by Fiscal Year
-          filterAccountID: filters?.filterAccountID, // Add if you plan to filter by Account ID
-        };
+  // Fetch reference data
+  const fetchReferenceData = async () => {
+    try {
+      const [companiesData, fiscalYearsData] = await Promise.all([
+        companyService.getCompaniesForDropdown(true),
+        fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+      ]);
 
-        if (activeTab === "posted") {
-          searchParams.filterPostingStatus = "Posted";
-        } else if (activeTab === "unposted") {
-          searchParams.filterPostingStatus = "Draft"; // Changed 'Unposted' to 'Draft' to match SP
-        } else {
-          // For 'all' tab, include all status unless specifically filtered by user
-          if (selectedPostingStatus && selectedPostingStatus !== "0") {
-            searchParams.filterPostingStatus = selectedPostingStatus;
-          } else {
-            searchParams.filterPostingStatus = undefined; // Do not send a status filter for 'all' unless user selected one
-          }
-        }
+      setCompanies(companiesData);
+      setFiscalYears(fiscalYearsData);
+    } catch (error) {
+      console.error("Error fetching reference data:", error);
+      toast.error("Failed to load reference data");
+    }
+  };
 
-        // If a specific search term is provided, ensure it's passed regardless of tab
-        if (search) {
-          searchParams.searchText = search;
-        }
+  // Fetch vouchers with filters
+  const fetchVouchers = async (filters?: PettyCashSearchFilters) => {
+    try {
+      setLoading(true);
+      let vouchersData: PettyCashVoucher[];
 
-        vouchersData = await pettyCashService.searchPettyCashVouchers(searchParams);
-        setVouchers(vouchersData);
-      } catch (error) {
-        console.error("Error fetching petty cash vouchers:", error);
-        toast.error("Failed to load petty cash vouchers");
-      } finally {
-        setLoading(false);
+      if (filters) {
+        vouchersData = await pettyCashService.searchVouchers(filters);
+      } else {
+        vouchersData = await pettyCashService.getAllVouchers();
       }
-    },
-    [activeTab, selectedPostingStatus, fromDate, toDate]
-  ); // Added dependencies for useCallback
 
-  // Apply filters
-  const applyFilters = useCallback(() => {
-    const filters: PettyCashSearchParams = {
-      // Removed filterExpenseCategory
-      filterPostingStatus: selectedPostingStatus === "0" ? undefined : selectedPostingStatus,
-      filterFromDate: fromDate,
-      filterToDate: toDate,
-      // Add other filters here as needed, e.g., filterCompanyID, filterFiscalYearID, filterAccountID
-    };
-    fetchVouchers(searchTerm, filters);
-  }, [searchTerm, selectedPostingStatus, fromDate, toDate, fetchVouchers]);
+      setVouchers(vouchersData);
+    } catch (error) {
+      console.error("Error fetching vouchers:", error);
+      toast.error("Failed to load petty cash vouchers");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Debounced search function
-  const debouncedSearch = _.debounce((value: string) => {
-    setSearchTerm(value); // Update searchTerm immediately
-    applyFilters(); // Apply filters which will trigger fetchVouchers
+  const debouncedSearch = debounce((value: string) => {
+    if (value.length >= 2 || value === "") {
+      handleFilterChange();
+    }
   }, 500);
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    debouncedSearch(e.target.value);
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
   };
 
-  // Handle filter changes (trigger applyFilters)
-  useEffect(() => {
-    applyFilters();
-  }, [applyFilters]); // Dependency on applyFilters
+  // Handle filter changes
+  const handleFilterChange = () => {
+    const filters: PettyCashSearchFilters = {
+      searchText: searchTerm || undefined,
+      companyId: selectedCompanyId ? parseInt(selectedCompanyId) : undefined,
+      fiscalYearId: selectedFiscalYearId ? parseInt(selectedFiscalYearId) : undefined,
+      status: (selectedStatus as VoucherStatus) || undefined,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+    };
+
+    // Remove undefined values
+    Object.keys(filters).forEach((key) => {
+      if (filters[key as keyof PettyCashSearchFilters] === undefined) {
+        delete filters[key as keyof PettyCashSearchFilters];
+      }
+    });
+
+    fetchVouchers(filters);
+  };
+
+  // Handle filter dropdown changes
+  const handleCompanyChange = (value: string) => {
+    setSelectedCompanyId(value === "all" ? "" : value);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleFiscalYearChange = (value: string) => {
+    setSelectedFiscalYearId(value === "all" ? "" : value);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setSelectedStatus(value === "all" ? "" : value);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleDateFromChange = (date: Date | undefined) => {
+    setDateFrom(date);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleDateToChange = (date: Date | undefined) => {
+    setDateTo(date);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCompanyId("");
+    setSelectedFiscalYearId("");
+    setSelectedStatus("");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    fetchVouchers();
+  };
 
   // Navigation handlers
   const handleAddVoucher = () => {
     navigate("/petty-cash/new");
   };
 
-  const handleEditVoucher = (voucherNo: string) => {
-    // Changed to voucherNo
-    navigate(`/petty-cash/edit/${voucherNo}`);
+  const handleEditVoucher = (voucher: PettyCashVoucher) => {
+    navigate(`/petty-cash/edit/${voucher.VoucherNo}`);
   };
 
-  const handleViewVoucher = (voucherNo: string) => {
-    // Changed to voucherNo
-    navigate(`/petty-cash/${voucherNo}`);
+  const handleViewVoucher = (voucher: PettyCashVoucher) => {
+    navigate(`/petty-cash/${voucher.VoucherNo}`);
   };
 
-  // Delete voucher handlers
+  // Delete confirmation handlers
   const openDeleteDialog = (voucher: PettyCashVoucher) => {
     setSelectedVoucher(voucher);
     setIsDeleteDialogOpen(true);
@@ -140,388 +179,284 @@ const PettyCashList: React.FC = () => {
   };
 
   const handleDeleteVoucher = async () => {
-    if (!selectedVoucher?.VoucherNo) {
-      // Check for VoucherNo
-      toast.error("Voucher number is missing for deletion.");
-      return;
-    }
+    if (!selectedVoucher) return;
 
     try {
-      setActionLoading(true);
-      const response = await pettyCashService.deletePettyCashVoucher(selectedVoucher.VoucherNo); // Pass VoucherNo
+      const result = await pettyCashService.deleteVoucher(selectedVoucher.VoucherNo, selectedVoucher.CompanyID);
 
-      if (response.Status === 1) {
-        setVouchers(vouchers.filter((v) => v.VoucherNo !== selectedVoucher.VoucherNo)); // Filter by VoucherNo
-        toast.success("Petty cash voucher deleted successfully");
+      if (result.success) {
+        setVouchers(vouchers.filter((v) => v.VoucherNo !== selectedVoucher.VoucherNo));
+        toast.success(result.message);
       } else {
-        toast.error(response.Message || "Failed to delete petty cash voucher");
+        toast.error(result.message);
       }
     } catch (error) {
-      console.error("Error deleting petty cash voucher:", error);
-      toast.error("Failed to delete petty cash voucher");
+      console.error("Error deleting voucher:", error);
+      toast.error("Failed to delete voucher");
     } finally {
-      setActionLoading(false);
       closeDeleteDialog();
     }
   };
 
-  // Post to GL handlers
-  const openPostDialog = (voucher: PettyCashVoucher) => {
-    setSelectedVoucher(voucher);
-    setIsPostDialogOpen(true);
-  };
+  // Render status badge
+  const renderStatusBadge = (status: string) => {
+    const statusConfig = {
+      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
+      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+      Posted: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
+      Rejected: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Reversed: { variant: "secondary" as const, icon: XCircle, className: "bg-purple-100 text-purple-800" },
+    };
 
-  const closePostDialog = () => {
-    setIsPostDialogOpen(false);
-    setSelectedVoucher(null);
-  };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
+    const Icon = config.icon;
 
-  const handlePostToGL = async () => {
-    if (!selectedVoucher?.VoucherNo) {
-      // Check for VoucherNo
-      toast.error("Voucher number is missing for posting.");
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-      const response = await pettyCashService.postPettyCashVoucher(selectedVoucher.VoucherNo); // Pass VoucherNo
-
-      if (response.Status === 1) {
-        // Update voucher in list
-        setVouchers(vouchers.map((v) => (v.VoucherNo === selectedVoucher.VoucherNo ? { ...v, PostingStatus: "Posted" } : v)));
-        toast.success("Petty cash voucher posted successfully");
-      } else {
-        toast.error(response.Message || "Failed to post petty cash voucher");
-      }
-    } catch (error) {
-      console.error("Error posting petty cash voucher:", error);
-      toast.error("Failed to post petty cash voucher");
-    } finally {
-      setActionLoading(false);
-      closePostDialog();
-    }
-  };
-
-  // Reverse voucher handlers
-  const openReverseDialog = (voucher: PettyCashVoucher) => {
-    setSelectedVoucher(voucher);
-    setIsReverseDialogOpen(true);
-  };
-
-  const closeReverseDialog = () => {
-    setIsReverseDialogOpen(false);
-    setSelectedVoucher(null);
-  };
-
-  const handleReverseVoucher = async () => {
-    if (!selectedVoucher?.VoucherNo) {
-      // Check for VoucherNo
-      toast.error("Voucher number is missing for reversal.");
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-      const response = await pettyCashService.reversePettyCashVoucher({
-        VoucherNo: selectedVoucher.VoucherNo, // Pass VoucherNo
-        reversalReason: "Reversal requested by user from Petty Cash List", // Provide a more descriptive reason
-      });
-
-      if (response.Status === 1) {
-        // Refresh the list to show the new reversal entry and updated status
-        fetchVouchers(); // Re-fetch all vouchers after a successful reversal
-        toast.success("Petty cash voucher reversed successfully");
-      } else {
-        toast.error(response.Message || "Failed to reverse petty cash voucher");
-      }
-    } catch (error) {
-      console.error("Error reversing petty cash voucher:", error);
-      toast.error("Failed to reverse petty cash voucher");
-    } finally {
-      setActionLoading(false);
-      closeReverseDialog();
-    }
-  };
-
-  // Format date for display
-  const formatDate = (date?: string | Date) => {
-    if (!date) return "N/A";
-    try {
-      return new Date(date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-      });
-    } catch (error) {
-      return "Invalid date";
-    }
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </Badge>
+    );
   };
 
   // Format currency
-  const formatCurrency = (amount?: number) => {
-    if (amount === undefined || amount === null) return "0.00";
-    return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCurrency = (amount: number | undefined, currencyCode?: string) => {
+    if (amount === undefined || amount === null) return "—";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD", // ||currencyCode
+      minimumFractionDigits: 2,
+    }).format(amount);
   };
 
-  // Get posting status color
-  const getPostingStatusColor = (status?: string) => {
-    // Status can be undefined
-    switch (status) {
-      case "Posted":
-        return "default";
-      case "Draft": // Assuming 'Unposted' is now 'Draft' based on SP default
-        return "secondary";
-      case "Reversed":
-        return "destructive";
-      default:
-        return "outline";
-    }
+  // Calculate summary statistics
+  const stats = {
+    total: vouchers.length,
+    draft: vouchers.filter((v) => v.PostingStatus === "Draft").length,
+    pending: vouchers.filter((v) => v.PostingStatus === "Pending").length,
+    posted: vouchers.filter((v) => v.PostingStatus === "Posted").length,
+    totalAmount: vouchers.reduce((sum, v) => sum + (v.TotalDebit || 0), 0),
   };
-
-  // Get posting status icon
-  const getPostingStatusIcon = (status?: string) => {
-    // Status can be undefined
-    switch (status) {
-      case "Posted":
-        return <CheckCircle className="h-3 w-3" />;
-      case "Draft": // Assuming 'Unposted' is now 'Draft' based on SP default
-        return <Clock className="h-3 w-3" />;
-      case "Reversed":
-        return <RefreshCw className="h-3 w-3" />;
-      default:
-        return <FileText className="h-3 w-3" />;
-    }
-  };
-
-  // Get tab counts
-  const getTabCounts = useCallback(() => {
-    return {
-      all: vouchers.length,
-      posted: vouchers.filter((v) => v.PostingStatus === "Posted").length,
-      unposted: vouchers.filter((v) => v.PostingStatus === "Draft").length, // Adjusted to 'Draft'
-    };
-  }, [vouchers]);
-
-  const tabCounts = getTabCounts();
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Petty Cash Management</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Petty Cash Management</h1>
+          <p className="text-muted-foreground">Manage petty cash vouchers and expenses</p>
+        </div>
         <Button onClick={handleAddVoucher}>
           <Plus className="mr-2 h-4 w-4" />
-          New Petty Cash Voucher
+          New Voucher
         </Button>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>Petty Cash Vouchers</CardTitle>
-          <CardDescription>Manage petty cash transactions and vouchers</CardDescription>
+          <CardDescription>View and manage all petty cash vouchers</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-3 w-full mb-6">
-              <TabsTrigger value="all">All ({tabCounts.all})</TabsTrigger>
-              <TabsTrigger value="posted">Posted ({tabCounts.posted})</TabsTrigger>
-              <TabsTrigger value="unposted">Draft ({tabCounts.unposted})</TabsTrigger> {/* Adjusted tab name */}
-            </TabsList>
+          {/* Summary Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Total Vouchers</span>
+                </div>
+                <div className="text-2xl font-bold">{stats.total}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm text-muted-foreground">Draft</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-muted-foreground">Pending</span>
+                </div>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">Posted</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">{stats.posted}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">Total Amount</span>
+                </div>
+                <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalAmount)}</div>
+              </CardContent>
+            </Card>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-4 mb-6">
-              <div className="relative w-full max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input type="text" placeholder="Search vouchers..." className="pl-9" onChange={handleSearchChange} />
-              </div>
-
-              {/* Removed Expense Category filter, as it's not directly supported by SP's search params */}
-              {/* If you need this, you'll have to adjust your SP or fetch all and filter client-side. */}
-              {/* <Select value={selectedExpenseCategory} onValueChange={setSelectedExpenseCategory}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Expense Category" />
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input type="text" placeholder="Search vouchers..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={selectedCompanyId || "all"} onValueChange={handleCompanyChange}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by company" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">All Categories</SelectItem>
-                  <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                  <SelectItem value="Travel">Travel</SelectItem>
-                  <SelectItem value="Utilities">Utilities</SelectItem>
-                  <SelectItem value="Maintenance">Maintenance</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  <SelectItem value="all">All Companies</SelectItem>
+                  {companies.map((company) => (
+                    <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
+                      {company.CompanyName}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
-              </Select> */}
+              </Select>
 
-              <Select value={selectedPostingStatus} onValueChange={setSelectedPostingStatus}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Posting Status" />
+              <Select value={selectedFiscalYearId || "all"} onValueChange={handleFiscalYearChange}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Fiscal year" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">All Statuses</SelectItem>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {fiscalYears.map((fy) => (
+                    <SelectItem key={fy.FiscalYearID} value={fy.FiscalYearID.toString()}>
+                      {fy.FYDescription}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedStatus || "all"} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Draft">Draft</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Posted">Posted</SelectItem>
-                  <SelectItem value="Draft">Draft</SelectItem> {/* Changed 'Unposted' to 'Draft' */}
+                  <SelectItem value="Rejected">Rejected</SelectItem>
                   <SelectItem value="Reversed">Reversed</SelectItem>
                 </SelectContent>
               </Select>
 
-              <div className="flex items-center space-x-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 border-dashed">
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {fromDate ? formatDate(fromDate) : "From Date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <DatePicker value={fromDate} onChange={setFromDate} placeholder="From Date" />
-                  </PopoverContent>
-                </Popover>
+              <DatePicker value={dateFrom} onChange={handleDateFromChange} placeholder="From date" />
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 border-dashed">
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {toDate ? formatDate(toDate) : "To Date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <DatePicker value={toDate} onChange={setToDate} placeholder="To Date" disabled={(date) => (fromDate ? date < fromDate : false)} />
-                  </PopoverContent>
-                </Popover>
+              <DatePicker value={dateTo} onChange={handleDateToChange} placeholder="To date" />
 
-                {(fromDate || toDate || selectedPostingStatus !== "0") && ( // Check for selectedPostingStatus value
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFromDate(null);
-                      setToDate(null);
-                      setSelectedPostingStatus("0"); // Reset to "0" for all statuses
-                    }}
-                  >
-                    Reset Filters
-                  </Button>
-                )}
-              </div>
+              <Button variant="outline" onClick={clearFilters}>
+                Clear Filters
+              </Button>
             </div>
+          </div>
 
-            <TabsContent value={activeTab}>
-              {loading ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : vouchers.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  {searchTerm || selectedPostingStatus !== "0" || fromDate || toDate
-                    ? "No petty cash vouchers found matching your criteria."
-                    : "No petty cash vouchers have been created yet."}
-                </div>
-              ) : (
-                <div className="border rounded-md overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-muted/50 border-b">
-                        <tr>
-                          <th className="text-left p-4 font-medium">Voucher #</th>
-                          <th className="text-left p-4 font-medium">Transaction Date</th>
-                          <th className="text-left p-4 font-medium">Posting Date</th>
-                          <th className="text-left p-4 font-medium">Amount</th>
-                          {/* Removed Category and Received By columns as they are no longer direct properties of PettyCashVoucher */}
-                          {/* <th className="text-left p-4 font-medium">Category</th> */}
-                          {/* <th className="text-left p-4 font-medium">Received By</th> */}
-                          <th className="text-left p-4 font-medium">Status</th>
-                          <th className="text-left p-4 font-medium">Description</th>
-                          <th className="text-left p-4 font-medium w-[100px]">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {vouchers.map((voucher, index) => (
-                          <tr key={voucher.VoucherNo} className={index % 2 === 0 ? "bg-background" : "bg-muted/25"}>
-                            {/* Changed key to VoucherNo */}
-                            <td className="p-4">
-                              <div className="font-medium">{voucher.VoucherNo}</div>
-                              {voucher.ReceiptNo && <div className="text-xs text-muted-foreground">Receipt: {voucher.ReceiptNo}</div>}
-                            </td>
-                            <td className="p-4">{formatDate(voucher.TransactionDate)}</td>
-                            <td className="p-4">{formatDate(voucher.PostingDate)}</td>
-                            <td className="p-4">
-                              <div className="font-medium">{formatCurrency(voucher.TotalAmount)}</div> {/* Use TotalAmount */}
-                              {voucher.CurrencyName && voucher.CurrencyName !== "USD" && <div className="text-xs text-muted-foreground">{voucher.CurrencyName}</div>}
-                            </td>
-                            {/* Removed Category and Received By display */}
-                            {/* <td className="p-4">{voucher.ExpenseCategory || "N/A"}</td> */}
-                            {/* <td className="p-4">{voucher.ReceivedBy || "N/A"}</td> */}
-                            <td className="p-4">
-                              <Badge variant={getPostingStatusColor(voucher.PostingStatus)} className="flex items-center gap-1 w-fit">
-                                {getPostingStatusIcon(voucher.PostingStatus)}
-                                {voucher.PostingStatus}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <div className="max-w-xs truncate" title={voucher.Description}>
-                                {voucher.Description || "N/A"}
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewVoucher(voucher.VoucherNo!)}>
-                                    {" "}
-                                    {/* Pass VoucherNo */}
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleEditVoucher(voucher.VoucherNo!)}
-                                    disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}
-                                  >
-                                    {" "}
-                                    {/* Pass VoucherNo, disable if Reversed */}
-                                    Edit
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuSeparator />
-
-                                  <DropdownMenuItem onClick={() => openPostDialog(voucher)} disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}>
-                                    {" "}
-                                    {/* Disable if Reversed */}
-                                    <DollarSign className="h-4 w-4 mr-2" />
-                                    Post to GL
-                                  </DropdownMenuItem>
-
-                                  {voucher.PostingStatus === "Posted" && ( // Only show reverse if status is 'Posted'
-                                    <DropdownMenuItem onClick={() => openReverseDialog(voucher)}>
-                                      <RefreshCw className="h-4 w-4 mr-2" />
-                                      Reverse
-                                    </DropdownMenuItem>
-                                  )}
-
-                                  <DropdownMenuSeparator />
-
-                                  <DropdownMenuItem
-                                    className="text-red-500"
-                                    onClick={() => openDeleteDialog(voucher)}
-                                    disabled={voucher.PostingStatus === "Posted" || voucher.PostingStatus === "Reversed"}
-                                  >
-                                    {" "}
-                                    {/* Disable if Posted or Reversed */}
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          {/* Vouchers Table */}
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : vouchers.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              {searchTerm || selectedCompanyId || selectedFiscalYearId || selectedStatus || dateFrom || dateTo
+                ? "No vouchers found matching your criteria."
+                : "No petty cash vouchers found. Create your first voucher to get started."}
+            </div>
+          ) : (
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[150px]">Voucher No</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created By</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vouchers.map((voucher) => (
+                    <TableRow key={voucher.VoucherNo}>
+                      <TableCell>
+                        <div className="font-medium">{voucher.VoucherNo}</div>
+                        <div className="text-sm text-muted-foreground">{voucher.VoucherType}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          {format(new Date(voucher.TransactionDate), "MMM dd, yyyy")}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>{voucher.CompanyName || `Company ${voucher.CompanyID}`}</div>
+                        <div className="text-sm text-muted-foreground">{voucher.FYDescription}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-[200px] truncate">{voucher.Description || voucher.Narration || "—"}</div>
+                        {voucher.PaidTo && <div className="text-sm text-muted-foreground">Paid to: {voucher.PaidTo}</div>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{formatCurrency(voucher.TotalDebit, voucher.CurrencyName)}</div>
+                        <div className="text-sm text-muted-foreground">{voucher.CurrencyName}</div>
+                      </TableCell>
+                      <TableCell>{renderStatusBadge(voucher.PostingStatus || "Draft")}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {voucher.CreatedBy && <div>{voucher.CreatedBy}</div>}
+                          {voucher.CreatedOn && <div className="text-muted-foreground">{format(new Date(voucher.CreatedOn), "MMM dd, yyyy")}</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewVoucher(voucher)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View details
+                            </DropdownMenuItem>
+                            {(voucher.PostingStatus === "Draft" || voucher.PostingStatus === "Pending") && (
+                              <DropdownMenuItem onClick={() => handleEditVoucher(voucher)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {(voucher.PostingStatus === "Draft" || voucher.PostingStatus === "Pending") && (
+                              <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(voucher)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -534,46 +469,11 @@ const PettyCashList: React.FC = () => {
         description={
           selectedVoucher
             ? `Are you sure you want to delete voucher "${selectedVoucher.VoucherNo}"? This action cannot be undone.`
-            : "Are you sure you want to delete this petty cash voucher?"
+            : "Are you sure you want to delete this voucher?"
         }
         cancelText="Cancel"
         confirmText="Delete"
         type="danger"
-        loading={actionLoading}
-      />
-
-      {/* Post to GL Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isPostDialogOpen}
-        onClose={closePostDialog}
-        onConfirm={handlePostToGL}
-        title="Post Petty Cash Voucher to GL"
-        description={
-          selectedVoucher
-            ? `Are you sure you want to post voucher "${selectedVoucher.VoucherNo}" to the General Ledger? This action cannot be undone.`
-            : "Are you sure you want to post this petty cash voucher to GL?"
-        }
-        cancelText="Cancel"
-        confirmText="Post to GL"
-        type="warning"
-        loading={actionLoading}
-      />
-
-      {/* Reverse Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isReverseDialogOpen}
-        onClose={closeReverseDialog}
-        onConfirm={handleReverseVoucher}
-        title="Reverse Petty Cash Voucher"
-        description={
-          selectedVoucher
-            ? `Are you sure you want to reverse voucher "${selectedVoucher.VoucherNo}"? This will create a reversal entry.`
-            : "Are you sure you want to reverse this petty cash voucher?"
-        }
-        cancelText="Cancel"
-        confirmText="Reverse"
-        type="warning"
-        loading={actionLoading}
       />
     </div>
   );
