@@ -657,22 +657,6 @@ class SupplierService extends BaseService {
     // This would typically be a separate service/endpoint
     return [];
   }
-
-  /**
-   * Helper method to get the current user ID
-   * @returns The current user ID
-   */
-  private getCurrentUserId(): number | undefined {
-    try {
-      const state = (window as any).store.getState();
-      if (state && state.auth && state.auth.user) {
-        return state.auth.user.userID;
-      }
-    } catch (error) {
-      console.warn("Error retrieving current user ID from store:", error);
-    }
-    return undefined;
-  }
 }
 
 // Export a singleton instance
