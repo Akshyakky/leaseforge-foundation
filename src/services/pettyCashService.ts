@@ -709,24 +709,6 @@ class PettyCashService extends BaseService {
 
     return { voucher: null, lines: [], attachments: [] };
   }
-
-  /**
-   * Get petty cash statistics
-   * @returns Statistics data
-   */
-  async getStatistics(): Promise<PettyCashStatistics> {
-    // This would need a corresponding endpoint
-    return {
-      TotalVouchers: 0,
-      DraftVouchers: 0,
-      PendingVouchers: 0,
-      PostedVouchers: 0,
-      RejectedVouchers: 0,
-      TotalAmount: 0,
-      MonthlyTrend: [],
-      AccountDistribution: [],
-    };
-  }
 }
 
 // Export a singleton instance
