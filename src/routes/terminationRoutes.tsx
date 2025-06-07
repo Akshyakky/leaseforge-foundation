@@ -3,7 +3,7 @@ import React from "react";
 import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import TerminationList from "@/pages/termination/TerminationList";
-import TerminationForm from "@/pages/termination/TerminatioForm";
+import TerminationForm from "@/pages/termination/TerminationForm";
 import TerminationDetails from "@/pages/termination/TerminationDetails";
 
 // Import module components
