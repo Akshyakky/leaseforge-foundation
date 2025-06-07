@@ -405,7 +405,7 @@ const LeaseRevenuePostingList = () => {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input type="text" placeholder="Search transactions..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2">
               <Select
                 value={selectedCompanyId || "all"}
                 onValueChange={(value) => {
@@ -413,7 +413,7 @@ const LeaseRevenuePostingList = () => {
                   setTimeout(handleFilterChange, 100);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] flex-shrink-0">
                   <SelectValue placeholder="Company" />
                 </SelectTrigger>
                 <SelectContent>
@@ -433,7 +433,7 @@ const LeaseRevenuePostingList = () => {
                   setTimeout(handleFilterChange, 100);
                 }}
               >
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] flex-shrink-0">
                   <SelectValue placeholder="Fiscal year" />
                 </SelectTrigger>
                 <SelectContent>
@@ -453,7 +453,7 @@ const LeaseRevenuePostingList = () => {
                   setTimeout(handleFilterChange, 100);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] flex-shrink-0">
                   <SelectValue placeholder="Property" />
                 </SelectTrigger>
                 <SelectContent>
@@ -473,7 +473,7 @@ const LeaseRevenuePostingList = () => {
                   setTimeout(handleFilterChange, 100);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] flex-shrink-0">
                   <SelectValue placeholder="Customer" />
                 </SelectTrigger>
                 <SelectContent>
@@ -486,25 +486,29 @@ const LeaseRevenuePostingList = () => {
                 </SelectContent>
               </Select>
 
-              <DatePicker
-                value={dateFrom}
-                onChange={(date) => {
-                  setDateFrom(date);
-                  setTimeout(handleFilterChange, 100);
-                }}
-                placeholder="From date"
-              />
+              <div className="flex-shrink-0">
+                <DatePicker
+                  value={dateFrom}
+                  onChange={(date) => {
+                    setDateFrom(date);
+                    setTimeout(handleFilterChange, 100);
+                  }}
+                  placeholder="From date"
+                />
+              </div>
 
-              <DatePicker
-                value={dateTo}
-                onChange={(date) => {
-                  setDateTo(date);
-                  setTimeout(handleFilterChange, 100);
-                }}
-                placeholder="To date"
-              />
+              <div className="flex-shrink-0">
+                <DatePicker
+                  value={dateTo}
+                  onChange={(date) => {
+                    setDateTo(date);
+                    setTimeout(handleFilterChange, 100);
+                  }}
+                  placeholder="To date"
+                />
+              </div>
 
-              <Button variant="outline" onClick={clearFilters}>
+              <Button variant="outline" onClick={clearFilters} className="flex-shrink-0 whitespace-nowrap">
                 Clear Filters
               </Button>
             </div>

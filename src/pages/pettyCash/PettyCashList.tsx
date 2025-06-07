@@ -307,14 +307,14 @@ const PettyCashList = () => {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div className="flex flex-col gap-4 mb-6">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input type="text" placeholder="Search vouchers..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2">
               <Select value={selectedCompanyId || "all"} onValueChange={handleCompanyChange}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] flex-shrink-0">
                   <SelectValue placeholder="Filter by company" />
                 </SelectTrigger>
                 <SelectContent>
@@ -328,7 +328,7 @@ const PettyCashList = () => {
               </Select>
 
               <Select value={selectedFiscalYearId || "all"} onValueChange={handleFiscalYearChange}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[160px] flex-shrink-0">
                   <SelectValue placeholder="Fiscal year" />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +342,7 @@ const PettyCashList = () => {
               </Select>
 
               <Select value={selectedStatus || "all"} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[140px] flex-shrink-0">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,11 +355,15 @@ const PettyCashList = () => {
                 </SelectContent>
               </Select>
 
-              <DatePicker value={dateFrom} onChange={handleDateFromChange} placeholder="From date" />
+              <div className="flex-shrink-0">
+                <DatePicker value={dateFrom} onChange={handleDateFromChange} placeholder="From date" />
+              </div>
 
-              <DatePicker value={dateTo} onChange={handleDateToChange} placeholder="To date" />
+              <div className="flex-shrink-0">
+                <DatePicker value={dateTo} onChange={handleDateToChange} placeholder="To date" />
+              </div>
 
-              <Button variant="outline" onClick={clearFilters}>
+              <Button variant="outline" onClick={clearFilters} className="flex-shrink-0 whitespace-nowrap">
                 Clear Filters
               </Button>
             </div>

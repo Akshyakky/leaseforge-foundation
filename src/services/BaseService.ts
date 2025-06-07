@@ -87,9 +87,10 @@ export class BaseService {
    */
   protected getCurrentUserId(): number | undefined {
     try {
-      const state = (window as any).store?.getState();
-      if (state?.auth?.user) {
-        return state.auth.user.userID;
+      // Get current user from Redux store
+      const state = store.getState();
+      if (state && state.auth && state.auth.user) {
+        return state.auth.user.id;
       }
     } catch (error) {
       console.warn("Error retrieving current user ID from store:", error);

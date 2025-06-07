@@ -18,8 +18,8 @@ const contractRoutes = (
       path="contracts"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          {/* <ContractList /> */}
-          <LeaseContractList />
+          <ContractList />
+          {/* <LeaseContractList /> */}
         </ProtectedRoute>
       }
     />
@@ -27,8 +27,8 @@ const contractRoutes = (
       path="contracts/new"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          {/* <ContractForm /> */}
-          <LeaseContractForm />
+          <ContractForm />
+          {/* <LeaseContractForm /> */}
         </ProtectedRoute>
       }
     />
@@ -36,8 +36,8 @@ const contractRoutes = (
       path="contracts/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          {/* <ContractForm /> */}
-          <LeaseContractForm />
+          <ContractForm />
+          {/* <LeaseContractForm /> */}
         </ProtectedRoute>
       }
     />
@@ -45,8 +45,8 @@ const contractRoutes = (
       path="contracts/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          {/* <ContractDetails /> */}
-          <LeaseContractDetails />
+          <ContractDetails />
+          {/* <LeaseContractDetails /> */}
         </ProtectedRoute>
       }
     />
