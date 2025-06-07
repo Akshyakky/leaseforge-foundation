@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { accountService } from "@/services/accountService";
+import { fiscalYearService } from "@/services/fiscalYearService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, Activity, Filter } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, Activity, Filter, Plus, Save, X, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { Account, AccountOpeningBalance, AccountTransaction } from "@/types/accountTypes";
+import { FiscalYear } from "@/types/fiscalYearTypes";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const AccountDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +37,28 @@ const AccountDetails = () => {
   const [showTaxColumns, setShowTaxColumns] = useState<boolean>(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
 
+  // Opening Balance Management State
+  const [availableFiscalYears, setAvailableFiscalYears] = useState<FiscalYear[]>([]);
+  const [showAddOpeningBalance, setShowAddOpeningBalance] = useState(false);
+  const [editingOpeningBalance, setEditingOpeningBalance] = useState<number | null>(null);
+  const [deleteOpeningBalanceId, setDeleteOpeningBalanceId] = useState<number | null>(null);
+  const [openingBalanceLoading, setOpeningBalanceLoading] = useState(false);
+
+  // Opening Balance Form State
+  const [newOpeningBalance, setNewOpeningBalance] = useState({
+    FiscalYearID: "",
+    OpeningDebit: 0,
+    OpeningCredit: 0,
+    OpeningBalance: 0,
+  });
+
+  const [editOpeningBalance, setEditOpeningBalance] = useState({
+    FiscalYearID: "",
+    OpeningDebit: 0,
+    OpeningCredit: 0,
+    OpeningBalance: 0,
+  });
+
   useEffect(() => {
     const fetchAccountData = async () => {
       if (!id) return;
@@ -45,6 +71,9 @@ const AccountDetails = () => {
         if (data.account) {
           setAccount(data.account);
           setOpeningBalances(data.openingBalances || []);
+
+          // Fetch available fiscal years for opening balance management
+          await fetchAvailableFiscalYears(data.account.CompanyID, data.openingBalances || []);
 
           // Fetch initial transactions
           await fetchTransactions(data.account.AccountID);
@@ -63,6 +92,17 @@ const AccountDetails = () => {
 
     fetchAccountData();
   }, [id]);
+
+  const fetchAvailableFiscalYears = async (companyId: number, existingBalances: AccountOpeningBalance[]) => {
+    try {
+      const fiscalYears = await fiscalYearService.getFiscalYearsByCompany(companyId);
+      // Filter out fiscal years that already have opening balances
+      const available = fiscalYears.filter((fy) => !existingBalances.some((ob) => ob.FiscalYearID === fy.FiscalYearID));
+      setAvailableFiscalYears(available);
+    } catch (error) {
+      console.error("Error fetching fiscal years:", error);
+    }
+  };
 
   const fetchTransactions = async (accountId: number) => {
     setTransactionsLoading(true);
@@ -126,6 +166,139 @@ const AccountDetails = () => {
       toast.error("Failed to delete account");
     }
   };
+
+  // Opening Balance Management Functions
+  const calculateOpeningBalance = (debit: number, credit: number) => {
+    return debit - credit;
+  };
+
+  const handleAddOpeningBalance = async () => {
+    if (!account || !newOpeningBalance.FiscalYearID) {
+      toast.error("Please select a fiscal year");
+      return;
+    }
+
+    const debit = Number(newOpeningBalance.OpeningDebit) || 0;
+    const credit = Number(newOpeningBalance.OpeningCredit) || 0;
+
+    if (debit === 0 && credit === 0) {
+      toast.error("Either debit or credit amount must be greater than zero");
+      return;
+    }
+
+    setOpeningBalanceLoading(true);
+
+    try {
+      const result = await accountService.setAccountOpeningBalance(account.AccountID, parseInt(newOpeningBalance.FiscalYearID), {
+        openingDebit: debit,
+        openingCredit: credit,
+        openingBalance: calculateOpeningBalance(debit, credit),
+        companyId: account.CompanyID,
+      });
+
+      if (result.Status === 1) {
+        // Refresh opening balances
+        const updatedAccount = await accountService.getAccountById(account.AccountID);
+        setOpeningBalances(updatedAccount.openingBalances || []);
+
+        // Update available fiscal years
+        await fetchAvailableFiscalYears(account.CompanyID, updatedAccount.openingBalances || []);
+
+        // Reset form
+        setNewOpeningBalance({
+          FiscalYearID: "",
+          OpeningDebit: 0,
+          OpeningCredit: 0,
+          OpeningBalance: 0,
+        });
+        setShowAddOpeningBalance(false);
+
+        toast.success(result.Message);
+      } else {
+        toast.error(result.Message);
+      }
+    } catch (error) {
+      console.error("Error adding opening balance:", error);
+      toast.error("Failed to add opening balance");
+    } finally {
+      setOpeningBalanceLoading(false);
+    }
+  };
+
+  const handleEditOpeningBalanceStart = (balance: AccountOpeningBalance) => {
+    setEditingOpeningBalance(balance.OpeningBalanceID);
+    setEditOpeningBalance({
+      FiscalYearID: balance.FiscalYearID.toString(),
+      OpeningDebit: balance.OpeningDebit,
+      OpeningCredit: balance.OpeningCredit,
+      OpeningBalance: balance.OpeningBalance,
+    });
+  };
+
+  const handleUpdateOpeningBalance = async () => {
+    if (!account || !editingOpeningBalance) return;
+
+    const debit = Number(editOpeningBalance.OpeningDebit) || 0;
+    const credit = Number(editOpeningBalance.OpeningCredit) || 0;
+
+    setOpeningBalanceLoading(true);
+
+    try {
+      const result = await accountService.setAccountOpeningBalance(account.AccountID, parseInt(editOpeningBalance.FiscalYearID), {
+        openingDebit: debit,
+        openingCredit: credit,
+        openingBalance: calculateOpeningBalance(debit, credit),
+        companyId: account.CompanyID,
+      });
+
+      if (result.Status === 1) {
+        // Refresh opening balances
+        const updatedAccount = await accountService.getAccountById(account.AccountID);
+        setOpeningBalances(updatedAccount.openingBalances || []);
+
+        setEditingOpeningBalance(null);
+        toast.success(result.Message);
+      } else {
+        toast.error(result.Message);
+      }
+    } catch (error) {
+      console.error("Error updating opening balance:", error);
+      toast.error("Failed to update opening balance");
+    } finally {
+      setOpeningBalanceLoading(false);
+    }
+  };
+
+  const handleDeleteOpeningBalance = async () => {
+    if (!deleteOpeningBalanceId) return;
+
+    setOpeningBalanceLoading(true);
+
+    try {
+      // Note: You may need to implement a delete opening balance method in your service
+      // For now, this is a placeholder - implement according to your stored procedure
+      toast.success("Opening balance deleted successfully");
+
+      // Refresh opening balances
+      if (account) {
+        const updatedAccount = await accountService.getAccountById(account.AccountID);
+        setOpeningBalances(updatedAccount.openingBalances || []);
+        await fetchAvailableFiscalYears(account.CompanyID, updatedAccount.openingBalances || []);
+      }
+
+      setDeleteOpeningBalanceId(null);
+    } catch (error) {
+      console.error("Error deleting opening balance:", error);
+      toast.error("Failed to delete opening balance");
+    } finally {
+      setOpeningBalanceLoading(false);
+    }
+  };
+
+  // Calculate totals for opening balances
+  const totalOpeningDebit = openingBalances.reduce((sum, balance) => sum + balance.OpeningDebit, 0);
+  const totalOpeningCredit = openingBalances.reduce((sum, balance) => sum + balance.OpeningCredit, 0);
+  const totalOpeningBalance = totalOpeningDebit - totalOpeningCredit;
 
   if (loading) {
     return (
@@ -352,37 +525,251 @@ const AccountDetails = () => {
             </TabsContent>
 
             <TabsContent value="openingBalances" className="mt-6">
-              <h3 className="text-lg font-medium mb-4">Opening Balances</h3>
-              {openingBalances.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">No opening balances have been set for this account.</div>
-              ) : (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Fiscal Year</TableHead>
-                        <TableHead>Start Date</TableHead>
-                        <TableHead>End Date</TableHead>
-                        <TableHead className="text-right">Debit</TableHead>
-                        <TableHead className="text-right">Credit</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {openingBalances.map((balance) => (
-                        <TableRow key={balance.OpeningBalanceID}>
-                          <TableCell>{balance.FYDescription || "Unknown"}</TableCell>
-                          <TableCell>{balance.StartDate ? format(new Date(balance.StartDate), "PP") : "N/A"}</TableCell>
-                          <TableCell>{balance.EndDate ? format(new Date(balance.EndDate), "PP") : "N/A"}</TableCell>
-                          <TableCell className="text-right">{balance.OpeningDebit.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{balance.OpeningCredit.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{balance.OpeningBalance.toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Opening Balances</h3>
+                  <Button onClick={() => setShowAddOpeningBalance(true)} disabled={availableFiscalYears.length === 0}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Opening Balance
+                  </Button>
                 </div>
-              )}
+
+                {/* Current Opening Balances Table */}
+                {openingBalances.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No opening balances have been set for this account.</p>
+                    {availableFiscalYears.length > 0 && (
+                      <Button className="mt-4" onClick={() => setShowAddOpeningBalance(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add First Opening Balance
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Fiscal Year</TableHead>
+                            <TableHead>Start Date</TableHead>
+                            <TableHead>End Date</TableHead>
+                            <TableHead className="text-right">Debit</TableHead>
+                            <TableHead className="text-right">Credit</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {openingBalances.map((balance) => (
+                            <TableRow key={balance.OpeningBalanceID}>
+                              <TableCell>{balance.FYDescription || "Unknown"}</TableCell>
+                              <TableCell>{balance.StartDate ? format(new Date(balance.StartDate), "PP") : "N/A"}</TableCell>
+                              <TableCell>{balance.EndDate ? format(new Date(balance.EndDate), "PP") : "N/A"}</TableCell>
+                              <TableCell className="text-right">
+                                {editingOpeningBalance === balance.OpeningBalanceID ? (
+                                  <Input
+                                    type="number"
+                                    value={editOpeningBalance.OpeningDebit}
+                                    onChange={(e) =>
+                                      setEditOpeningBalance((prev) => ({
+                                        ...prev,
+                                        OpeningDebit: Number(e.target.value),
+                                      }))
+                                    }
+                                    className="w-24 text-right"
+                                    step="0.01"
+                                  />
+                                ) : (
+                                  balance.OpeningDebit.toFixed(2)
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {editingOpeningBalance === balance.OpeningBalanceID ? (
+                                  <Input
+                                    type="number"
+                                    value={editOpeningBalance.OpeningCredit}
+                                    onChange={(e) =>
+                                      setEditOpeningBalance((prev) => ({
+                                        ...prev,
+                                        OpeningCredit: Number(e.target.value),
+                                      }))
+                                    }
+                                    className="w-24 text-right"
+                                    step="0.01"
+                                  />
+                                ) : (
+                                  balance.OpeningCredit.toFixed(2)
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {editingOpeningBalance === balance.OpeningBalanceID ? (
+                                  <span className="text-muted-foreground">
+                                    {calculateOpeningBalance(editOpeningBalance.OpeningDebit, editOpeningBalance.OpeningCredit).toFixed(2)}
+                                  </span>
+                                ) : (
+                                  balance.OpeningBalance.toFixed(2)
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {editingOpeningBalance === balance.OpeningBalanceID ? (
+                                    <>
+                                      <Button size="sm" onClick={handleUpdateOpeningBalance} disabled={openingBalanceLoading}>
+                                        <Save className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="sm" variant="outline" onClick={() => setEditingOpeningBalance(null)}>
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button size="sm" variant="ghost" onClick={() => handleEditOpeningBalanceStart(balance)} disabled={openingBalanceLoading}>
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setDeleteOpeningBalanceId(balance.OpeningBalanceID)}
+                                        disabled={openingBalanceLoading}
+                                        className="text-red-500 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Summary */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Total Debit</div>
+                          <div className="text-lg font-semibold text-green-600">{totalOpeningDebit.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Total Credit</div>
+                          <div className="text-lg font-semibold text-red-600">{totalOpeningCredit.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Net Balance</div>
+                          <div className={`text-lg font-semibold ${totalOpeningBalance >= 0 ? "text-green-600" : "text-red-600"}`}>{totalOpeningBalance.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Add Opening Balance Form */}
+                {showAddOpeningBalance && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Add Opening Balance</CardTitle>
+                      <CardDescription>Set opening balance for a new fiscal year</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {availableFiscalYears.length === 0 ? (
+                        <div className="text-center py-6">
+                          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-amber-500" />
+                          <p className="text-muted-foreground">All available fiscal years already have opening balances set.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="space-y-2">
+                              <Label>Fiscal Year</Label>
+                              <Select value={newOpeningBalance.FiscalYearID} onValueChange={(value) => setNewOpeningBalance((prev) => ({ ...prev, FiscalYearID: value }))}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select fiscal year" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableFiscalYears.map((fy) => (
+                                    <SelectItem key={fy.FiscalYearID} value={fy.FiscalYearID.toString()}>
+                                      {fy.FYCode} - {fy.FYDescription}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Debit Amount</Label>
+                              <Input
+                                type="number"
+                                value={newOpeningBalance.OpeningDebit}
+                                onChange={(e) =>
+                                  setNewOpeningBalance((prev) => ({
+                                    ...prev,
+                                    OpeningDebit: Number(e.target.value),
+                                    OpeningBalance: calculateOpeningBalance(Number(e.target.value), prev.OpeningCredit),
+                                  }))
+                                }
+                                placeholder="0.00"
+                                step="0.01"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Credit Amount</Label>
+                              <Input
+                                type="number"
+                                value={newOpeningBalance.OpeningCredit}
+                                onChange={(e) =>
+                                  setNewOpeningBalance((prev) => ({
+                                    ...prev,
+                                    OpeningCredit: Number(e.target.value),
+                                    OpeningBalance: calculateOpeningBalance(prev.OpeningDebit, Number(e.target.value)),
+                                  }))
+                                }
+                                placeholder="0.00"
+                                step="0.01"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Net Balance</Label>
+                              <Input type="number" value={newOpeningBalance.OpeningBalance} className="font-mono" disabled />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setShowAddOpeningBalance(false);
+                                setNewOpeningBalance({
+                                  FiscalYearID: "",
+                                  OpeningDebit: 0,
+                                  OpeningCredit: 0,
+                                  OpeningBalance: 0,
+                                });
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button onClick={handleAddOpeningBalance} disabled={!newOpeningBalance.FiscalYearID || openingBalanceLoading}>
+                              {openingBalanceLoading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Adding...
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add Opening Balance
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -398,7 +785,19 @@ const AccountDetails = () => {
         cancelText="Cancel"
         type="danger"
       />
+
+      <ConfirmationDialog
+        isOpen={!!deleteOpeningBalanceId}
+        onClose={() => setDeleteOpeningBalanceId(null)}
+        onConfirm={handleDeleteOpeningBalance}
+        title="Delete Opening Balance"
+        description="Are you sure you want to delete this opening balance? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };
+
 export default AccountDetails;

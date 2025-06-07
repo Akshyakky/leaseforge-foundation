@@ -58,6 +58,8 @@ class AccountService extends BaseService {
         CostCenter4ID: account.CostCenter4ID,
         CompanyID: account.CompanyID,
         Description: account.Description,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
 
         // Opening balance fields if provided
         FiscalYearID: openingBalance?.fiscalYearID,
@@ -118,6 +120,8 @@ class AccountService extends BaseService {
         CostCenter4ID: account.CostCenter4ID,
         CompanyID: account.CompanyID,
         Description: account.Description,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
 
         // Opening balance fields if provided
         FiscalYearID: openingBalance?.fiscalYearID,
@@ -150,7 +154,10 @@ class AccountService extends BaseService {
   async getAllAccounts(): Promise<Account[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Accounts
-      parameters: {},
+      parameters: {
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
     };
 
     const response = await this.execute<Account[]>(request);
@@ -167,6 +174,8 @@ class AccountService extends BaseService {
       mode: 4, // Mode 4: Fetch Account by ID
       parameters: {
         AccountID: accountId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -192,6 +201,8 @@ class AccountService extends BaseService {
       mode: 5, // Mode 5: Soft Delete Account
       parameters: {
         AccountID: accountId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -227,6 +238,8 @@ class AccountService extends BaseService {
         FilterIsPostable: params.isPostable,
         FilterCashFlowCategoryID: params.cashFlowCategoryID,
         FilterCompanyID: params.companyID,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -244,6 +257,8 @@ class AccountService extends BaseService {
       mode: 7, // Mode 7: Get Account Hierarchy
       parameters: {
         FilterCompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -277,6 +292,8 @@ class AccountService extends BaseService {
         OpeningCredit: openingBalance.openingCredit || 0,
         OpeningBalance: openingBalance.openingBalance,
         CompanyID: openingBalance.companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -295,6 +312,43 @@ class AccountService extends BaseService {
       Message: response.message || "Failed to set opening balance",
     };
   }
+
+  /**
+   * Delete account opening balance
+   * @param accountId - The account ID
+   * @param fiscalYearId - The fiscal year ID
+   * @returns Response with status
+   */
+  async deleteAccountOpeningBalance(accountId: number, fiscalYearId: number): Promise<ApiResponse> {
+    // Note: You'll need to add a new mode to your stored procedure to handle opening balance deletion
+    // For now, this uses the same endpoint but you may want to create a dedicated one
+
+    const request: BaseRequest = {
+      mode: 17, // Mode 17: Delete Account Opening Balance (you'll need to implement this mode in your SP)
+      parameters: {
+        AccountID: accountId,
+        FiscalYearID: fiscalYearId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Opening balance deleted successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Opening balance deleted successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to delete opening balance",
+    };
+  }
+
   /**
    * Get account transactions with enhanced filtering options
    * @param accountId - The account ID
@@ -318,6 +372,8 @@ class AccountService extends BaseService {
         FilterFromDate: options?.fromDate,
         FilterToDate: options?.toDate,
         FiscalYearID: options?.fiscalYearId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -339,6 +395,8 @@ class AccountService extends BaseService {
         ParentAccountTypeID: accountType.ParentAccountTypeID,
         AccountTypeLevel: accountType.AccountLevel,
         IsActive: accountType.IsActive !== undefined ? accountType.IsActive : true,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -374,6 +432,8 @@ class AccountService extends BaseService {
         ParentAccountTypeID: accountType.ParentAccountTypeID,
         AccountTypeLevel: accountType.AccountLevel,
         IsActive: accountType.IsActive,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -400,7 +460,10 @@ class AccountService extends BaseService {
   async getAllAccountTypes(): Promise<AccountType[]> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get All Account Types
-      parameters: {},
+      parameters: {
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
     };
 
     const response = await this.execute<AccountType[]>(request);
@@ -414,7 +477,10 @@ class AccountService extends BaseService {
   async getAccountTypeHierarchy(): Promise<AccountTypeHierarchy[]> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Get Account Type Hierarchy
-      parameters: {},
+      parameters: {
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
     };
 
     const response = await this.execute<AccountTypeHierarchy[]>(request);
@@ -433,6 +499,8 @@ class AccountService extends BaseService {
       parameters: {
         BalanceAsOfDate: asOfDate,
         FilterCompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -461,6 +529,8 @@ class AccountService extends BaseService {
         FilterFromDate: fromDate,
         FilterToDate: toDate,
         FilterCompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -494,6 +564,8 @@ class AccountService extends BaseService {
       parameters: {
         BalanceAsOfDate: asOfDate,
         FilterCompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
       },
     };
 
@@ -507,6 +579,52 @@ class AccountService extends BaseService {
     }
 
     return { items: [], summary: null };
+  }
+
+  /**
+   * Validate account relationships and business rules
+   * @param accountData - The account data to validate
+   * @returns Validation result with errors if any
+   */
+  async validateAccountRelationships(accountData: {
+    AccountCode: string;
+    AccountName: string;
+    AccountTypeID: number;
+    ParentAccountID?: number;
+    CompanyID: number;
+    CurrencyID: number;
+  }): Promise<{ isValid: boolean; errors: string[] }> {
+    // Client-side validation logic
+    const errors: string[] = [];
+
+    // Basic validations
+    if (!accountData.AccountCode || accountData.AccountCode.trim().length === 0) {
+      errors.push("Account code is required");
+    }
+
+    if (!accountData.AccountName || accountData.AccountName.trim().length === 0) {
+      errors.push("Account name is required");
+    }
+
+    if (!accountData.AccountTypeID) {
+      errors.push("Account type is required");
+    }
+
+    if (!accountData.CompanyID) {
+      errors.push("Company is required");
+    }
+
+    if (!accountData.CurrencyID) {
+      errors.push("Currency is required");
+    }
+
+    // You can add more complex validation logic here
+    // For example, checking for duplicate account codes, validating parent-child relationships, etc.
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
   }
 }
 
