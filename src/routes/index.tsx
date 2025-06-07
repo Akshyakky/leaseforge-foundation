@@ -33,6 +33,7 @@ import generalLedgerRoutes from "./generalLedgerRoutes";
 import paymentVoucherRoutes from "./paymentVoucherRoutes";
 import journalVoucherRoutes from "./journalVoucherRoutes";
 import bankRoutes from "./bankRoutes";
+import leaseRevenuePostingRoutes from "./leaseRevenuePostingRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -130,6 +131,9 @@ const AppRoutes = () => {
 
           {/* Bank routes */}
           {bankRoutes}
+
+          {/* Lease Revenue Posting routes */}
+          {leaseRevenuePostingRoutes}
         </Route>
 
         {/* Catch-all route */}

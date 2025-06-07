@@ -29,7 +29,7 @@ import {
 class LeaseRevenuePostingService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/LeaseRevenue/posting");
+    super("/Master/LeaseRevenuePosting");
   }
 
   /**
