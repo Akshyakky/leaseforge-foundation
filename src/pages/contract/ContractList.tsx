@@ -4,21 +4,36 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, Filter, Calendar, User, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import {
+  Loader2,
+  MoreHorizontal,
+  Search,
+  Plus,
+  FileText,
+  Building,
+  Users,
+  DollarSign,
+  Calendar,
+  Eye,
+  Edit,
+  Trash2,
+  CheckCircle,
+  Clock,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ContractList: React.FC = () => {
   const navigate = useNavigate();
@@ -26,16 +41,16 @@ const ContractList: React.FC = () => {
   // State variables
   const [searchTerm, setSearchTerm] = useState("");
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
 
-  // Filters
+  // Filter states
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [fromDate, setFromDate] = useState<Date | null>(null);
-  const [toDate, setToDate] = useState<Date | null>(null);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
   // Contract status options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
@@ -46,17 +61,22 @@ const ContractList: React.FC = () => {
     fetchCustomers();
   }, []);
 
-  // Fetch all contracts
-  const fetchContracts = async (search?: string, filters?: any) => {
+  // Fetch customers for filter dropdown
+  const fetchCustomers = async () => {
+    try {
+      const customersData = await customerService.getAllCustomers();
+      setCustomers(customersData);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      toast.error("Failed to load customers");
+    }
+  };
+
+  // Fetch all contracts with filters
+  const fetchContracts = async (filters?: { searchText?: string; customerID?: number; contractStatus?: string; fromDate?: Date; toDate?: Date }) => {
     try {
       setLoading(true);
-      const contractsData = await contractService.searchContracts({
-        searchText: search,
-        customerID: filters?.customerID,
-        contractStatus: filters?.contractStatus,
-        fromDate: filters?.fromDate,
-        toDate: filters?.toDate,
-      });
+      const contractsData = await contractService.searchContracts(filters || {});
       setContracts(contractsData);
     } catch (error) {
       console.error("Error fetching contracts:", error);
@@ -66,57 +86,87 @@ const ContractList: React.FC = () => {
     }
   };
 
-  // Fetch customers for filter dropdown
-  const fetchCustomers = async () => {
-    try {
-      const customersData = await customerService.getAllCustomers();
-      setCustomers(customersData);
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-    }
-  };
-
-  // Apply filters
-  const applyFilters = () => {
-    const filters = {
-      customerID: selectedCustomerId ? parseInt(selectedCustomerId) : undefined,
-      contractStatus: selectedStatus || undefined,
-      fromDate: fromDate,
-      toDate: toDate,
-    };
-    fetchContracts(searchTerm, filters);
-  };
-
   // Debounced search function
   const debouncedSearch = debounce((value: string) => {
     if (value.length >= 2 || value === "") {
-      setSearchTerm(value);
-      applyFilters();
+      handleFilterChange();
     }
   }, 500);
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    setSearchTerm(value);
     debouncedSearch(value);
   };
 
   // Handle filter changes
-  useEffect(() => {
-    applyFilters();
-  }, [selectedCustomerId, selectedStatus, fromDate, toDate]);
+  const handleFilterChange = () => {
+    const filters = {
+      searchText: searchTerm || undefined,
+      customerID: selectedCustomerId ? parseInt(selectedCustomerId) : undefined,
+      contractStatus: selectedStatus || undefined,
+      fromDate: dateFrom,
+      toDate: dateTo,
+    };
+
+    // Remove undefined values
+    Object.keys(filters).forEach((key) => {
+      if (filters[key as keyof typeof filters] === undefined) {
+        delete filters[key as keyof typeof filters];
+      }
+    });
+
+    fetchContracts(filters);
+  };
+
+  // Handle filter dropdown changes
+  const handleCustomerChange = (value: string) => {
+    setSelectedCustomerId(value === "all" ? "" : value);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setSelectedStatus(value === "all" ? "" : value);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleDateFromChange = (date: Date | undefined) => {
+    setDateFrom(date);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  const handleDateToChange = (date: Date | undefined) => {
+    setDateTo(date);
+    setTimeout(handleFilterChange, 100);
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCustomerId("");
+    setSelectedStatus("");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    fetchContracts();
+  };
 
   // Navigation handlers
   const handleAddContract = () => {
     navigate("/contracts/new");
   };
 
-  const handleEditContract = (contractId: number) => {
-    navigate(`/contracts/edit/${contractId}`);
+  const handleEditContract = (contract: Contract) => {
+    navigate(`/contracts/edit/${contract.ContractID}`);
   };
 
-  const handleViewContract = (contractId: number) => {
-    navigate(`/contracts/${contractId}`);
+  const handleViewContract = (contract: Contract) => {
+    navigate(`/contracts/${contract.ContractID}`);
+  };
+
+  const handleRenewContract = (contract: Contract) => {
+    // Redirect to contract details where renewal can be handled
+    navigate(`/contracts/${contract.ContractID}`);
   };
 
   // Delete contract handlers
@@ -168,11 +218,34 @@ const ContractList: React.FC = () => {
     }
   };
 
+  // Render status badge
+  const renderStatusBadge = (status: string) => {
+    const statusConfig = {
+      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
+      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
+      Completed: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
+      Expired: { variant: "destructive" as const, icon: AlertCircle, className: "bg-orange-100 text-orange-800" },
+      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Terminated: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
+    const Icon = config.icon;
+
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </Badge>
+    );
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
     try {
-      return format(new Date(date), "dd MMM yyyy");
+      return format(new Date(date), "MMM dd, yyyy");
     } catch (error) {
       return "Invalid date";
     }
@@ -180,34 +253,34 @@ const ContractList: React.FC = () => {
 
   // Format currency
   const formatCurrency = (amount?: number) => {
-    if (amount === undefined || amount === null) return "N/A";
-    return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (amount === undefined || amount === null) return "—";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(amount);
   };
 
-  // Get status color for badge
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "default";
-      case "Draft":
-        return "secondary";
-      case "Pending":
-        return "outline";
-      case "Completed":
-        return "default";
-      case "Expired":
-      case "Cancelled":
-      case "Terminated":
-        return "destructive";
-      default:
-        return "outline";
-    }
+  // Calculate summary statistics
+  const stats = {
+    total: contracts.length,
+    draft: contracts.filter((c) => c.ContractStatus === "Draft").length,
+    pending: contracts.filter((c) => c.ContractStatus === "Pending").length,
+    active: contracts.filter((c) => c.ContractStatus === "Active").length,
+    completed: contracts.filter((c) => c.ContractStatus === "Completed").length,
+    expired: contracts.filter((c) => c.ContractStatus === "Expired").length,
+    cancelled: contracts.filter((c) => c.ContractStatus === "Cancelled" || c.ContractStatus === "Terminated").length,
+    totalValue: contracts.reduce((sum, c) => sum + (c.GrandTotal || 0), 0),
+    totalUnits: contracts.reduce((sum, c) => sum + (c.UnitCount || 0), 0),
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Contract Management</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Contract Management</h1>
+          <p className="text-muted-foreground">Manage rental and property contracts</p>
+        </div>
         <Button onClick={handleAddContract}>
           <Plus className="mr-2 h-4 w-4" />
           New Contract
@@ -217,92 +290,144 @@ const ContractList: React.FC = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>Contracts</CardTitle>
-          <CardDescription>Manage rental and property contracts</CardDescription>
+          <CardDescription>View and manage all rental contracts</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Summary Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Total</span>
+                </div>
+                <div className="text-2xl font-bold">{stats.total}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm text-muted-foreground">Draft</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-muted-foreground">Pending</span>
+                </div>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">Active</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">Completed</span>
+                </div>
+                <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-orange-600" />
+                  <span className="text-sm text-muted-foreground">Expired</span>
+                </div>
+                <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm text-muted-foreground">Terminated</span>
+                </div>
+                <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-muted-foreground">Total Value</span>
+                </div>
+                <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters */}
           <div className="flex flex-wrap items-center gap-4 mb-6">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input type="text" placeholder="Search contracts..." className="pl-9" onChange={handleSearchChange} />
+              <Input type="text" placeholder="Search contracts..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
             </div>
+            <div className="flex items-center gap-3 overflow-x-auto">
+              <Select value={selectedCustomerId || "all"} onValueChange={handleCustomerChange}>
+                <SelectTrigger className="w-[200px] flex-shrink-0">
+                  <SelectValue placeholder="Filter by customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
+                      {customer.CustomerFullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="All Customers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">All Customers</SelectItem>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
-                    {customer.CustomerFullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select value={selectedStatus || "all"} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-[160px] flex-shrink-0">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {contractStatusOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">All Statuses</SelectItem>
-                {contractStatusOptions.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <div className="flex-shrink-0">
+                <DatePicker value={dateFrom} onChange={handleDateFromChange} placeholder="From date" />
+              </div>
 
-            <div className="flex items-center space-x-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-dashed">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {fromDate ? format(fromDate, "PP") : "From Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <DatePicker value={fromDate} onChange={setFromDate} placeholder="From Date" />
-                </PopoverContent>
-              </Popover>
+              <div className="flex-shrink-0">
+                <DatePicker value={dateTo} onChange={handleDateToChange} placeholder="To date" />
+              </div>
 
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 border-dashed">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {toDate ? format(toDate, "PP") : "To Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <DatePicker value={toDate} onChange={setToDate} placeholder="To Date" disabled={(date) => (fromDate ? date < fromDate : false)} />
-                </PopoverContent>
-              </Popover>
-
-              {(fromDate || toDate || selectedCustomerId || selectedStatus) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setFromDate(null);
-                    setToDate(null);
-                    setSelectedCustomerId("");
-                    setSelectedStatus("");
-                  }}
-                >
-                  Reset Filters
-                </Button>
-              )}
+              <Button variant="outline" onClick={clearFilters} className="flex-shrink-0 whitespace-nowrap">
+                Clear Filters
+              </Button>
             </div>
           </div>
 
+          {/* Contracts Table */}
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : contracts.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
-              {searchTerm || selectedCustomerId || selectedStatus || fromDate || toDate ? "No contracts found matching your criteria." : "No contracts have been created yet."}
+              {searchTerm || selectedCustomerId || selectedStatus || dateFrom || dateTo
+                ? "No contracts found matching your criteria."
+                : "No contracts found. Create your first contract to get started."}
             </div>
           ) : (
             <div className="border rounded-md">
@@ -315,6 +440,7 @@ const ContractList: React.FC = () => {
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Units</TableHead>
+                    <TableHead>Created By</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -323,29 +449,42 @@ const ContractList: React.FC = () => {
                     <TableRow key={contract.ContractID}>
                       <TableCell>
                         <div className="font-medium">{contract.ContractNo}</div>
+                        <div className="text-sm text-muted-foreground">ID: {contract.ContractID}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
-                          <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <Users className="h-4 w-4 mr-2 text-muted-foreground" />
                           <div>
-                            <div>{contract.CustomerName}</div>
+                            <div className="font-medium">{contract.CustomerName}</div>
                             {contract.JointCustomerName && <div className="text-sm text-muted-foreground">Joint: {contract.JointCustomerName}</div>}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{formatDate(contract.TransactionDate)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          {formatDate(contract.TransactionDate)}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{formatCurrency(contract.GrandTotal)}</div>
-                        {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">(+{formatCurrency(contract.AdditionalCharges)} additional charges)</div>}
+                        {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Base: {formatCurrency(contract.TotalAmount)}</div>}
+                        {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Additional: {formatCurrency(contract.AdditionalCharges)}</div>}
+                      </TableCell>
+                      <TableCell>{renderStatusBadge(contract.ContractStatus)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Building className="h-3 w-3 text-muted-foreground" />
+                          <Badge variant="outline" className="font-normal">
+                            {contract.UnitCount || 0} units
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getStatusColor(contract.ContractStatus)}>{contract.ContractStatus}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">
-                          <FileText className="h-3 w-3 mr-1" />
-                          {contract.UnitCount || 0}
-                        </Badge>
+                        <div className="text-sm">
+                          {contract.CreatedBy && <div>{contract.CreatedBy}</div>}
+                          {contract.CreatedOn && <div className="text-muted-foreground">{formatDate(contract.CreatedOn)}</div>}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -355,14 +494,24 @@ const ContractList: React.FC = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewContract(contract.ContractID)}>View details</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditContract(contract.ContractID)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewContract(contract)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditContract(contract)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {(contract.ContractStatus === "Active" || contract.ContractStatus === "Completed" || contract.ContractStatus === "Expired") && (
+                              <DropdownMenuItem onClick={() => handleRenewContract(contract)}>
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Renew
+                              </DropdownMenuItem>
+                            )}
 
                             <DropdownMenuSeparator />
 
-                            <DropdownMenuItem disabled className="font-medium text-muted-foreground">
-                              Change Status
-                            </DropdownMenuItem>
+                            <DropdownMenuLabel className="font-medium text-muted-foreground">Change Status</DropdownMenuLabel>
 
                             {contractStatusOptions
                               .filter((status) => status !== contract.ContractStatus)
@@ -379,6 +528,7 @@ const ContractList: React.FC = () => {
                               onClick={() => openDeleteDialog(contract)}
                               disabled={contract.ContractStatus === "Active" || contract.ContractStatus === "Completed"}
                             >
+                              <Trash2 className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -393,7 +543,7 @@ const ContractList: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={closeDeleteDialog}
