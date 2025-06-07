@@ -8,6 +8,9 @@ import { lazyLoad } from "@/lib/performance";
 import ContractList from "@/pages/contract/ContractList";
 import ContractForm from "@/pages/contract/ContractForm";
 import ContractDetails from "@/pages/contract/ContractDetails";
+import LeaseContractList from "@/pages/leaseContract/LeaseContractList";
+import LeaseContractForm from "@/pages/leaseContract/LeaseContractForm";
+import LeaseContractDetails from "@/pages/leaseContract/LeaseContractDetails";
 
 const contractRoutes = (
   <>
@@ -15,7 +18,8 @@ const contractRoutes = (
       path="contracts"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <ContractList />
+          {/* <ContractList /> */}
+          <LeaseContractList />
         </ProtectedRoute>
       }
     />
@@ -23,7 +27,8 @@ const contractRoutes = (
       path="contracts/new"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <ContractForm />
+          {/* <ContractForm /> */}
+          <LeaseContractForm />
         </ProtectedRoute>
       }
     />
@@ -31,7 +36,8 @@ const contractRoutes = (
       path="contracts/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <ContractForm />
+          {/* <ContractForm /> */}
+          <LeaseContractForm />
         </ProtectedRoute>
       }
     />
@@ -39,7 +45,8 @@ const contractRoutes = (
       path="contracts/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <ContractDetails />
+          {/* <ContractDetails /> */}
+          <LeaseContractDetails />
         </ProtectedRoute>
       }
     />
