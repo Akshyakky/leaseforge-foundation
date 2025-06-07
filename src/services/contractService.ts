@@ -212,7 +212,7 @@ class ContractService extends BaseService {
 
     if (response.success) {
       // Process attachments to create file URLs for display if needed
-      const attachments = (response.table3 || []).map((attachment: ContractAttachment) => {
+      const attachments = (response.table4 || []).map((attachment: ContractAttachment) => {
         if (attachment.FileContent && attachment.FileContentType) {
           // Create a data URL for display
           attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;

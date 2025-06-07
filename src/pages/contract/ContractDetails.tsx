@@ -15,6 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -29,9 +33,13 @@ const ContractDetails: React.FC = () => {
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [activeTab, setActiveTab] = useState("details");
-  const [selectedAttachment, setSelectedAttachment] = useState<ContractAttachment | null>(null);
-  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+
+  // Attachment-related state
+  const [previewAttachment, setPreviewAttachment] = useState<ContractAttachment | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
 
   // Contract renewal states
   const [isRenewDialogOpen, setIsRenewDialogOpen] = useState(false);
@@ -72,6 +80,17 @@ const ContractDetails: React.FC = () => {
 
     fetchContractDetails();
   }, [id, navigate]);
+
+  // Attachment handlers
+  const openAttachmentPreview = (attachment: ContractAttachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewOpen(true);
+  };
+
+  const openAttachmentGallery = (attachmentId?: number) => {
+    setInitialAttachmentId(attachmentId);
+    setGalleryOpen(true);
+  };
 
   const handleEdit = () => {
     if (!contract) return;
@@ -172,49 +191,9 @@ const ContractDetails: React.FC = () => {
     }
   };
 
-  const openAttachmentPreview = (attachment: ContractAttachment) => {
-    setSelectedAttachment(attachment);
-    setIsPreviewDialogOpen(true);
-  };
-
-  const closeAttachmentPreview = () => {
-    setIsPreviewDialogOpen(false);
-    setSelectedAttachment(null);
-  };
-
-  // Check if the attachment is an image or PDF for preview
-  const isPreviewable = (attachment: ContractAttachment) => {
-    if (!attachment.FileContentType) return false;
-    return attachment.FileContentType.startsWith("image/") || attachment.FileContentType === "application/pdf";
-  };
-
-  // Get file type icon
-  const getFileIcon = (contentType?: string, fileName?: string) => {
-    if (!contentType) {
-      // Try to determine type from filename if available
-      if (fileName) {
-        const extension = fileName.split(".").pop()?.toLowerCase();
-        if (["pdf"].includes(extension || "")) return <FileText className="h-16 w-16 text-red-500" />;
-        if (["doc", "docx"].includes(extension || "")) return <FileText className="h-16 w-16 text-blue-500" />;
-        if (["xls", "xlsx"].includes(extension || "")) return <FileText className="h-16 w-16 text-green-500" />;
-        if (["jpg", "jpeg", "png", "gif"].includes(extension || "")) return <Image className="h-16 w-16 text-purple-500" />;
-      }
-      return <FileText className="h-16 w-16 text-muted-foreground" />;
-    }
-
-    if (contentType.startsWith("image/")) return <Image className="h-16 w-16 text-purple-500" />;
-    if (contentType === "application/pdf") return <FileText className="h-16 w-16 text-red-500" />;
-    if (contentType.includes("word") || contentType.includes("document")) return <FileText className="h-16 w-16 text-blue-500" />;
-    if (contentType.includes("excel") || contentType.includes("spreadsheet")) return <FileText className="h-16 w-16 text-green-500" />;
-
-    return <FileText className="h-16 w-16 text-muted-foreground" />;
-  };
-
   // Contract renewal functions
   const handleRenewContract = async () => {
     if (!contract) return;
-
-    // Open confirmation dialog
     setIsRenewDialogOpen(true);
   };
 
@@ -224,10 +203,9 @@ const ContractDetails: React.FC = () => {
     try {
       setIsRenewing(true);
 
-      // Create a copy of the current contract
       const renewalData = {
         contract: {
-          ContractNo: "", // Will be auto-generated
+          ContractNo: "",
           ContractStatus: "Draft",
           CustomerID: contract.CustomerID,
           JointCustomerID: contract.JointCustomerID,
@@ -238,7 +216,6 @@ const ContractDetails: React.FC = () => {
           Remarks: `Renewal of contract ${contract.ContractNo}. ${contract.Remarks || ""}`,
         },
         units: units.map((unit) => {
-          // Calculate new dates based on renewal period
           const fromDate = new Date();
           const toDate = new Date(fromDate);
           toDate.setFullYear(toDate.getFullYear() + renewalPeriod.years);
@@ -266,15 +243,13 @@ const ContractDetails: React.FC = () => {
           };
         }),
         additionalCharges: additionalCharges,
-        attachments: [], // Don't copy attachments to the renewal
+        attachments: [],
       };
 
-      // Create new contract with the renewal data
       const response = await contractService.createContract(renewalData);
 
       if (response.Status === 1 && response.NewContractID) {
         toast.success("Contract renewed successfully");
-        // Navigate to the new contract
         navigate(`/contracts/${response.NewContractID}`);
       } else {
         toast.error(response.Message || "Failed to renew contract");
@@ -326,13 +301,13 @@ const ContractDetails: React.FC = () => {
               <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
             {statusDropdownOpen && (
-              <div className="absolute right-0 top-10 z-10 w-56 rounded-md border border-gray-100  shadow-lg">
+              <div className="absolute right-0 top-10 z-10 w-56 rounded-md border border-gray-100 shadow-lg">
                 {contractStatusOptions
                   .filter((status) => status !== contract.ContractStatus)
                   .map((status) => (
                     <button
                       key={status}
-                      className="block w-full px-4 py-2 text-left text-sm "
+                      className="block w-full px-4 py-2 text-left text-sm"
                       onClick={() => {
                         openStatusChangeDialog(status);
                         setStatusDropdownOpen(false);
@@ -591,78 +566,88 @@ const ContractDetails: React.FC = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center">
                 <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
-                Attachments
+                Contract Documents
               </CardTitle>
               <Button variant="outline" size="sm" disabled>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Add Attachment
+                Add Document
               </Button>
             </CardHeader>
             <CardContent>
-              {attachments.length > 0 ? (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Document</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Issue Date</TableHead>
-                        <TableHead>Expiry Date</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {attachments.map((attachment) => (
-                        <TableRow key={attachment.ContractAttachmentID}>
-                          <TableCell>
-                            <div className="font-medium">{attachment.DocumentName}</div>
-                          </TableCell>
-                          <TableCell>{attachment.DocTypeName}</TableCell>
-                          <TableCell>{attachment.DocIssueDate ? formatDate(attachment.DocIssueDate) : "N/A"}</TableCell>
-                          <TableCell>{attachment.DocExpiryDate ? formatDate(attachment.DocExpiryDate) : "N/A"}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              {attachment.FileContentType && (
-                                <Button variant="outline" size="sm" onClick={() => openAttachmentPreview(attachment)} className="flex items-center gap-1">
-                                  {isPreviewable(attachment) ? (
-                                    <>
-                                      <Eye className="h-4 w-4" /> Preview
-                                    </>
-                                  ) : (
-                                    <>
-                                      {getFileIcon(attachment.FileContentType, attachment.DocumentName)}
-                                      <span>View File Info</span>
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!attachment.FileContent}
-                                onClick={() => {
-                                  if (attachment.fileUrl) {
-                                    // Create an anchor element and trigger download
-                                    const link = document.createElement("a");
-                                    link.href = attachment.fileUrl;
-                                    link.download = attachment.DocumentName || "document";
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                  }
-                                }}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              {attachments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-4">No documents have been attached to this contract.</p>
+                  <Button variant="outline" disabled>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Document
+                  </Button>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">No attachments have been added to this contract.</div>
+                <>
+                  <div className="flex justify-end mb-4">
+                    <Button variant="outline" onClick={() => openAttachmentGallery()}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      View All Documents
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {attachments.map((attachment) => (
+                      <Card key={attachment.ContractAttachmentID} className="overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex gap-4">
+                            <AttachmentThumbnail
+                              fileUrl={attachment.fileUrl}
+                              fileName={attachment.DocumentName || "Document"}
+                              fileType={attachment.FileContentType}
+                              onClick={() => attachment.fileUrl && openAttachmentPreview(attachment)}
+                            />
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center">
+                                <span className="font-medium">{attachment.DocumentName}</span>
+                                {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                              </div>
+                              <div className="text-sm space-y-1">
+                                {attachment.DocIssueDate && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                    Issue date: {formatDate(attachment.DocIssueDate)}
+                                  </div>
+                                )}
+                                {attachment.DocExpiryDate && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                    Expiry date: {formatDate(attachment.DocExpiryDate)}
+                                  </div>
+                                )}
+                                {attachment.Remarks && <div className="text-muted-foreground mt-1">{attachment.Remarks}</div>}
+                              </div>
+
+                              {attachment.fileUrl && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Button variant="outline" size="sm" onClick={() => openAttachmentGallery(attachment.ContractAttachmentID)} className="h-8 px-3">
+                                    <FileTypeIcon fileName={attachment.DocumentName || "Document"} fileType={attachment.FileContentType} size={14} className="mr-1.5" />
+                                    Preview
+                                  </Button>
+                                  <a
+                                    href={attachment.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download={attachment.DocumentName}
+                                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+                                  >
+                                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                                    Download
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -693,79 +678,36 @@ const ContractDetails: React.FC = () => {
         type="warning"
       />
 
-      {/* Document Preview Dialog */}
-      <Dialog open={isPreviewDialogOpen} onOpenChange={closeAttachmentPreview}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedAttachment && getFileIcon(selectedAttachment.FileContentType, selectedAttachment.DocumentName)}
-              <span>{selectedAttachment?.DocumentName}</span>
-            </DialogTitle>
-            {selectedAttachment?.DocTypeID && (
-              <DialogDescription>
-                Document Type: {selectedAttachment.DocTypeName}
-                {selectedAttachment.DocIssueDate && <span className="ml-4">Issued: {formatDate(selectedAttachment.DocIssueDate)}</span>}
-                {selectedAttachment.DocExpiryDate && (
-                  <span className="ml-4">
-                    Expires: {formatDate(selectedAttachment.DocExpiryDate)}
-                    {new Date(selectedAttachment.DocExpiryDate) < new Date() && (
-                      <Badge variant="destructive" className="ml-2">
-                        Expired
-                      </Badge>
-                    )}
-                  </span>
-                )}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-          <div className="h-[60vh] overflow-auto flex items-center justify-center p-4 bg-muted/50">
-            {selectedAttachment && selectedAttachment.fileUrl ? (
-              selectedAttachment.FileContentType?.startsWith("image/") ? (
-                <img src={selectedAttachment.fileUrl} alt={selectedAttachment.DocumentName} className="max-w-full max-h-full object-contain" />
-              ) : selectedAttachment.FileContentType === "application/pdf" ? (
-                <iframe src={selectedAttachment.fileUrl} className="w-full h-full" title={selectedAttachment.DocumentName} />
-              ) : (
-                <div className="text-center">
-                  {getFileIcon(selectedAttachment.FileContentType, selectedAttachment.DocumentName)}
-                  <p className="mt-2">Preview not available for this file type</p>
-                  <p className="text-sm text-muted-foreground">File type: {selectedAttachment.FileContentType}</p>
-                  {selectedAttachment.FileSize && <p className="text-sm text-muted-foreground">Size: {(selectedAttachment.FileSize / 1024).toFixed(2)} KB</p>}
-                </div>
-              )
-            ) : (
-              <div className="text-center">
-                <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
-                <p className="mt-2">No file content available</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex justify-between">
-            <div>
-              {selectedAttachment?.fileUrl && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (selectedAttachment.fileUrl) {
-                      const link = document.createElement("a");
-                      link.href = selectedAttachment.fileUrl;
-                      link.download = selectedAttachment.DocumentName || "document";
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }
-                  }}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </Button>
-              )}
-            </div>
-            <Button variant="outline" onClick={closeAttachmentPreview}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Attachment Preview Dialog */}
+      {previewAttachment && (
+        <AttachmentPreview
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUrl={previewAttachment.fileUrl}
+          fileName={previewAttachment.DocumentName || "Document"}
+          fileType={previewAttachment.FileContentType}
+          fileSize={previewAttachment.FileSize}
+          uploadDate={previewAttachment.CreatedOn}
+          uploadedBy={previewAttachment.CreatedBy}
+          description={previewAttachment.Remarks}
+          documentType={previewAttachment.DocTypeName}
+          issueDate={previewAttachment.DocIssueDate}
+          expiryDate={previewAttachment.DocExpiryDate}
+        />
+      )}
+
+      {/* Attachment Gallery Dialog */}
+      {attachments.length > 0 && (
+        <AttachmentGallery
+          isOpen={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          attachments={attachments.map((attachment) => ({
+            ...attachment,
+            PostingAttachmentID: attachment.ContractAttachmentID, // Map ID for gallery compatibility
+          }))}
+          initialAttachmentId={initialAttachmentId}
+        />
+      )}
 
       {/* Contract Renewal Dialog */}
       <Dialog open={isRenewDialogOpen} onOpenChange={setIsRenewDialogOpen}>

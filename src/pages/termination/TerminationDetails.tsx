@@ -5,7 +5,7 @@ import { terminationService, ContractTermination, TerminationDeduction, Terminat
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag, Calculator } from "lucide-react";
+import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag, Calculator, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -16,6 +16,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+// Import attachment components from customer module
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 
 const TerminationDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,11 +37,15 @@ const TerminationDetails: React.FC = () => {
   const [isCalculationDialogOpen, setIsCalculationDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [activeTab, setActiveTab] = useState("details");
-  const [selectedAttachment, setSelectedAttachment] = useState<TerminationAttachment | null>(null);
-  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [refundDate, setRefundDate] = useState<Date | null>(new Date());
   const [refundReference, setRefundReference] = useState("");
   const [calculationResult, setCalculationResult] = useState<any>(null);
+
+  // Attachment preview and gallery state
+  const [previewAttachment, setPreviewAttachment] = useState<TerminationAttachment | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
 
   // Termination status options
   const terminationStatusOptions = ["Draft", "Pending", "Approved", "Completed", "Cancelled"];
@@ -70,6 +80,17 @@ const TerminationDetails: React.FC = () => {
 
     fetchTerminationDetails();
   }, [id, navigate]);
+
+  // Attachment handlers
+  const openAttachmentPreview = (attachment: TerminationAttachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewOpen(true);
+  };
+
+  const openAttachmentGallery = (attachmentId?: number) => {
+    setInitialAttachmentId(attachmentId);
+    setGalleryOpen(true);
+  };
 
   const handleEdit = () => {
     if (!termination) return;
@@ -255,22 +276,6 @@ const TerminationDetails: React.FC = () => {
     }
   };
 
-  const openAttachmentPreview = (attachment: TerminationAttachment) => {
-    setSelectedAttachment(attachment);
-    setIsPreviewDialogOpen(true);
-  };
-
-  const closeAttachmentPreview = () => {
-    setIsPreviewDialogOpen(false);
-    setSelectedAttachment(null);
-  };
-
-  // Check if the attachment is an image or PDF for preview
-  const isPreviewable = (attachment: TerminationAttachment) => {
-    if (!attachment.FileContentType) return false;
-    return attachment.FileContentType.startsWith("image/") || attachment.FileContentType === "application/pdf";
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -351,7 +356,7 @@ const TerminationDetails: React.FC = () => {
         <TabsList className="grid grid-cols-3 w-[400px]">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="deductions">Deductions ({deductions.length})</TabsTrigger>
-          <TabsTrigger value="attachments">Attachments ({attachments.length})</TabsTrigger>
+          <TabsTrigger value="attachments">Documents ({attachments.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-6">
@@ -617,54 +622,88 @@ const TerminationDetails: React.FC = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center">
                 <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
-                Attachments
+                Documents
               </CardTitle>
-              <Button variant="outline" size="sm" disabled>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Attachment
-              </Button>
+              <div className="flex space-x-2">
+                {attachments.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => openAttachmentGallery()}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    View All Documents
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" disabled>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Document
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              {attachments.length > 0 ? (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Document</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Issue Date</TableHead>
-                        <TableHead>Expiry Date</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {attachments.map((attachment) => (
-                        <TableRow key={attachment.TerminationAttachmentID}>
-                          <TableCell>
-                            <div className="font-medium">{attachment.DocumentName}</div>
-                          </TableCell>
-                          <TableCell>{attachment.DocTypeName}</TableCell>
-                          <TableCell>{attachment.DocIssueDate ? formatDate(attachment.DocIssueDate) : "N/A"}</TableCell>
-                          <TableCell>{attachment.DocExpiryDate ? formatDate(attachment.DocExpiryDate) : "N/A"}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              {isPreviewable(attachment) && (
-                                <Button variant="outline" size="sm" onClick={() => openAttachmentPreview(attachment)}>
-                                  Preview
-                                </Button>
-                              )}
-                              <Button variant="outline" size="sm" disabled>
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              {attachments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <p className="text-muted-foreground mb-4">No documents associated with this termination.</p>
+                  <Button variant="outline" onClick={() => navigate(`/terminations/edit/${termination.TerminationID}`)}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Document
+                  </Button>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">No attachments have been added to this termination.</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {attachments.map((attachment) => (
+                    <Card key={attachment.TerminationAttachmentID} className="overflow-hidden">
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          <AttachmentThumbnail
+                            fileUrl={attachment.fileUrl}
+                            fileName={attachment.DocumentName || "Document"}
+                            fileType={attachment.FileContentType}
+                            onClick={() => attachment.fileUrl && openAttachmentPreview(attachment)}
+                          />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center">
+                              <span className="font-medium">{attachment.DocumentName}</span>
+                              {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                            </div>
+                            <div className="text-sm space-y-1">
+                              {attachment.DocIssueDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Issue date: {formatDate(attachment.DocIssueDate)}
+                                </div>
+                              )}
+                              {attachment.DocExpiryDate && (
+                                <div className="flex items-center text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                  Expiry date: {formatDate(attachment.DocExpiryDate)}
+                                </div>
+                              )}
+                              {attachment.Remarks && <div className="text-muted-foreground mt-1">{attachment.Remarks}</div>}
+                            </div>
+
+                            {/* Document preview and download buttons */}
+                            {attachment.fileUrl && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <Button variant="outline" size="sm" onClick={() => openAttachmentGallery(attachment.TerminationAttachmentID)} className="h-8 px-3">
+                                  <FileTypeIcon fileName={attachment.DocumentName || "Document"} fileType={attachment.FileContentType} size={14} className="mr-1.5" />
+                                  Preview
+                                </Button>
+                                <a
+                                  href={attachment.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={attachment.DocumentName}
+                                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+                                >
+                                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                                  Download
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -760,39 +799,30 @@ const TerminationDetails: React.FC = () => {
         type="warning"
       />
 
-      {/* Document Preview Dialog */}
-      <Dialog open={isPreviewDialogOpen} onOpenChange={closeAttachmentPreview}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{selectedAttachment?.DocumentName}</DialogTitle>
-          </DialogHeader>
-          <div className="h-[60vh] overflow-auto flex items-center justify-center p-4 bg-muted/50">
-            {selectedAttachment &&
-              selectedAttachment.fileUrl &&
-              (selectedAttachment.FileContentType?.startsWith("image/") ? (
-                <img src={selectedAttachment.fileUrl} alt={selectedAttachment.DocumentName} className="max-w-full max-h-full object-contain" />
-              ) : selectedAttachment.FileContentType === "application/pdf" ? (
-                <iframe src={selectedAttachment.fileUrl} className="w-full h-full" title={selectedAttachment.DocumentName} />
-              ) : (
-                <div className="text-center">
-                  <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
-                  <p className="mt-2">Preview not available for this file type</p>
-                </div>
-              ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeAttachmentPreview}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Attachment Preview Dialog */}
+      {previewAttachment && (
+        <AttachmentPreview
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUrl={previewAttachment.fileUrl}
+          fileName={previewAttachment.DocumentName || "Document"}
+          fileType={previewAttachment.FileContentType}
+          fileSize={previewAttachment.FileSize}
+          uploadDate={previewAttachment.CreatedOn}
+          uploadedBy={previewAttachment.CreatedBy}
+          description={previewAttachment.Remarks}
+          documentType={previewAttachment.DocTypeName}
+          issueDate={previewAttachment.DocIssueDate}
+          expiryDate={previewAttachment.DocExpiryDate}
+        />
+      )}
+
+      {/* Attachment Gallery Dialog */}
+      {attachments.length > 0 && (
+        <AttachmentGallery isOpen={galleryOpen} onClose={() => setGalleryOpen(false)} attachments={attachments} initialAttachmentId={initialAttachmentId} />
+      )}
     </div>
   );
 };
-
-// Import DropdownMenu components and ChevronDown icon
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
 
 export default TerminationDetails;

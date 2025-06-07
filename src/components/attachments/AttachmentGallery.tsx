@@ -87,11 +87,11 @@ export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, on
             </>
           )}
 
-          {/* The actual attachment preview */}
+          {/* The actual attachment preview - FIXED: Added showDialogWrapper={false} */}
           <div>
             <AttachmentPreview
               isOpen={true}
-              onClose={() => {}} // No-op since we handle closing in the gallery
+              onClose={onClose} // Now properly connected to the gallery's close function
               fileUrl={currentAttachment.fileUrl}
               fileName={currentAttachment.DocumentName || "Document"}
               fileType={currentAttachment.FileContentType}
@@ -102,6 +102,7 @@ export const AttachmentGallery: React.FC<AttachmentGalleryProps> = ({ isOpen, on
               documentType={currentAttachment.DocTypeName}
               issueDate={currentAttachment.DocIssueDate}
               expiryDate={currentAttachment.DocExpiryDate}
+              showDialogWrapper={false} // FIXED: Don't render dialog wrapper since we already have one
             />
           </div>
         </div>

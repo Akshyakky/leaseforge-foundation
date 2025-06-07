@@ -7,7 +7,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent, PlusCircle, X } from "lucide-react";
 import { terminationService, ContractTermination } from "@/services/terminationService";
 import { contractService } from "@/services/contractService";
 import { docTypeService } from "@/services/docTypeService";
@@ -19,7 +19,83 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { FormField as CustomFormField } from "@/components/forms/FormField";
 import { format } from "date-fns";
+
+// Create Document Type Dialog
+const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: any) => void }) => {
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!description.trim()) {
+        toast.error("Description is required");
+        return;
+      }
+
+      const newTypeId = await docTypeService.createDocType({
+        Description: description,
+      });
+
+      if (newTypeId) {
+        const newDocType = {
+          DocTypeID: newTypeId,
+          Description: description,
+        };
+        onSave(newDocType);
+        setDescription("");
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error creating document type:", error);
+      toast.error("Failed to create document type");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Document Type</DialogTitle>
+          <DialogDescription>Add a new document type to use in the system</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="docTypeDescription" className="text-sm font-medium">
+                Description
+              </label>
+              <Input id="docTypeDescription" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter document type description" required />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // Create schema for termination form validation
 const terminationSchema = z.object({
@@ -106,7 +182,16 @@ const TerminationForm: React.FC = () => {
   const [contracts, setContracts] = useState<any[]>([]);
   const [deductions, setDeductions] = useState<any[]>([]);
   const [docTypes, setDocTypes] = useState<any[]>([]);
-  const [taxes, setTaxes] = useState<Tax[]>([]);
+  const [taxes, setTaxes] = useState<any[]>([]);
+
+  // File upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<{ [key: number]: string }>({});
+
+  // Dialog states
+  const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
   // Initialize form
   const form = useForm<TerminationFormValues>({
@@ -148,17 +233,21 @@ const TerminationForm: React.FC = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [contractsData, deductionsData, docTypesData, taxesData] = await Promise.all([
+        const [contractsData, deductionsData, docTypesData] = await Promise.all([
           contractService.getAllContracts(),
           terminationService.getAvailableDeductions(),
           docTypeService.getAllDocTypes(),
-          taxService.getAllTaxes(),
         ]);
 
         setContracts(contractsData);
         setDeductions(deductionsData);
         setDocTypes(docTypesData);
-        setTaxes(taxesData);
+
+        // Mock taxes data - replace with actual tax service
+        setTaxes([
+          { TaxID: 1, TaxName: "VAT", TaxCode: "VAT", TaxRate: 15 },
+          { TaxID: 2, TaxName: "Service Tax", TaxCode: "ST", TaxRate: 5 },
+        ]);
 
         // If editing, fetch the termination data
         if (isEdit && id) {
@@ -180,13 +269,13 @@ const TerminationForm: React.FC = () => {
             };
 
             // Format deductions
-            const formattedDeductions = terminationData.deductions.map((deduction) => ({
+            const formattedDeductions = terminationData.deductions.map((deduction: any) => ({
               ...deduction,
               DeductionID: deduction.DeductionID || null,
             }));
 
             // Format attachments
-            const formattedAttachments = terminationData.attachments.map((attachment) => ({
+            const formattedAttachments = terminationData.attachments.map((attachment: any) => ({
               ...attachment,
               DocTypeID: attachment.DocTypeID.toString(),
               DocIssueDate: attachment.DocIssueDate ? new Date(attachment.DocIssueDate) : null,
@@ -228,13 +317,6 @@ const TerminationForm: React.FC = () => {
     try {
       const data = await contractService.getContractById(contractId);
       setContractDetails(data.contract);
-
-      // If contract has security deposit data, pre-fill it
-      if (data.contract && !isEdit) {
-        // This is a placeholder - in a real app, you might get this from the contract or another source
-        // For now, we'll leave it to be manually entered
-        // form.setValue("SecurityDepositAmount", data.contract.securityDeposit || 0);
-      }
     } catch (error) {
       console.error("Error fetching contract details:", error);
     }
@@ -321,6 +403,57 @@ const TerminationForm: React.FC = () => {
     setActiveTab("attachments");
   };
 
+  // Handle document type creation
+  const handleSaveDocType = (newDocType: any) => {
+    setDocTypes([...docTypes, newDocType]);
+    toast.success(`Document type "${newDocType.Description}" created successfully`);
+  };
+
+  // Handle file upload
+  const handleFileUpload = (file: File, index: number) => {
+    setIsUploading(true);
+    setUploadError(null);
+
+    // Validate file
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("File size exceeds 10MB limit");
+      setIsUploading(false);
+      return;
+    }
+
+    // Create a preview URL
+    const url = URL.createObjectURL(file);
+    setPreviewUrls((prev) => ({ ...prev, [index]: url }));
+
+    setIsUploading(false);
+    setUploadSuccess(true);
+
+    // Auto-set document name if it's empty
+    if (!form.getValues(`attachments.${index}.DocumentName`)) {
+      form.setValue(`attachments.${index}.DocumentName`, file.name);
+    }
+
+    // Reset success status after a moment
+    setTimeout(() => setUploadSuccess(false), 3000);
+  };
+
+  // Handle file removal
+  const handleFileRemove = (index: number) => {
+    // Clean up any preview URL
+    if (previewUrls[index]) {
+      URL.revokeObjectURL(previewUrls[index]);
+      setPreviewUrls((prev) => {
+        const newPreviewUrls = { ...prev };
+        delete newPreviewUrls[index];
+        return newPreviewUrls;
+      });
+    }
+
+    form.setValue(`attachments.${index}.file`, undefined);
+    setUploadSuccess(false);
+    setUploadError(null);
+  };
+
   // Handle form submission
   const onSubmit = async (data: TerminationFormValues) => {
     if (!user) {
@@ -360,9 +493,9 @@ const TerminationForm: React.FC = () => {
           DeductionName: deduction.DeductionName,
           DeductionDescription: deduction.DeductionDescription,
           DeductionAmount: deduction.DeductionAmount,
-          TaxID: deduction.TaxID, // Save Tax ID
-          TaxCode: deduction.TaxCode, // Save Tax Code
-          TaxName: deduction.TaxName, // Save Tax Name
+          TaxID: deduction.TaxID,
+          TaxCode: deduction.TaxCode,
+          TaxName: deduction.TaxName,
           TaxPercentage: deduction.TaxPercentage,
           TaxAmount: deduction.TaxAmount,
           TotalAmount: deduction.TotalAmount,
@@ -451,11 +584,7 @@ const TerminationForm: React.FC = () => {
     if (files && files.length > 0) {
       const file = files[0];
       form.setValue(`attachments.${index}.file`, file);
-
-      // Auto-set document name if it's empty
-      if (!form.getValues(`attachments.${index}.DocumentName`)) {
-        form.setValue(`attachments.${index}.DocumentName`, file.name);
-      }
+      handleFileUpload(file, index);
     }
   };
 
@@ -580,7 +709,7 @@ const TerminationForm: React.FC = () => {
               <TabsList className="grid grid-cols-3 w-[400px]">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="deductions">Deductions ({deductionsFieldArray.fields.length})</TabsTrigger>
-                <TabsTrigger value="attachments">Attachments ({attachmentsFieldArray.fields.length})</TabsTrigger>
+                <TabsTrigger value="attachments">Documents ({attachmentsFieldArray.fields.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details">
@@ -645,7 +774,7 @@ const TerminationForm: React.FC = () => {
                               field.onChange(value);
                               fetchContractDetails(parseInt(value));
                             }}
-                            disabled={isNewFromContract} // Disable if creating from a specific contract
+                            disabled={isNewFromContract}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -1007,7 +1136,7 @@ const TerminationForm: React.FC = () => {
                                   )}
                                 />
 
-                                {/* Tax selection from Tax Master */}
+                                {/* Tax selection */}
                                 <div className="space-y-2">
                                   <FormLabel>Tax Selection</FormLabel>
                                   <Select
@@ -1035,7 +1164,7 @@ const TerminationForm: React.FC = () => {
                                         </span>
                                       </div>
                                     ) : (
-                                      "Select a tax from Tax Master or use manual rate"
+                                      "Select a tax or use manual rate"
                                     )}
                                   </FormDescription>
                                 </div>
@@ -1108,18 +1237,18 @@ const TerminationForm: React.FC = () => {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                      <CardTitle>Attachments</CardTitle>
+                      <CardTitle>Documents</CardTitle>
                       <CardDescription>Add document attachments to this termination</CardDescription>
                     </div>
                     <Button type="button" onClick={addAttachment}>
                       <Plus className="mr-2 h-4 w-4" />
-                      Add Attachment
+                      Add Document
                     </Button>
                   </CardHeader>
 
                   <CardContent className="space-y-6">
                     {attachmentsFieldArray.fields.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">No attachments have been added yet. Click "Add Attachment" to add one.</div>
+                      <div className="text-center py-8 text-muted-foreground">No documents have been added yet. Click "Add Document" to add one.</div>
                     ) : (
                       <Accordion type="multiple" className="w-full">
                         {attachmentsFieldArray.fields.map((field, index) => (
@@ -1142,7 +1271,7 @@ const TerminationForm: React.FC = () => {
                                 <div className="flex justify-end">
                                   <Button type="button" variant="destructive" size="sm" onClick={() => attachmentsFieldArray.remove(index)}>
                                     <Trash2 className="h-4 w-4 mr-1" />
-                                    Remove Attachment
+                                    Remove Document
                                   </Button>
                                 </div>
 
@@ -1151,7 +1280,22 @@ const TerminationForm: React.FC = () => {
                                   name={`attachments.${index}.DocTypeID`}
                                   render={({ field }) => (
                                     <FormItem>
-                                      <FormLabel>Document Type</FormLabel>
+                                      <FormLabel className="flex items-center justify-between">
+                                        <span>Document Type</span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 text-xs"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            setIsDocTypeDialogOpen(true);
+                                          }}
+                                        >
+                                          <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                                          Create New
+                                        </Button>
+                                      </FormLabel>
                                       <Select value={field.value} onValueChange={field.onChange}>
                                         <FormControl>
                                           <SelectTrigger>
@@ -1185,11 +1329,35 @@ const TerminationForm: React.FC = () => {
                                   )}
                                 />
 
-                                <div className="space-y-2">
-                                  <FormLabel>Document File</FormLabel>
-                                  <Input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={(e) => handleFileChange(e, index)} />
-                                  <FormDescription>Upload document file (PDF, Word, Excel, or images)</FormDescription>
-                                </div>
+                                <CustomFormField
+                                  form={form}
+                                  name={`attachments.${index}.file`}
+                                  label="Upload File"
+                                  description="Upload a document file (PDF, Word, Excel, or images)"
+                                  type="file"
+                                  fileConfig={{
+                                    maxSize: 10 * 1024 * 1024, // 10MB
+                                    acceptedFileTypes: ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls",
+                                    onUpload: (file: File) => handleFileUpload(file, index),
+                                    onRemove: () => handleFileRemove(index),
+                                    isUploading,
+                                    uploadSuccess,
+                                    uploadError,
+                                  }}
+                                />
+
+                                {/* Show file preview if available */}
+                                {previewUrls[index] && (
+                                  <div className="mt-2 p-2 border rounded-md bg-muted/20">
+                                    <p className="text-xs text-muted-foreground mb-1">File preview:</p>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm">{form.watch(`attachments.${index}.file`)?.name}</span>
+                                      <Button type="button" variant="ghost" size="sm" onClick={() => handleFileRemove(index)}>
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
 
                                 <div className="grid grid-cols-2 gap-4">
                                   <FormField
@@ -1279,12 +1447,14 @@ const TerminationForm: React.FC = () => {
           </div>
         </form>
       </Form>
+
+      {/* Create Document Type Dialog */}
+      <CreateDocTypeDialog isOpen={isDocTypeDialogOpen} onClose={() => setIsDocTypeDialogOpen(false)} onSave={handleSaveDocType} />
     </div>
   );
 };
 
 // Import DollarSign icon
 import { DollarSign } from "lucide-react";
-import { Tax, taxService } from "@/services";
 
 export default TerminationForm;
