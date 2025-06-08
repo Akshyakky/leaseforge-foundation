@@ -41,7 +41,6 @@ import { companyService } from "@/services/companyService";
 import { fiscalYearService } from "@/services/fiscalYearService";
 import { currencyService } from "@/services/currencyService";
 import { accountService } from "@/services/accountService";
-//import { paymentTermService } from "@/services/paymentTermService";
 import { taxService } from "@/services/taxService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
@@ -70,6 +69,8 @@ const contractUnitInvoiceSchema = z.object({
   DiscountAmount: z.coerce.number().min(0).optional().nullable(),
   TotalAmount: z.coerce.number().min(0, "Total amount must be 0 or greater"),
   RentPerMonth: z.coerce.number().min(0).optional().nullable(),
+  RentPerYear: z.coerce.number().min(0).optional().nullable(),
+  NoOfInstallments: z.number().optional().nullable(),
   ContractDays: z.number().optional().nullable(),
 });
 
@@ -193,6 +194,40 @@ const ContractInvoiceForm: React.FC = () => {
     };
   };
 
+  // Validate form before submission
+  const validateFormBeforeSubmit = (data: InvoiceFormValues): string[] => {
+    const errors: string[] = [];
+
+    if (!data.CompanyID) {
+      errors.push("Company is required");
+    }
+
+    if (!data.FiscalYearID) {
+      errors.push("Fiscal Year is required");
+    }
+
+    if (!data.contractUnits || data.contractUnits.length === 0) {
+      errors.push("At least one contract unit is required");
+    } else {
+      data.contractUnits.forEach((unit, index) => {
+        if (!unit.UnitID) {
+          errors.push(`Unit ${index + 1}: Unit selection is required`);
+        }
+        if (!unit.ContractID) {
+          errors.push(`Unit ${index + 1}: Contract ID is missing. Please reselect the unit.`);
+        }
+        if (!unit.PeriodFromDate || !unit.PeriodToDate) {
+          errors.push(`Unit ${index + 1}: Invoice period dates are required`);
+        }
+        if (unit.InvoiceAmount <= 0) {
+          errors.push(`Unit ${index + 1}: Invoice amount must be greater than zero`);
+        }
+      });
+    }
+
+    return errors;
+  };
+
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
@@ -224,7 +259,7 @@ const ContractInvoiceForm: React.FC = () => {
   // Fetch reference data
   const fetchReferenceData = async () => {
     try {
-      const [companiesData, fiscalYearsData, customersData, contractsData, unitsData, currenciesData, accountsData, paymentTermsData, taxesData] = await Promise.all([
+      const [companiesData, fiscalYearsData, customersData, contractsData, unitsData, currenciesData, accountsData, taxesData] = await Promise.all([
         companyService.getCompaniesForDropdown(true),
         fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
         customerService.getAllCustomers(),
@@ -232,8 +267,6 @@ const ContractInvoiceForm: React.FC = () => {
         unitService.getAllUnits(),
         currencyService.getAllCurrencies(),
         accountService.getAllAccounts(),
-        "",
-        //paymentTermService.getAllPaymentTerms(),
         taxService.getAllTaxes(),
       ]);
 
@@ -244,7 +277,6 @@ const ContractInvoiceForm: React.FC = () => {
       setUnits(unitsData);
       setCurrencies(currenciesData);
       setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
-      //setPaymentTerms(paymentTermsData);
       setPaymentTerms([
         { PaymentTermID: 1, TermName: "Net 30", DaysCount: 30 },
         { PaymentTermID: 2, TermName: "Net 15", DaysCount: 15 },
@@ -311,7 +343,7 @@ const ContractInvoiceForm: React.FC = () => {
     });
   };
 
-  // Fetch contract units when customer or contract changes
+  // Enhanced fetchContractUnits function
   const fetchContractUnits = async (customerId?: string, contractId?: string) => {
     try {
       let units: any[] = [];
@@ -319,8 +351,11 @@ const ContractInvoiceForm: React.FC = () => {
       if (contractId) {
         // Fetch units for specific contract
         const contractData = await contractService.getContractById(parseInt(contractId));
-        if (contractData.contract) {
-          units = contractData.units || [];
+        if (contractData.contract && contractData.units) {
+          units = contractData.units.map((unit) => ({
+            ...unit,
+            ContractID: contractData.contract!.ContractID,
+          }));
         }
       } else if (customerId) {
         // Fetch all contracts for customer and their units
@@ -331,7 +366,11 @@ const ContractInvoiceForm: React.FC = () => {
         for (const contract of customerContracts) {
           const contractData = await contractService.getContractById(contract.ContractID);
           if (contractData.units) {
-            units.push(...contractData.units);
+            const contractUnitsWithId = contractData.units.map((unit) => ({
+              ...unit,
+              ContractID: contract.ContractID,
+            }));
+            units.push(...contractUnitsWithId);
           }
         }
       }
@@ -339,6 +378,7 @@ const ContractInvoiceForm: React.FC = () => {
       setContractUnits(units);
     } catch (error) {
       console.error("Error fetching contract units:", error);
+      toast.error("Error loading contract units");
     }
   };
 
@@ -348,6 +388,11 @@ const ContractInvoiceForm: React.FC = () => {
       if (!name) return;
 
       const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+      const getTaxDetails = (taxId: string) => {
+        if (!taxId || taxId === "0") return null;
+        return taxes.find((tax) => tax.TaxID.toString() === taxId);
+      };
 
       // Auto-calculation for contract units
       if (name.includes("contractUnits.") && name.includes("InvoiceAmount")) {
@@ -421,7 +466,63 @@ const ContractInvoiceForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, taxes]);
+
+  // Enhanced auto-populate unit rent values
+  useEffect(() => {
+    const handleUnitChange = async (unitId: string, index: number) => {
+      if (unitId) {
+        try {
+          let unitDetails = units.find((u) => u.UnitID.toString() === unitId);
+
+          if (!unitDetails) {
+            const { unit } = await unitService.getUnitById(parseInt(unitId));
+            unitDetails = unit;
+          }
+
+          if (unitDetails) {
+            // Ensure ContractID is properly set
+            const contractUnit = contractUnits.find((cu) => cu.UnitID.toString() === unitId);
+
+            if (contractUnit && contractUnit.ContractID) {
+              form.setValue(`contractUnits.${index}.ContractID`, contractUnit.ContractID.toString());
+            }
+
+            // Set rental values
+            if (unitDetails.PerMonth) {
+              form.setValue(`contractUnits.${index}.RentPerMonth`, unitDetails.PerMonth);
+            }
+            if (unitDetails.PerYear) {
+              form.setValue(`contractUnits.${index}.RentPerYear`, unitDetails.PerYear);
+            }
+            if (unitDetails.NoOfInstallmentLease) {
+              form.setValue(`contractUnits.${index}.NoOfInstallments`, unitDetails.NoOfInstallmentLease);
+            }
+
+            // Trigger amount calculation after setting values
+            setTimeout(() => {
+              calculateUnitInvoiceAmount(index);
+            }, 100);
+          }
+        } catch (error) {
+          console.error("Error fetching unit details:", error);
+          toast.error("Error loading unit details");
+        }
+      }
+    };
+
+    const subscription = form.watch((value, { name }) => {
+      if (name && name.includes(".UnitID") && value) {
+        const index = parseInt(name.split(".")[1]);
+        const unitId = form.getValues(`contractUnits.${index}.UnitID`);
+        if (unitId) {
+          handleUnitChange(unitId, index);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, units, contractUnits]);
 
   // Calculate unit invoice amount based on contract details and period
   const calculateUnitInvoiceAmount = async (index: number) => {
@@ -511,6 +612,13 @@ const ContractInvoiceForm: React.FC = () => {
       return;
     }
 
+    // Validate form before submission
+    const validationErrors = validateFormBeforeSubmit(data);
+    if (validationErrors.length > 0) {
+      validationErrors.forEach((error) => toast.error(error));
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -567,6 +675,10 @@ const ContractInvoiceForm: React.FC = () => {
         }
       } else {
         // Generate new invoice
+        const firstContractUnit = data.contractUnits[0];
+        const contractId = firstContractUnit?.ContractID ? parseInt(firstContractUnit.ContractID) : undefined;
+        const contractUnitId = firstContractUnit?.ContractUnitID || undefined;
+
         const generationRequest: InvoiceGenerationRequest = {
           CompanyID: parseInt(data.CompanyID),
           FiscalYearID: parseInt(data.FiscalYearID),
@@ -575,8 +687,8 @@ const ContractInvoiceForm: React.FC = () => {
           InvoiceType: data.InvoiceType,
           InvoiceStatus: data.InvoiceStatus,
           CustomerID: data.CustomerID ? parseInt(data.CustomerID) : undefined,
-          //ContractID: contractUnitsData[0]?.ContractID,
-          ContractUnitID: contractUnitsData[0]?.ContractUnitID,
+          ContractID: contractId,
+          ContractUnitID: contractUnitId,
           PeriodFromDate: contractUnitsData[0]?.PeriodFromDate,
           PeriodToDate: contractUnitsData[0]?.PeriodToDate,
           SubTotal: totals.subTotal,
@@ -600,6 +712,13 @@ const ContractInvoiceForm: React.FC = () => {
           PostingNarration: data.PostingNarration,
           ContractUnits: contractUnitsData.length > 1 ? contractUnitsData : undefined,
         };
+
+        // Enhanced validation before calling service
+        if (!generationRequest.ContractID && !generationRequest.ContractUnitID) {
+          toast.error("Please select a valid contract unit. Contract ID or Contract Unit ID is required.");
+          setLoading(false);
+          return;
+        }
 
         const response =
           data.GenerationMode === GENERATION_MODE.SINGLE || contractUnitsData.length === 1
@@ -628,7 +747,31 @@ const ContractInvoiceForm: React.FC = () => {
 
   // Reset form
   const handleReset = () => {
-    form.reset();
+    if (isEdit && invoice) {
+      form.reset();
+    } else {
+      form.reset({
+        InvoiceNo: "",
+        InvoiceDate: new Date(),
+        InvoiceType: INVOICE_TYPE.RENT,
+        InvoiceStatus: INVOICE_STATUS.DRAFT,
+        CompanyID: companies.length > 0 ? companies[0].CompanyID.toString() : "",
+        FiscalYearID: fiscalYears.length > 0 ? fiscalYears[0].FiscalYearID.toString() : "",
+        CustomerID: "",
+        CurrencyID: currencies.length > 0 ? currencies[0].CurrencyID.toString() : "",
+        ExchangeRate: 1,
+        PaymentTermID: "",
+        TaxID: "",
+        IsRecurring: false,
+        RecurrencePattern: "",
+        Notes: "",
+        InternalNotes: "",
+        GenerationMode: GENERATION_MODE.SINGLE,
+        AutoNumbering: true,
+        AutoPost: false,
+        contractUnits: [],
+      });
+    }
   };
 
   // Format date for display
