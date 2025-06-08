@@ -626,7 +626,8 @@ const ContractInvoiceForm: React.FC = () => {
 
       // Prepare contract units data
       const contractUnitsData: ContractUnitForInvoice[] = data.contractUnits.map((unit) => ({
-        ContractUnitID: unit.ContractUnitID || 0,
+        //ContractUnitID: unit.ContractUnitID || 0,
+        ContractUnitID: parseInt(unit.UnitID) || 0,
         PeriodFromDate: unit.PeriodFromDate,
         PeriodToDate: unit.PeriodToDate,
         InvoiceAmount: unit.InvoiceAmount,
@@ -677,7 +678,7 @@ const ContractInvoiceForm: React.FC = () => {
         // Generate new invoice
         const firstContractUnit = data.contractUnits[0];
         const contractId = firstContractUnit?.ContractID ? parseInt(firstContractUnit.ContractID) : undefined;
-        const contractUnitId = firstContractUnit?.ContractUnitID || undefined;
+        const contractUnitId = firstContractUnit?.UnitID ? parseInt(firstContractUnit.UnitID) : undefined;
 
         const generationRequest: InvoiceGenerationRequest = {
           CompanyID: parseInt(data.CompanyID),
