@@ -39,6 +39,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Form } from "@/components/ui/form";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
 import { customerService } from "@/services/customerService";
 import { propertyService } from "@/services/propertyService";
@@ -1009,51 +1010,53 @@ const ContractInvoiceList: React.FC = () => {
               Outstanding balance: {formatCurrency(selectedInvoice?.BalanceAmount)}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={paymentForm.handleSubmit(handleRecordPayment)} className="space-y-4">
-            <FormField
-              form={paymentForm}
-              name="paymentAmount"
-              label="Payment Amount"
-              type="number"
-              step="0.01"
-              placeholder="Enter payment amount"
-              required
-              description="Amount being paid"
-            />
-            <FormField form={paymentForm} name="paymentDate" label="Payment Date" type="date" required description="Date payment was received" />
-            <FormField
-              form={paymentForm}
-              name="paymentMethod"
-              label="Payment Method"
-              type="select"
-              options={paymentMethodOptions.map((method) => ({
-                label: method,
-                value: method,
-              }))}
-              required
-              description="Method of payment"
-            />
-            <FormField form={paymentForm} name="paymentReference" label="Reference Number" placeholder="Check number, transaction ID, etc." description="Payment reference" />
-            <FormField form={paymentForm} name="notes" label="Notes" type="textarea" placeholder="Additional notes" description="Optional payment notes" />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={actionLoading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={actionLoading}>
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Recording...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Record Payment
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+          <Form {...paymentForm}>
+            <form onSubmit={paymentForm.handleSubmit(handleRecordPayment)} className="space-y-4">
+              <FormField
+                form={paymentForm}
+                name="paymentAmount"
+                label="Payment Amount"
+                type="number"
+                step="0.01"
+                placeholder="Enter payment amount"
+                required
+                description="Amount being paid"
+              />
+              <FormField form={paymentForm} name="paymentDate" label="Payment Date" type="date" required description="Date payment was received" />
+              <FormField
+                form={paymentForm}
+                name="paymentMethod"
+                label="Payment Method"
+                type="select"
+                options={paymentMethodOptions.map((method) => ({
+                  label: method,
+                  value: method,
+                }))}
+                required
+                description="Method of payment"
+              />
+              <FormField form={paymentForm} name="paymentReference" label="Reference Number" placeholder="Check number, transaction ID, etc." description="Payment reference" />
+              <FormField form={paymentForm} name="notes" label="Notes" type="textarea" placeholder="Additional notes" description="Optional payment notes" />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={actionLoading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Recording...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Record Payment
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -1068,78 +1071,80 @@ const ContractInvoiceList: React.FC = () => {
               Amount: {formatCurrency(selectedInvoice?.TotalAmount)}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={postingForm.handleSubmit(handlePostInvoice)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for the posting entries" />
+          <Form {...postingForm}>
+            <form onSubmit={postingForm.handleSubmit(handlePostInvoice)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for the posting entries" />
+                <FormField
+                  form={postingForm}
+                  name="exchangeRate"
+                  label="Exchange Rate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="1.0000"
+                  description="Exchange rate to base currency"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  form={postingForm}
+                  name="debitAccountId"
+                  label="Debit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("1"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select debit account"
+                  required
+                  description="Account to debit (typically Accounts Receivable)"
+                />
+                <FormField
+                  form={postingForm}
+                  name="creditAccountId"
+                  label="Credit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("4"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select credit account"
+                  required
+                  description="Account to credit (typically Revenue account)"
+                />
+              </div>
               <FormField
                 form={postingForm}
-                name="exchangeRate"
-                label="Exchange Rate"
-                type="number"
-                step="0.0001"
-                placeholder="1.0000"
-                description="Exchange rate to base currency"
+                name="narration"
+                label="Narration"
+                type="textarea"
+                placeholder="Enter posting narration"
+                description="Description for the posting entries"
               />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                form={postingForm}
-                name="debitAccountId"
-                label="Debit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("1"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select debit account"
-                required
-                description="Account to debit (typically Accounts Receivable)"
-              />
-              <FormField
-                form={postingForm}
-                name="creditAccountId"
-                label="Credit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("4"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select credit account"
-                required
-                description="Account to credit (typically Revenue account)"
-              />
-            </div>
-            <FormField
-              form={postingForm}
-              name="narration"
-              label="Narration"
-              type="textarea"
-              placeholder="Enter posting narration"
-              description="Description for the posting entries"
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={actionLoading}>
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Posting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Post Invoice
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Post Invoice
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -1154,78 +1159,80 @@ const ContractInvoiceList: React.FC = () => {
               Total Amount: {formatCurrency(stats.selectedAmount)}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={postingForm.handleSubmit(handleBulkPost)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for all posting entries" />
+          <Form {...postingForm}>
+            <form onSubmit={postingForm.handleSubmit(handleBulkPost)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for all posting entries" />
+                <FormField
+                  form={postingForm}
+                  name="exchangeRate"
+                  label="Exchange Rate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="1.0000"
+                  description="Exchange rate to base currency"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  form={postingForm}
+                  name="debitAccountId"
+                  label="Debit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("1"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select debit account"
+                  required
+                  description="Account to debit for all invoices"
+                />
+                <FormField
+                  form={postingForm}
+                  name="creditAccountId"
+                  label="Credit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("4"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select credit account"
+                  required
+                  description="Account to credit for all invoices"
+                />
+              </div>
               <FormField
                 form={postingForm}
-                name="exchangeRate"
-                label="Exchange Rate"
-                type="number"
-                step="0.0001"
-                placeholder="1.0000"
-                description="Exchange rate to base currency"
+                name="narration"
+                label="Narration"
+                type="textarea"
+                placeholder="Enter posting narration"
+                description="Description for all posting entries"
               />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                form={postingForm}
-                name="debitAccountId"
-                label="Debit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("1"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select debit account"
-                required
-                description="Account to debit for all invoices"
-              />
-              <FormField
-                form={postingForm}
-                name="creditAccountId"
-                label="Credit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("4"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select credit account"
-                required
-                description="Account to credit for all invoices"
-              />
-            </div>
-            <FormField
-              form={postingForm}
-              name="narration"
-              label="Narration"
-              type="textarea"
-              placeholder="Enter posting narration"
-              description="Description for all posting entries"
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setBulkPostingDialogOpen(false)} disabled={actionLoading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={actionLoading}>
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Posting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Post {selectedInvoices.size} Invoices
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setBulkPostingDialogOpen(false)} disabled={actionLoading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Post {selectedInvoices.size} Invoices
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

@@ -99,7 +99,7 @@ export const LeaseRevenuePostingDetails = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currencyCode || "USD",
+      currency: "USD", //currencyCode ||
       minimumFractionDigits: 2,
     }).format(amount);
   };
