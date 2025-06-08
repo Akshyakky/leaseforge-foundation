@@ -4,6 +4,9 @@ import ProtectedRoute from "./ProtectedRoute";
 import InvoiceList from "@/pages/invoice/InvoiceList";
 import InvoiceForm from "@/pages/invoice/InvoiceForm";
 import InvoiceDetails from "@/pages/invoice/InvoiceDetails";
+import ContractInvoiceList from "@/pages/contractInvoice/ContractInvoiceList";
+import ContractInvoiceForm from "@/pages/contractInvoice/ContractInvoiceForm";
+import ContractInvoiceDetails from "@/pages/contractInvoice/ContractInvoiceDetails";
 
 const invoiceRoutes = (
   <>
@@ -11,7 +14,8 @@ const invoiceRoutes = (
       path="invoices"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <InvoiceList />
+          {/* <InvoiceList /> */}
+          <ContractInvoiceList />
         </ProtectedRoute>
       }
     />
@@ -19,7 +23,8 @@ const invoiceRoutes = (
       path="invoices/new"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <InvoiceForm />
+          {/* <InvoiceForm /> */}
+          <ContractInvoiceForm />
         </ProtectedRoute>
       }
     />
@@ -27,7 +32,8 @@ const invoiceRoutes = (
       path="invoices/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <InvoiceForm />
+          {/* <InvoiceForm /> */}
+          <ContractInvoiceForm />
         </ProtectedRoute>
       }
     />
@@ -35,7 +41,8 @@ const invoiceRoutes = (
       path="invoices/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <InvoiceDetails />
+          {/* <InvoiceDetails /> */}
+          <ContractInvoiceDetails />
         </ProtectedRoute>
       }
     />
