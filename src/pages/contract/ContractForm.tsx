@@ -394,8 +394,185 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // Continue with other auto-calculation logic...
-      // (Include all the existing auto-calculation logic from the original file)
+      // 2. Auto-calculate number of installments based on yearly/monthly rent
+      if (name.includes("NoOfInstallments") && name.includes("units.")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const monthlyRent = units[index].RentPerMonth || 0;
+          const installments = units[index].NoOfInstallments || 12;
+          const yearlyRent = roundToTwo(monthlyRent * installments);
+
+          form.setValue(`units.${index}.RentPerYear`, yearlyRent);
+
+          // Trigger tax recalculation
+          const taxId = units[index].TaxID;
+          if (taxId && taxId !== "0") {
+            const selectedTax = getTaxDetails(taxId);
+            if (selectedTax) {
+              const taxAmount = roundToTwo((yearlyRent * selectedTax.TaxRate) / 100);
+              form.setValue(`units.${index}.TaxAmount`, taxAmount);
+              form.setValue(`units.${index}.TotalAmount`, roundToTwo(yearlyRent + taxAmount));
+            }
+          } else {
+            form.setValue(`units.${index}.TaxAmount`, 0);
+            form.setValue(`units.${index}.TotalAmount`, yearlyRent);
+          }
+        }
+      }
+
+      // 3. Auto-calculate contract duration
+      if ((name.includes("FromDate") || name.includes("ToDate")) && name.includes("units.")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const fromDate = units[index].FromDate;
+          const toDate = units[index].ToDate;
+
+          if (fromDate && toDate && toDate >= fromDate) {
+            const totalDays = differenceInDays(toDate, fromDate);
+            const totalMonths = differenceInMonths(toDate, fromDate);
+            const totalYears = differenceInYears(toDate, fromDate);
+
+            form.setValue(`units.${index}.ContractDays`, totalDays);
+            form.setValue(`units.${index}.ContractMonths`, totalMonths);
+            form.setValue(`units.${index}.ContractYears`, totalYears);
+          }
+        }
+      }
+
+      // 4. Handle tax changes for units
+      if (name.includes("TaxID") && name.includes("units.")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const taxId = units[index].TaxID;
+          const rentPerYear = units[index].RentPerYear || 0;
+
+          if (taxId && taxId !== "0") {
+            const selectedTax = getTaxDetails(taxId);
+            if (selectedTax) {
+              form.setValue(`units.${index}.TaxPercentage`, selectedTax.TaxRate);
+              const taxAmount = roundToTwo((rentPerYear * selectedTax.TaxRate) / 100);
+              form.setValue(`units.${index}.TaxAmount`, taxAmount);
+              form.setValue(`units.${index}.TotalAmount`, roundToTwo(rentPerYear + taxAmount));
+            }
+          } else {
+            // No tax selected
+            form.setValue(`units.${index}.TaxPercentage`, 0);
+            form.setValue(`units.${index}.TaxAmount`, 0);
+            form.setValue(`units.${index}.TotalAmount`, rentPerYear);
+          }
+        }
+      }
+
+      // 5. Handle direct yearly rent changes for units
+      if (name.includes("RentPerYear") && name.includes("units.") && !name.includes("RentPerMonth")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const rentPerYear = units[index].RentPerYear || 0;
+          const taxId = units[index].TaxID;
+
+          if (taxId && taxId !== "0") {
+            const selectedTax = getTaxDetails(taxId);
+            if (selectedTax) {
+              const taxAmount = roundToTwo((rentPerYear * selectedTax.TaxRate) / 100);
+              form.setValue(`units.${index}.TaxAmount`, taxAmount);
+              form.setValue(`units.${index}.TotalAmount`, roundToTwo(rentPerYear + taxAmount));
+            }
+          } else {
+            form.setValue(`units.${index}.TaxAmount`, 0);
+            form.setValue(`units.${index}.TotalAmount`, rentPerYear);
+          }
+        }
+      }
+
+      // 6. Handle tax changes for additional charges
+      if (name.includes("TaxID") && name.includes("additionalCharges.")) {
+        const index = parseInt(name.split(".")[1]);
+        const charges = form.getValues("additionalCharges");
+
+        if (charges && charges[index] !== undefined) {
+          const taxId = charges[index].TaxID;
+          const amount = Number(charges[index].Amount) || 0;
+
+          if (taxId && taxId !== "0" && taxId !== "") {
+            const selectedTax = getTaxDetails(taxId);
+            if (selectedTax) {
+              const taxRate = Number(selectedTax.TaxRate) || 0;
+              form.setValue(`additionalCharges.${index}.TaxPercentage`, taxRate);
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+              form.setValue(`additionalCharges.${index}.TotalAmount`, roundToTwo(amount + taxAmount));
+            }
+          } else {
+            // No tax selected or tax is "0"
+            form.setValue(`additionalCharges.${index}.TaxPercentage`, 0);
+            form.setValue(`additionalCharges.${index}.TaxAmount`, 0);
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+          }
+        }
+      }
+
+      // 7. Handle amount changes for additional charges
+      if (name.includes("Amount") && name.includes("additionalCharges.") && !name.includes("TaxAmount") && !name.includes("TotalAmount")) {
+        const index = parseInt(name.split(".")[1]);
+        const charges = form.getValues("additionalCharges");
+
+        if (charges && charges[index] !== undefined) {
+          const amount = Number(charges[index].Amount) || 0;
+          const taxId = charges[index].TaxID;
+
+          if (taxId && taxId !== "0" && taxId !== "") {
+            const selectedTax = getTaxDetails(taxId);
+            if (selectedTax) {
+              const taxRate = Number(selectedTax.TaxRate) || 0;
+              form.setValue(`additionalCharges.${index}.TaxPercentage`, taxRate);
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+              form.setValue(`additionalCharges.${index}.TotalAmount`, roundToTwo(amount + taxAmount));
+            }
+          } else {
+            form.setValue(`additionalCharges.${index}.TaxPercentage`, 0);
+            form.setValue(`additionalCharges.${index}.TaxAmount`, 0);
+            form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+          }
+        }
+      }
+
+      // 8. Handle additional charge selection (AdditionalChargesID changes)
+      if (name.includes("AdditionalChargesID") && name.includes("additionalCharges.")) {
+        const index = parseInt(name.split(".")[1]);
+        const charges = form.getValues("additionalCharges");
+
+        if (charges && charges[index] !== undefined) {
+          const amount = Number(charges[index].Amount) || 0;
+          const taxId = charges[index].TaxID;
+
+          // Recalculate when charge type changes
+          if (amount > 0) {
+            if (taxId && taxId !== "0" && taxId !== "") {
+              const selectedTax = getTaxDetails(taxId);
+              if (selectedTax) {
+                const taxRate = Number(selectedTax.TaxRate) || 0;
+                form.setValue(`additionalCharges.${index}.TaxPercentage`, taxRate);
+                const taxAmount = roundToTwo((amount * taxRate) / 100);
+                form.setValue(`additionalCharges.${index}.TaxAmount`, taxAmount);
+                form.setValue(`additionalCharges.${index}.TotalAmount`, roundToTwo(amount + taxAmount));
+              }
+            } else {
+              form.setValue(`additionalCharges.${index}.TaxPercentage`, 0);
+              form.setValue(`additionalCharges.${index}.TaxAmount`, 0);
+              form.setValue(`additionalCharges.${index}.TotalAmount`, amount);
+            }
+          }
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -884,8 +1061,102 @@ const ContractForm: React.FC = () => {
                               required
                             />
 
-                            {/* Rest of unit form fields - keeping existing implementation */}
-                            {/* ... (include all the existing unit form fields) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <FormField form={form} name={`units.${index}.FromDate`} label="From Date" type="date" required description="Contract start date" />
+                              <FormField form={form} name={`units.${index}.ToDate`} label="To Date" type="date" required description="Contract end date" />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <FormField form={form} name={`units.${index}.FitoutFromDate`} label="Fitout From Date" type="date" description="Optional fitout start date" />
+                              <FormField form={form} name={`units.${index}.FitoutToDate`} label="Fitout To Date" type="date" description="Optional fitout end date" />
+                            </div>
+
+                            <FormField form={form} name={`units.${index}.CommencementDate`} label="Commencement Date" type="date" description="Date when occupancy begins" />
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <FormField form={form} name={`units.${index}.ContractDays`} label="Contract Days" type="number" disabled description="Auto-calculated" />
+                              <FormField form={form} name={`units.${index}.ContractMonths`} label="Contract Months" type="number" disabled description="Auto-calculated" />
+                              <FormField form={form} name={`units.${index}.ContractYears`} label="Contract Years" type="number" disabled description="Auto-calculated" />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <FormField form={form} name={`units.${index}.RentPerMonth`} label="Monthly Rent" type="number" step="0.01" placeholder="0.00" required />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.RentPerYear`}
+                                label="Yearly Rent"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                required
+                                description="Auto-calculated from monthly rent"
+                              />
+                            </div>
+
+                            <FormField
+                              form={form}
+                              name={`units.${index}.NoOfInstallments`}
+                              label="Number of Installments"
+                              type="number"
+                              placeholder="12"
+                              description="Payment frequency per year"
+                            />
+
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2">
+                                <Info className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">Rent-Free Period (Optional)</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <FormField form={form} name={`units.${index}.RentFreePeriodFrom`} label="Rent-Free From" type="date" />
+                                <FormField form={form} name={`units.${index}.RentFreePeriodTo`} label="Rent-Free To" type="date" />
+                              </div>
+                              <FormField form={form} name={`units.${index}.RentFreeAmount`} label="Rent-Free Amount" type="number" step="0.01" placeholder="0.00" />
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-green-500" />
+                                <span className="font-medium">Tax Information</span>
+                              </div>
+                              <FormField
+                                form={form}
+                                name={`units.${index}.TaxID`}
+                                label="Applicable Tax"
+                                type="select"
+                                options={[
+                                  { label: "No Tax", value: "0" },
+                                  ...taxes.map((tax) => ({
+                                    label: `${tax.TaxName} (${tax.TaxCode}) - ${tax.IsExemptOrZero ? "Exempt" : `${tax.TaxRate}%`}`,
+                                    value: tax.TaxID.toString(),
+                                  })),
+                                ]}
+                                placeholder="Select applicable tax"
+                              />
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <FormField
+                                  form={form}
+                                  name={`units.${index}.TaxPercentage`}
+                                  label="Tax Rate (%)"
+                                  type="number"
+                                  step="0.01"
+                                  disabled
+                                  description="Auto-filled from selected tax"
+                                />
+                                <FormField form={form} name={`units.${index}.TaxAmount`} label="Tax Amount" type="number" step="0.01" disabled description="Auto-calculated" />
+                              </div>
+                            </div>
+
+                            <FormField
+                              form={form}
+                              name={`units.${index}.TotalAmount`}
+                              label="Total Amount"
+                              type="number"
+                              step="0.01"
+                              disabled
+                              description="Rent + Tax (auto-calculated)"
+                              className="bg-muted/50"
+                            />
                           </div>
                         </AccordionContent>
                       </AccordionItem>
@@ -922,7 +1193,106 @@ const ContractForm: React.FC = () => {
                 </div>
               ) : (
                 <Accordion type="multiple" className="w-full">
-                  {/* Charges accordion content - keeping existing implementation */}
+                  {chargesFieldArray.fields.map((field, index) => {
+                    const chargeId = form.watch(`additionalCharges.${index}.AdditionalChargesID`);
+                    const chargeDetails = chargeId ? charges.find((c) => c.ChargesID.toString() === chargeId) : null;
+
+                    return (
+                      <AccordionItem key={field.id} value={`charge-${index}`} className="border rounded-lg mb-4">
+                        <AccordionTrigger className="px-4 hover:no-underline">
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-3">
+                              <DollarSign className="h-5 w-5 text-muted-foreground" />
+                              <div className="text-left">
+                                <div className="font-medium">{chargeDetails ? chargeDetails.ChargesName : `Charge ${index + 1}`}</div>
+                                <div className="text-sm text-muted-foreground">{chargeDetails && chargeDetails.ChargesCategoryName}</div>
+                              </div>
+                            </div>
+                            <div className="font-medium">
+                              {form.watch(`additionalCharges.${index}.TotalAmount`) ? form.watch(`additionalCharges.${index}.TotalAmount`).toLocaleString() : "0"}
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          <div className="space-y-6">
+                            <div className="flex justify-end">
+                              <Button type="button" variant="destructive" size="sm" onClick={() => chargesFieldArray.remove(index)}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove Charge
+                              </Button>
+                            </div>
+
+                            <FormField
+                              form={form}
+                              name={`additionalCharges.${index}.AdditionalChargesID`}
+                              label="Select Charge"
+                              type="select"
+                              options={charges.map((charge) => ({
+                                label: `${charge.ChargesName} - ${charge.ChargesCategoryName}`,
+                                value: charge.ChargesID.toString(),
+                              }))}
+                              placeholder="Choose a charge type"
+                              required
+                            />
+
+                            <FormField form={form} name={`additionalCharges.${index}.Amount`} label="Charge Amount" type="number" step="0.01" placeholder="0.00" required />
+
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-green-500" />
+                                <span className="font-medium">Tax Information</span>
+                              </div>
+                              <FormField
+                                form={form}
+                                name={`additionalCharges.${index}.TaxID`}
+                                label="Applicable Tax"
+                                type="select"
+                                options={[
+                                  { label: "No Tax", value: "0" },
+                                  ...taxes.map((tax) => ({
+                                    label: `${tax.TaxName} (${tax.TaxCode}) - ${tax.IsExemptOrZero ? "Exempt" : `${tax.TaxRate}%`}`,
+                                    value: tax.TaxID.toString(),
+                                  })),
+                                ]}
+                                placeholder="Select applicable tax"
+                              />
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <FormField
+                                  form={form}
+                                  name={`additionalCharges.${index}.TaxPercentage`}
+                                  label="Tax Rate (%)"
+                                  type="number"
+                                  step="0.01"
+                                  disabled
+                                  description="Auto-filled from selected tax"
+                                />
+                                <FormField
+                                  form={form}
+                                  name={`additionalCharges.${index}.TaxAmount`}
+                                  label="Tax Amount"
+                                  type="number"
+                                  step="0.01"
+                                  disabled
+                                  description="Auto-calculated"
+                                />
+                              </div>
+                            </div>
+
+                            <FormField
+                              form={form}
+                              name={`additionalCharges.${index}.TotalAmount`}
+                              label="Total Amount"
+                              type="number"
+                              step="0.01"
+                              disabled
+                              description="Amount + Tax (auto-calculated)"
+                              className="bg-muted/50"
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
                 </Accordion>
               )}
             </CardContent>

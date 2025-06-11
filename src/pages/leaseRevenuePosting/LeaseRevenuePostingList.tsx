@@ -32,7 +32,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Form } from "@/components/ui/form";
 import { leaseRevenuePostingService } from "@/services/leaseRevenuePostingService";
 import { accountService } from "@/services/accountService";
 import { companyService } from "@/services/companyService";
@@ -778,83 +780,85 @@ const LeaseRevenuePostingList = () => {
             <DialogDescription>Configure posting details for {selectedTransactions.size} selected transactions</DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={postingForm.handleSubmit(handlePostTransactions)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for the posting entries" />
+          <Form {...postingForm}>
+            <form onSubmit={postingForm.handleSubmit(handlePostTransactions)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField form={postingForm} name="postingDate" label="Posting Date" type="date" required description="Date for the posting entries" />
+                <FormField
+                  form={postingForm}
+                  name="exchangeRate"
+                  label="Exchange Rate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="1.0000"
+                  description="Exchange rate to base currency"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  form={postingForm}
+                  name="debitAccountId"
+                  label="Debit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("1"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select debit account"
+                  required
+                  description="Account to debit (typically Accounts Receivable)"
+                />
+                <FormField
+                  form={postingForm}
+                  name="creditAccountId"
+                  label="Credit Account"
+                  type="select"
+                  options={accounts
+                    .filter((acc) => acc.AccountCode.startsWith("4"))
+                    .map((account) => ({
+                      label: `${account.AccountCode} - ${account.AccountName}`,
+                      value: account.AccountID.toString(),
+                    }))}
+                  placeholder="Select credit account"
+                  required
+                  description="Account to credit (typically Revenue account)"
+                />
+              </div>
+
               <FormField
                 form={postingForm}
-                name="exchangeRate"
-                label="Exchange Rate"
-                type="number"
-                step="0.0001"
-                placeholder="1.0000"
-                description="Exchange rate to base currency"
+                name="narration"
+                label="Narration"
+                type="textarea"
+                placeholder="Enter posting narration"
+                description="Description for the posting entries"
               />
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                form={postingForm}
-                name="debitAccountId"
-                label="Debit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("1"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select debit account"
-                required
-                description="Account to debit (typically Accounts Receivable)"
-              />
-              <FormField
-                form={postingForm}
-                name="creditAccountId"
-                label="Credit Account"
-                type="select"
-                options={accounts
-                  .filter((acc) => acc.AccountCode.startsWith("4"))
-                  .map((account) => ({
-                    label: `${account.AccountCode} - ${account.AccountName}`,
-                    value: account.AccountID.toString(),
-                  }))}
-                placeholder="Select credit account"
-                required
-                description="Account to credit (typically Revenue account)"
-              />
-            </div>
+              <FormField form={postingForm} name="referenceNo" label="Reference Number" placeholder="Enter reference number" description="Optional reference for the posting" />
 
-            <FormField
-              form={postingForm}
-              name="narration"
-              label="Narration"
-              type="textarea"
-              placeholder="Enter posting narration"
-              description="Description for the posting entries"
-            />
-
-            <FormField form={postingForm} name="referenceNo" label="Reference Number" placeholder="Enter reference number" description="Optional reference for the posting" />
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={actionLoading}>
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Posting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Post Transactions
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Post Transactions
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -868,15 +872,7 @@ const LeaseRevenuePostingList = () => {
           <div className="space-y-4">
             <div>
               <Label htmlFor="reversal-reason">Reversal Reason *</Label>
-              <textarea
-                id="reversal-reason"
-                className="w-full mt-1 p-2 border rounded-md"
-                placeholder="Enter reason for reversal"
-                value={reversalReason}
-                onChange={(e) => setReversalReason(e.target.value)}
-                rows={3}
-                required
-              />
+              <Textarea id="reversal-reason" placeholder="Enter reason for reversal" value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} rows={3} required />
             </div>
           </div>
           <DialogFooter>
