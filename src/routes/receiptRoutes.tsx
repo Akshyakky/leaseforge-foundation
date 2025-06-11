@@ -4,6 +4,9 @@ import ProtectedRoute from "./ProtectedRoute";
 import ReceiptList from "@/pages/receipt/ReceiptList";
 import ReceiptForm from "@/pages/receipt/ReceiptForm";
 import ReceiptDetails from "@/pages/receipt/ReceiptDetails";
+import ContractReceiptList from "@/pages/contractReceipt/ContractReceiptList";
+import ContractReceiptForm from "@/pages/contractReceipt/ContractReceiptForm";
+import ContractReceiptDetails from "@/pages/contractReceipt/ContractReceiptDetails";
 
 const receiptRoutes = (
   <>
@@ -11,7 +14,8 @@ const receiptRoutes = (
       path="receipts"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <ReceiptList />
+          {/* <ReceiptList /> */}
+          <ContractReceiptList />
         </ProtectedRoute>
       }
     />
@@ -19,7 +23,8 @@ const receiptRoutes = (
       path="receipts/new"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <ReceiptForm />
+          {/* <ReceiptForm /> */}
+          <ContractReceiptForm />
         </ProtectedRoute>
       }
     />
@@ -27,7 +32,8 @@ const receiptRoutes = (
       path="receipts/edit/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager"]}>
-          <ReceiptForm />
+          {/* <ReceiptForm /> */}
+          <ContractReceiptForm />
         </ProtectedRoute>
       }
     />
@@ -35,7 +41,8 @@ const receiptRoutes = (
       path="receipts/:id"
       element={
         <ProtectedRoute requiredRoles={["admin", "manager", "user"]}>
-          <ReceiptDetails />
+          {/* <ReceiptDetails /> */}
+          <ContractReceiptDetails />
         </ProtectedRoute>
       }
     />
