@@ -1,23 +1,28 @@
-// src/pages/UnitMaster/UnitForm.tsx
+// src/pages/UnitMaster/UnitForm.tsx - Enhanced with property information fetching
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
 import { Unit, UnitContact } from "../../services/unitService";
+import { Property } from "../../services/propertyService";
 import { DEFAULT_FORM_VALUES, UNIT_STATUS_OPTIONS, UNIT_TABS } from "./constants";
 import { UnitContacts } from "./UnitContacts";
-import { Home, Users, Save, RotateCcw, DollarSign } from "lucide-react";
+import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/components/ui/use-toast";
 import { unitDropdownService } from "../../services/unitDropdownService";
+import { propertyService } from "../../services/propertyService";
+import { unitService } from "../../services/unitService";
 import { cityService, countryService } from "@/services";
 
 // Define the form validation schema
@@ -64,11 +69,135 @@ const unitFormSchema = z.object({
 
 type UnitFormValues = z.infer<typeof unitFormSchema>;
 
+// Property Summary Interface
+interface PropertySummary {
+  property: Property | null;
+  existingUnits: Unit[];
+  totalUnits: number;
+  availableUnits: number;
+  occupiedUnits: number;
+  nextSuggestedUnitNo: string;
+}
+
+// Property Information Display Component
+const PropertyInfoDisplay: React.FC<{ propertySummary: PropertySummary | null }> = ({ propertySummary }) => {
+  if (!propertySummary?.property) return null;
+
+  const { property, existingUnits, totalUnits, availableUnits, occupiedUnits, nextSuggestedUnitNo } = propertySummary;
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case "Available":
+        return "bg-green-100 text-green-800";
+      case "Leased":
+        return "bg-blue-100 text-blue-800";
+      case "Sold":
+        return "bg-gray-100 text-gray-800";
+      case "Reserved":
+        return "bg-purple-100 text-purple-800";
+      default:
+        return "bg-red-100 text-red-800";
+    }
+  };
+
+  return (
+    <Card className="mb-6 border-blue-200">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center">
+          <Building2 className="mr-2 h-5 w-5 text-blue-600" />
+          Property Information: {property.PropertyName}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-sm text-gray-600">Property Number</div>
+            <div className="font-semibold">{property.PropertyNo || "Not specified"}</div>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-sm text-gray-600">Total Planned Units</div>
+            <div className="font-semibold">{property.TotalUnit || "Not specified"}</div>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-sm text-gray-600">Created Units</div>
+            <div className="font-semibold">{totalUnits}</div>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-sm text-gray-600">Available Units</div>
+            <div className="font-semibold text-green-600">{availableUnits}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <div className="text-sm font-medium text-gray-600 mb-2">Location Details</div>
+            <div className="space-y-1 text-sm">
+              <div>
+                <span className="font-medium">Address:</span> {property.Location || "Not specified"}
+              </div>
+              <div>
+                <span className="font-medium">Plot Number:</span> {property.PlotNo || "Not specified"}
+              </div>
+              <div>
+                <span className="font-medium">Plot Size:</span> {property.PlotSize ? `${property.PlotSize.toLocaleString()} sq ft` : "Not specified"}
+              </div>
+            </div>
+          </div>
+          <div>
+            <div className="text-sm font-medium text-gray-600 mb-2">Property Statistics</div>
+            <div className="space-y-1 text-sm">
+              <div>
+                <span className="font-medium">Total Floors:</span> {property.NoOfFloors || "Not specified"}
+              </div>
+              <div>
+                <span className="font-medium">Parking Spaces:</span> {property.TotalParkings || "Not specified"}
+              </div>
+              <div>
+                <span className="font-medium">Built-up Area:</span> {property.BuildUpArea ? `${property.BuildUpArea.toLocaleString()} sq ft` : "Not specified"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {nextSuggestedUnitNo && (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Suggested next unit number: <strong>{nextSuggestedUnitNo}</strong>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {existingUnits.length > 0 && (
+          <div>
+            <div className="text-sm font-medium text-gray-600 mb-2">Unit Status Distribution</div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(
+                existingUnits.reduce((acc, unit) => {
+                  const status = unit.UnitStatus || "Unknown";
+                  acc[status] = (acc[status] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>)
+              ).map(([status, count]) => (
+                <Badge key={status} className={getStatusColor(status)}>
+                  {status}: {count}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel }) => {
   const [activeTab, setActiveTab] = useState(UNIT_TABS.GENERAL);
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPropertyLoading, setIsPropertyLoading] = useState(false);
   const [cities, setCities] = useState<{ CityID: number; CityName: string }[]>([]);
+  const [propertySummary, setPropertySummary] = useState<PropertySummary | null>(null);
   const [dropdownData, setDropdownData] = useState({
     properties: [],
     unitTypes: [],
@@ -97,21 +226,19 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     mode: "onChange",
   });
 
-  // Track when country changes to reset city selection
+  // Track when country and property changes
   const watchCountry = form.watch("CountryID");
   const watchProperty = form.watch("PropertyID");
 
-  // **FIX: Reset form based on mode and unit data availability**
+  // Reset form based on mode and unit data availability
   useEffect(() => {
     if (mode.isEdit && unit) {
-      // Edit mode: Reset form with unit data when unit becomes available
       const formValues: UnitFormValues = {
         ...DEFAULT_FORM_VALUES,
         ...unit,
       };
       form.reset(formValues);
     } else if (mode.isCreate) {
-      // Create mode: Always reset to default values
       form.reset(DEFAULT_FORM_VALUES);
     }
   }, [unit, mode.isEdit, mode.isCreate, form]);
@@ -121,16 +248,13 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     const loadDropdownData = async () => {
       try {
         setIsLoading(true);
-        // Get dropdown data from unit dropdown service
         const allDropdowns = await unitDropdownService.getAllDropdownData();
-
-        // Get countries from country service
         const countries = await countryService.getCountriesForDropdown();
 
         setDropdownData({
           ...allDropdowns,
           countries,
-          cities: [], // Initialize with empty array
+          cities: [],
         });
       } catch (error) {
         console.error("Error loading dropdown data:", error);
@@ -147,52 +271,133 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     loadDropdownData();
   }, []);
 
-  // Load property-specific floors when property changes
-  useEffect(() => {
-    const loadFloors = async () => {
-      if (watchProperty) {
-        try {
-          const floors = await unitDropdownService.getFloors(watchProperty);
-          setDropdownData((prev) => ({
-            ...prev,
-            floors,
-          }));
-        } catch (error) {
-          console.error("Error loading floors for property:", error);
-        }
-      }
-    };
+  // Enhanced property selection handler
+  const handlePropertyChange = async (propertyId: number) => {
+    form.setValue("PropertyID", propertyId);
 
-    if (watchProperty && watchProperty > 0) {
-      loadFloors();
+    if (propertyId > 0) {
+      setIsPropertyLoading(true);
+
+      try {
+        // Fetch comprehensive property information
+        const [propertyDetails, existingUnits, floors] = await Promise.all([
+          propertyService.getPropertyById(propertyId),
+          unitService.getUnitsByProperty(propertyId),
+          unitDropdownService.getFloors(propertyId),
+        ]);
+
+        // Update floors dropdown
+        setDropdownData((prev) => ({
+          ...prev,
+          floors,
+        }));
+
+        if (propertyDetails) {
+          // Auto-populate location fields
+          if (propertyDetails.CountryID) {
+            form.setValue("CountryID", propertyDetails.CountryID);
+
+            // Load cities for the property's country
+            const cityResponse = await cityService.getCitiesByCountry(propertyDetails.CountryID);
+            setCities(cityResponse);
+
+            setTimeout(() => {
+              if (propertyDetails.CityID) {
+                form.setValue("CityID", propertyDetails.CityID);
+              }
+            }, 100);
+          }
+
+          if (propertyDetails.CommunityID) {
+            form.setValue("CommunityID", propertyDetails.CommunityID);
+          }
+
+          // Calculate property statistics
+          const totalUnits = existingUnits.length;
+          const availableUnits = existingUnits.filter((unit) => unit.UnitStatus === "Available").length;
+          const occupiedUnits = totalUnits - availableUnits;
+
+          // Generate suggested unit number
+          const nextSuggestedUnitNo = generateNextUnitNumber(existingUnits, propertyDetails);
+
+          // Set property summary
+          setPropertySummary({
+            property: propertyDetails,
+            existingUnits,
+            totalUnits,
+            availableUnits,
+            occupiedUnits,
+            nextSuggestedUnitNo,
+          });
+
+          // Auto-suggest unit number for new units
+          if (mode.isCreate && nextSuggestedUnitNo && !form.getValues("UnitNo")) {
+            form.setValue("UnitNo", nextSuggestedUnitNo);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading property information:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load property information. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsPropertyLoading(false);
+      }
+    } else {
+      // Clear property-related data
+      setDropdownData((prev) => ({ ...prev, floors: [] }));
+      setPropertySummary(null);
+      form.setValue("CountryID", 0);
+      form.setValue("CityID", 0);
+      form.setValue("CommunityID", 0);
+      setCities([]);
     }
-  }, [watchProperty]);
+  };
+
+  // Generate next unit number based on existing units
+  const generateNextUnitNumber = (existingUnits: Unit[], property: Property): string => {
+    if (existingUnits.length === 0) {
+      return `${property.PropertyNo || "P"}-001`;
+    }
+
+    // Extract numeric parts from existing unit numbers
+    const numericParts = existingUnits
+      .map((unit) => {
+        const match = unit.UnitNo.match(/(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter((num) => num > 0)
+      .sort((a, b) => b - a);
+
+    const nextNumber = numericParts.length > 0 ? numericParts[0] + 1 : 1;
+    const paddedNumber = nextNumber.toString().padStart(3, "0");
+
+    return `${property.PropertyNo || "P"}-${paddedNumber}`;
+  };
 
   // Load cities when country changes
   useEffect(() => {
     const loadCities = async () => {
-      if (watchCountry) {
+      if (watchCountry && watchCountry > 0) {
         try {
-          // Reset city selection when country changes
           form.setValue("CityID", 0);
-
-          // Load cities for the selected country
           const cityResponse = await cityService.getCitiesByCountry(watchCountry);
           setCities(cityResponse);
         } catch (error) {
           console.error("Error loading cities for country:", error);
+          setCities([]);
         }
+      } else {
+        setCities([]);
       }
     };
 
-    if (watchCountry && watchCountry > 0) {
-      loadCities();
-    } else {
-      setCities([]);
-    }
+    loadCities();
   }, [watchCountry, form]);
 
-  // **FIX: Load cities immediately when editing and country is already selected**
+  // Load cities immediately when editing and country is already selected
   useEffect(() => {
     if (unit && unit.CountryID && mode.isEdit) {
       const loadInitialCities = async () => {
@@ -207,15 +412,21 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     }
   }, [unit, mode.isEdit]);
 
+  // Load property information immediately when editing
+  useEffect(() => {
+    if (unit && unit.PropertyID && mode.isEdit) {
+      handlePropertyChange(unit.PropertyID);
+    }
+  }, [unit, mode.isEdit]);
+
   // Initialize contacts
   useEffect(() => {
     if (unit?.UnitID) {
-      // In a real implementation, we would fetch contacts from the API
       setContacts([]);
     }
   }, [unit]);
 
-  // Update total area when component area values change
+  // Auto-calculate total area
   useEffect(() => {
     const livingArea = form.watch("LivingAreaSqft") || 0;
     const balconyArea = form.watch("BalconyAreaSqft") || 0;
@@ -225,56 +436,40 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     form.setValue("TotalAreaSqft", totalArea > 0 ? totalArea : undefined);
   }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft"), form]);
 
-  // Synchronize rent values based on available parameters
+  // Synchronize rent calculations
   useEffect(() => {
-    // Get current values
     const monthlyRent = form.watch("PerMonth");
     const yearlyRent = form.watch("PerYear");
     const installments = form.watch("NoOfInstallmentLease");
 
-    // Track which values are provided (not undefined, null, or 0)
     const hasMonthly = monthlyRent !== undefined && monthlyRent !== null && monthlyRent !== 0;
     const hasYearly = yearlyRent !== undefined && yearlyRent !== null && yearlyRent !== 0;
     const hasInstallments = installments !== undefined && installments !== null && installments !== 0;
 
-    // Variables to track if we need to update values to prevent infinite loops
-    let updatingMonthly = false;
-    let updatingYearly = false;
-    let updatingInstallments = false;
-
-    // Case 1: Monthly and Yearly are provided, calculate Installments
     if (hasMonthly && hasYearly && !hasInstallments) {
       if (monthlyRent > 0) {
         const calculatedInstallments = Math.round(yearlyRent / monthlyRent);
         form.setValue("NoOfInstallmentLease", calculatedInstallments);
-        updatingInstallments = true;
       }
     }
 
-    // Case 2: Monthly and Installments are provided, calculate Yearly
     if (hasMonthly && hasInstallments && !hasYearly) {
       const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
       form.setValue("PerYear", calculatedYearly);
-      updatingYearly = true;
     }
 
-    // Case 3: Yearly and Installments are provided, calculate Monthly
     if (hasYearly && hasInstallments && !hasMonthly) {
       if (installments > 0) {
         const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
         form.setValue("PerMonth", calculatedMonthly);
-        updatingMonthly = true;
       }
     }
 
-    // Prevent inconsistencies if all three values are provided
     if (hasMonthly && hasYearly && hasInstallments) {
-      // Check if values are consistent (within a small epsilon for floating point comparison)
       const calculatedYearly = monthlyRent * installments;
-      const epsilon = 0.01; // Allow for small rounding differences
+      const epsilon = 0.01;
 
       if (Math.abs(calculatedYearly - yearlyRent) > epsilon) {
-        // Values are inconsistent, prioritize monthly and installments
         const newYearly = parseFloat((monthlyRent * installments).toFixed(2));
         form.setValue("PerYear", newYearly);
       }
@@ -288,6 +483,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   const handleReset = () => {
     form.reset(defaultValues);
     setContacts(unit?.UnitID ? [] : []);
+    setPropertySummary(null);
   };
 
   const handleSubmit = (data: UnitFormValues) => {
@@ -301,6 +497,16 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)}>
+        {/* Property Information Display */}
+        {propertySummary && <PropertyInfoDisplay propertySummary={propertySummary} />}
+
+        {isPropertyLoading && (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>Loading property information...</AlertDescription>
+          </Alert>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value={UNIT_TABS.GENERAL}>
@@ -325,25 +531,18 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField
                       control={form.control}
-                      name="UnitNo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Unit Number *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter unit number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name="PropertyID"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Property *</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString() || ""}>
+                          <Select
+                            onValueChange={(value) => {
+                              const propertyId = parseInt(value);
+                              field.onChange(propertyId);
+                              handlePropertyChange(propertyId);
+                            }}
+                            value={field.value?.toString() || ""}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select Property" />
@@ -358,6 +557,19 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                               ))}
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="UnitNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit Number *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Enter unit number" {...field} />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -450,7 +662,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                           <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString() || ""}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select Floor" />
+                                <SelectValue placeholder={watchProperty ? "Select Floor" : "Select Property First"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -543,32 +755,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                         </FormItem>
                       )}
                     />
-
-                    <FormField
-                      control={form.control}
-                      name="UnitClassID"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Unit Class</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} value={field.value?.toString() || ""}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Class" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="0">None</SelectItem>
-                              {dropdownData.unitClasses.map((unitClass: any) => (
-                                <SelectItem key={unitClass.UnitClassID} value={unitClass.UnitClassID.toString()}>
-                                  {unitClass.UnitClassName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                 </CardContent>
               </Card>
@@ -592,7 +778,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                                 onChange={(e) => {
                                   const value = e.target.value ? parseFloat(e.target.value) : undefined;
                                   field.onChange(value);
-                                  // Optionally calculate sqm value
                                   if (value) {
                                     form.setValue("LivingAreaSqftMtr", parseFloat((value * 0.092903).toFixed(2)));
                                   } else {
@@ -620,7 +805,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                                 onChange={(e) => {
                                   const value = e.target.value ? parseFloat(e.target.value) : undefined;
                                   field.onChange(value);
-                                  // Optionally calculate sqm value
                                   if (value) {
                                     form.setValue("BalconyAreaSqftMtr", parseFloat((value * 0.092903).toFixed(2)));
                                   } else {
@@ -648,7 +832,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                                 onChange={(e) => {
                                   const value = e.target.value ? parseFloat(e.target.value) : undefined;
                                   field.onChange(value);
-                                  // Optionally calculate sqm value
                                   if (value) {
                                     form.setValue("TereaceAreaSqftMtr", parseFloat((value * 0.092903).toFixed(2)));
                                   } else {
