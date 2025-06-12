@@ -2,13 +2,14 @@
 import { useState } from "react";
 import { UnitDetailsProps } from "./types";
 import { UNIT_TABS } from "./constants";
-import { Home, Users, Calendar, DollarSign } from "lucide-react";
+import { Home, Users, Calendar, DollarSign, Copy, Edit } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
-export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoading }) => {
+export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoading, onEdit, onBack, onClone }) => {
   const [activeTab, setActiveTab] = useState(UNIT_TABS.GENERAL);
 
   if (isLoading) {
@@ -37,6 +38,12 @@ export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoad
     }
   };
 
+  const handleClone = () => {
+    if (onClone) {
+      onClone();
+    }
+  };
+
   return (
     <div>
       <div className="mb-6">
@@ -48,7 +55,19 @@ export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoad
             </h2>
             <p className="text-gray-500">{[unit.UnitTypeName, unit.BedRooms && `${unit.BedRooms} Bed`, unit.BathRooms && `${unit.BathRooms} Bath`].filter(Boolean).join(" • ")}</p>
           </div>
-          {unit.UnitStatus && <Badge className={getStatusColor(unit.UnitStatus)}>{unit.UnitStatus}</Badge>}
+          <div className="flex items-center gap-2">
+            {unit.UnitStatus && <Badge className={getStatusColor(unit.UnitStatus)}>{unit.UnitStatus}</Badge>}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleClone}>
+                <Copy className="mr-2 h-4 w-4" />
+                Clone Unit
+              </Button>
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -167,7 +186,13 @@ export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoad
         <TabsContent value={UNIT_TABS.CONTACTS}>
           <Card>
             <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-4">Unit Contacts</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Unit Contacts</h3>
+                <Button variant="outline" size="sm" onClick={handleClone}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Clone Unit with Contacts
+                </Button>
+              </div>
 
               {contacts.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">No contacts associated with this unit.</div>

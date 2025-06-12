@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { UnitListProps } from "./types";
 import { UNIT_STATUS_OPTIONS } from "./constants";
-import { Eye, Edit, Trash2, MoreHorizontal, CheckCircle2 } from "lucide-react";
+import { Eye, Edit, Trash2, MoreHorizontal, CheckCircle2, Copy } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, onView, onDelete, onStatusChange }) => {
+export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, onView, onDelete, onStatusChange, onClone }) => {
   const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
 
   const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
@@ -36,6 +36,12 @@ export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, on
       await onStatusChange(unitId, newStatus);
     } finally {
       setStatusUpdating(null);
+    }
+  };
+
+  const handleClone = (unitId: number) => {
+    if (onClone) {
+      onClone(unitId);
     }
   };
 
@@ -129,6 +135,10 @@ export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, on
                     <DropdownMenuItem onClick={() => onEdit(unit.UnitID)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleClone(unit.UnitID)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Clone Unit
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => onDelete(unit.UnitID)} className="text-red-600">

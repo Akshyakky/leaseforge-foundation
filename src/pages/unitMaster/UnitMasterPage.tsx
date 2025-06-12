@@ -5,9 +5,10 @@ import { Unit, UnitContact } from "../../services/unitService";
 import { UnitSearchFilters, FormMode } from "./types";
 import { toast } from "sonner";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { Plus, ArrowLeft, Settings } from "lucide-react";
+import { Plus, ArrowLeft, Settings, Copy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UnitSearchFilter } from "./UnitSearchFilter";
 import { UnitList } from "./UnitList";
 import { UnitDetails } from "./UnitDetails";
@@ -19,6 +20,7 @@ enum ViewMode {
   DETAILS,
   CREATE,
   EDIT,
+  CLONE,
 }
 
 interface LocationState {
@@ -29,12 +31,13 @@ export const UnitMasterPage = () => {
   const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
   const location = useLocation();
-  const { unitId } = useParams<{ unitId: string }>();
+  const { unitId, sourceUnitId } = useParams<{ unitId: string; sourceUnitId: string }>();
   const state = location.state as LocationState;
 
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.LIST);
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
+  const [sourceUnit, setSourceUnit] = useState<Unit | null>(null); // Unit to clone from
   const [unitContacts, setUnitContacts] = useState<UnitContact[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [dropdownData, setDropdownData] = useState({
@@ -61,6 +64,13 @@ export const UnitMasterPage = () => {
           fetchUnitDetails(id);
         }
       }
+    } else if (sourceUnitId) {
+      // Clone mode - load source unit data
+      const id = parseInt(sourceUnitId);
+      if (!isNaN(id)) {
+        setViewMode(ViewMode.CLONE);
+        fetchSourceUnitForCloning(id);
+      }
     } else {
       if (location.pathname.includes("/create")) {
         setViewMode(ViewMode.CREATE);
@@ -69,7 +79,7 @@ export const UnitMasterPage = () => {
         fetchUnits();
       }
     }
-  }, [unitId, location.pathname]);
+  }, [unitId, sourceUnitId, location.pathname]);
 
   // Load dropdown data for forms
   useEffect(() => {
@@ -121,6 +131,27 @@ export const UnitMasterPage = () => {
     }
   };
 
+  const fetchSourceUnitForCloning = async (id: number) => {
+    setIsLoading(true);
+    try {
+      const { unit, contacts } = await unitService.getUnitById(id);
+      if (unit) {
+        setSourceUnit(unit);
+        // Optionally load contacts for cloning reference
+        setUnitContacts(contacts);
+        toast.success(`Cloning from unit: ${unit.UnitNo}`);
+      } else {
+        toast.error("Source unit not found");
+        navigateToList();
+      }
+    } catch (error) {
+      toast.error("Failed to load source unit for cloning");
+      navigateToList();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSearch = async (filters: UnitSearchFilters) => {
     setIsLoading(true);
     try {
@@ -148,10 +179,17 @@ export const UnitMasterPage = () => {
   const handleSave = async (unitData: Partial<Unit>, contacts: Partial<UnitContact>[]) => {
     setIsLoading(true);
     try {
-      if (viewMode === ViewMode.CREATE) {
-        const newUnitId = await unitService.createUnit(unitData, contacts);
+      if (viewMode === ViewMode.CREATE || viewMode === ViewMode.CLONE) {
+        // For clone mode, ensure we're creating a new unit
+        const dataToSave =
+          viewMode === ViewMode.CLONE
+            ? { ...unitData, UnitID: undefined } // Remove ID to ensure new creation
+            : unitData;
+
+        const newUnitId = await unitService.createUnit(dataToSave, contacts);
         if (newUnitId) {
-          toast.success("Unit created successfully");
+          const successMessage = viewMode === ViewMode.CLONE ? `Unit cloned successfully (New Unit ID: ${newUnitId})` : "Unit created successfully";
+          toast.success(successMessage);
           navigateToList();
         }
       } else if (viewMode === ViewMode.EDIT && selectedUnit) {
@@ -162,7 +200,8 @@ export const UnitMasterPage = () => {
         }
       }
     } catch (error) {
-      toast.error("Save failed");
+      const errorMessage = viewMode === ViewMode.CLONE ? "Clone operation failed" : "Save failed";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -202,19 +241,54 @@ export const UnitMasterPage = () => {
     setViewMode(ViewMode.CREATE);
   };
 
+  const navigateToClone = (sourceUnitId: number) => {
+    navigate(`/units/clone/${sourceUnitId}`);
+    setViewMode(ViewMode.CLONE);
+  };
+
   const navigateToSettings = () => {
     navigate("/units/settings");
+  };
+
+  const handleCloneFromDetails = () => {
+    if (selectedUnit) {
+      navigateToClone(selectedUnit.UnitID);
+    }
+  };
+
+  const getFormMode = (): FormMode => {
+    return {
+      isCreate: viewMode === ViewMode.CREATE,
+      isEdit: viewMode === ViewMode.EDIT,
+      isView: viewMode === ViewMode.DETAILS,
+      isClone: viewMode === ViewMode.CLONE,
+    };
+  };
+
+  const getPageTitle = (): string => {
+    switch (viewMode) {
+      case ViewMode.LIST:
+        return "Unit Master";
+      case ViewMode.DETAILS:
+        return "Unit Details";
+      case ViewMode.CREATE:
+        return "Create Unit";
+      case ViewMode.EDIT:
+        return "Edit Unit";
+      case ViewMode.CLONE:
+        return "Clone Unit";
+      default:
+        return "Unit Master";
+    }
   };
 
   return (
     <div className="mx-auto p-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-2xl font-bold">
-            {viewMode === ViewMode.LIST && "Unit Master"}
-            {viewMode === ViewMode.DETAILS && "Unit Details"}
-            {viewMode === ViewMode.CREATE && "Create Unit"}
-            {viewMode === ViewMode.EDIT && "Edit Unit"}
+          <CardTitle className="text-2xl font-bold flex items-center">
+            {viewMode === ViewMode.CLONE && <Copy className="mr-2 h-6 w-6 text-blue-600" />}
+            {getPageTitle()}
           </CardTitle>
           <div className="flex space-x-2">
             {viewMode === ViewMode.LIST && (
@@ -235,10 +309,13 @@ export const UnitMasterPage = () => {
                 <Button variant="outline" onClick={navigateToList}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back
                 </Button>
+                <Button variant="outline" onClick={handleCloneFromDetails}>
+                  <Copy className="mr-2 h-4 w-4" /> Clone
+                </Button>
                 <Button onClick={() => navigateToEdit(parseInt(unitId || "0"))}>Edit</Button>
               </div>
             )}
-            {(viewMode === ViewMode.CREATE || viewMode === ViewMode.EDIT) && (
+            {(viewMode === ViewMode.CREATE || viewMode === ViewMode.EDIT || viewMode === ViewMode.CLONE) && (
               <Button variant="outline" onClick={navigateToList}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -246,27 +323,49 @@ export const UnitMasterPage = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Clone Mode Information Alert */}
+          {viewMode === ViewMode.CLONE && sourceUnit && (
+            <Alert className="mb-6 border-blue-200 bg-blue-50">
+              <Copy className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Cloning Unit:</strong> {sourceUnit.UnitNo} from {sourceUnit.PropertyName}. Modify the information below as needed and save to create a new unit.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {viewMode === ViewMode.LIST && (
             <>
               <UnitSearchFilter onSearch={handleSearch} dropdownData={dropdownData} />
               <div className="mt-4">
-                <UnitList units={units} isLoading={isLoading} onEdit={navigateToEdit} onView={navigateToDetails} onDelete={handleDelete} onStatusChange={handleStatusChange} />
+                <UnitList
+                  units={units}
+                  isLoading={isLoading}
+                  onEdit={navigateToEdit}
+                  onView={navigateToDetails}
+                  onDelete={handleDelete}
+                  onStatusChange={handleStatusChange}
+                  onClone={navigateToClone}
+                />
               </div>
             </>
           )}
 
           {viewMode === ViewMode.DETAILS && (
-            <UnitDetails unit={selectedUnit} contacts={unitContacts} isLoading={isLoading} onEdit={() => navigateToEdit(parseInt(unitId || "0"))} onBack={navigateToList} />
+            <UnitDetails
+              unit={selectedUnit}
+              contacts={unitContacts}
+              isLoading={isLoading}
+              onEdit={() => navigateToEdit(parseInt(unitId || "0"))}
+              onBack={navigateToList}
+              onClone={handleCloneFromDetails}
+            />
           )}
 
-          {(viewMode === ViewMode.CREATE || viewMode === ViewMode.EDIT) && (
+          {(viewMode === ViewMode.CREATE || viewMode === ViewMode.EDIT || viewMode === ViewMode.CLONE) && (
             <UnitForm
-              unit={selectedUnit || undefined}
-              mode={{
-                isCreate: viewMode === ViewMode.CREATE,
-                isEdit: viewMode === ViewMode.EDIT,
-                isView: false,
-              }}
+              unit={viewMode === ViewMode.EDIT ? selectedUnit || undefined : undefined}
+              sourceUnit={viewMode === ViewMode.CLONE ? sourceUnit || undefined : undefined}
+              mode={getFormMode()}
               onSave={handleSave}
               onCancel={navigateToList}
             />

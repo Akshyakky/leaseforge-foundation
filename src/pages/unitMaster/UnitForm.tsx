@@ -1,11 +1,11 @@
-// src/pages/UnitMaster/UnitForm.tsx - Enhanced with property information fetching
+// src/pages/UnitMaster/UnitForm.tsx - Enhanced with Clone Mode Support
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
 import { Unit, UnitContact } from "../../services/unitService";
 import { Property } from "../../services/propertyService";
 import { DEFAULT_FORM_VALUES, UNIT_STATUS_OPTIONS, UNIT_TABS } from "./constants";
 import { UnitContacts } from "./UnitContacts";
-import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2 } from "lucide-react";
+import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2, Copy } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -191,7 +191,72 @@ const PropertyInfoDisplay: React.FC<{ propertySummary: PropertySummary | null }>
   );
 };
 
-export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel }) => {
+// Clone Information Display Component
+const CloneInfoDisplay: React.FC<{ sourceUnit: Unit | null }> = ({ sourceUnit }) => {
+  if (!sourceUnit) return null;
+
+  return (
+    <Card className="mb-6 border-orange-200 bg-orange-50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center">
+          <Copy className="mr-2 h-5 w-5 text-orange-600" />
+          Cloning from Unit: {sourceUnit.UnitNo}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-3 rounded-lg border">
+            <div className="text-sm text-gray-600">Source Property</div>
+            <div className="font-semibold">{sourceUnit.PropertyName}</div>
+          </div>
+          <div className="bg-white p-3 rounded-lg border">
+            <div className="text-sm text-gray-600">Unit Type</div>
+            <div className="font-semibold">{sourceUnit.UnitTypeName}</div>
+          </div>
+          <div className="bg-white p-3 rounded-lg border">
+            <div className="text-sm text-gray-600">Total Area</div>
+            <div className="font-semibold">{sourceUnit.TotalAreaSqft ? `${sourceUnit.TotalAreaSqft.toLocaleString()} sqft` : "Not specified"}</div>
+          </div>
+          <div className="bg-white p-3 rounded-lg border">
+            <div className="text-sm text-gray-600">Original Price</div>
+            <div className="font-semibold">{sourceUnit.ListingPrice ? `$${sourceUnit.ListingPrice.toLocaleString()}` : "Not specified"}</div>
+          </div>
+        </div>
+        <Alert className="mt-4 border-orange-200">
+          <Info className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            The form has been pre-populated with data from the source unit. Please review and modify the unit number and any other fields as needed before saving.
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Helper function to create cloned unit data
+const createClonedUnitData = (sourceUnit: Unit): Partial<Unit> => {
+  const clonedData = { ...sourceUnit };
+
+  // Remove fields that should not be cloned
+  delete clonedData.UnitID;
+  delete clonedData.CreatedBy;
+  delete clonedData.CreatedOn;
+  delete clonedData.UpdatedBy;
+  delete clonedData.UpdatedOn;
+
+  // Clear unit number to force user to enter new one
+  clonedData.UnitNo = "";
+
+  // Reset status to Available for new unit
+  clonedData.UnitStatus = "Available";
+
+  // Clear sale price but keep listing price as reference
+  clonedData.SalePrice = undefined;
+
+  return clonedData;
+};
+
+export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSave, onCancel }) => {
   const [activeTab, setActiveTab] = useState(UNIT_TABS.GENERAL);
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -214,15 +279,23 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   });
 
   // Prepare default values for the form
-  const defaultValues: UnitFormValues = {
-    ...DEFAULT_FORM_VALUES,
-    ...unit,
+  const getDefaultValues = (): UnitFormValues => {
+    if (mode.isClone && sourceUnit) {
+      // Use cloned data for clone mode
+      return createClonedUnitData(sourceUnit) as UnitFormValues;
+    } else if (mode.isEdit && unit) {
+      // Use existing unit data for edit mode
+      return { ...DEFAULT_FORM_VALUES, ...unit } as UnitFormValues;
+    } else {
+      // Use default values for create mode
+      return DEFAULT_FORM_VALUES as UnitFormValues;
+    }
   };
 
   // Initialize form with react-hook-form
   const form = useForm<UnitFormValues>({
     resolver: zodResolver(unitFormSchema),
-    defaultValues,
+    defaultValues: getDefaultValues(),
     mode: "onChange",
   });
 
@@ -230,18 +303,11 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   const watchCountry = form.watch("CountryID");
   const watchProperty = form.watch("PropertyID");
 
-  // Reset form based on mode and unit data availability
+  // Reset form based on mode and unit/source unit data availability
   useEffect(() => {
-    if (mode.isEdit && unit) {
-      const formValues: UnitFormValues = {
-        ...DEFAULT_FORM_VALUES,
-        ...unit,
-      };
-      form.reset(formValues);
-    } else if (mode.isCreate) {
-      form.reset(DEFAULT_FORM_VALUES);
-    }
-  }, [unit, mode.isEdit, mode.isCreate, form]);
+    const formValues = getDefaultValues();
+    form.reset(formValues);
+  }, [unit, sourceUnit, mode.isEdit, mode.isCreate, mode.isClone, form]);
 
   // Load dropdown data
   useEffect(() => {
@@ -293,23 +359,25 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
         }));
 
         if (propertyDetails) {
-          // Auto-populate location fields
-          if (propertyDetails.CountryID) {
-            form.setValue("CountryID", propertyDetails.CountryID);
+          // Auto-populate location fields only if not in clone mode with different property
+          if (!mode.isClone || (mode.isClone && sourceUnit && sourceUnit.PropertyID === propertyId)) {
+            if (propertyDetails.CountryID) {
+              form.setValue("CountryID", propertyDetails.CountryID);
 
-            // Load cities for the property's country
-            const cityResponse = await cityService.getCitiesByCountry(propertyDetails.CountryID);
-            setCities(cityResponse);
+              // Load cities for the property's country
+              const cityResponse = await cityService.getCitiesByCountry(propertyDetails.CountryID);
+              setCities(cityResponse);
 
-            setTimeout(() => {
-              if (propertyDetails.CityID) {
-                form.setValue("CityID", propertyDetails.CityID);
-              }
-            }, 100);
-          }
+              setTimeout(() => {
+                if (propertyDetails.CityID) {
+                  form.setValue("CityID", propertyDetails.CityID);
+                }
+              }, 100);
+            }
 
-          if (propertyDetails.CommunityID) {
-            form.setValue("CommunityID", propertyDetails.CommunityID);
+            if (propertyDetails.CommunityID) {
+              form.setValue("CommunityID", propertyDetails.CommunityID);
+            }
           }
 
           // Calculate property statistics
@@ -330,8 +398,8 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
             nextSuggestedUnitNo,
           });
 
-          // Auto-suggest unit number for new units
-          if (mode.isCreate && nextSuggestedUnitNo && !form.getValues("UnitNo")) {
+          // Auto-suggest unit number for new units (including clones)
+          if ((mode.isCreate || mode.isClone) && nextSuggestedUnitNo && !form.getValues("UnitNo")) {
             form.setValue("UnitNo", nextSuggestedUnitNo);
           }
         }
@@ -397,34 +465,41 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
     loadCities();
   }, [watchCountry, form]);
 
-  // Load cities immediately when editing and country is already selected
+  // Load cities immediately when editing/cloning and country is already selected
   useEffect(() => {
-    if (unit && unit.CountryID && mode.isEdit) {
-      const loadInitialCities = async () => {
+    const loadInitialCities = async () => {
+      const countryId = (mode.isEdit && unit?.CountryID) || (mode.isClone && sourceUnit?.CountryID);
+      if (countryId) {
         try {
-          const cityResponse = await cityService.getCitiesByCountry(unit.CountryID);
+          const cityResponse = await cityService.getCitiesByCountry(countryId);
           setCities(cityResponse);
         } catch (error) {
           console.error("Error loading initial cities:", error);
         }
-      };
-      loadInitialCities();
-    }
-  }, [unit, mode.isEdit]);
+      }
+    };
 
-  // Load property information immediately when editing
+    loadInitialCities();
+  }, [unit, sourceUnit, mode.isEdit, mode.isClone]);
+
+  // Load property information immediately when editing or cloning
   useEffect(() => {
-    if (unit && unit.PropertyID && mode.isEdit) {
-      handlePropertyChange(unit.PropertyID);
+    const propertyId = (mode.isEdit && unit?.PropertyID) || (mode.isClone && sourceUnit?.PropertyID);
+    if (propertyId) {
+      handlePropertyChange(propertyId);
     }
-  }, [unit, mode.isEdit]);
+  }, [unit, sourceUnit, mode.isEdit, mode.isClone]);
 
   // Initialize contacts
   useEffect(() => {
     if (unit?.UnitID) {
       setContacts([]);
+    } else if (mode.isClone && sourceUnit) {
+      // Optionally pre-populate contacts from source unit
+      // For now, we'll start with empty contacts for cloned units
+      setContacts([]);
     }
-  }, [unit]);
+  }, [unit, sourceUnit, mode.isClone]);
 
   // Auto-calculate total area
   useEffect(() => {
@@ -481,13 +556,27 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   };
 
   const handleReset = () => {
+    const defaultValues = getDefaultValues();
     form.reset(defaultValues);
-    setContacts(unit?.UnitID ? [] : []);
+    setContacts([]);
     setPropertySummary(null);
   };
 
   const handleSubmit = (data: UnitFormValues) => {
     onSave(data, contacts);
+  };
+
+  const getFormTitle = (): string => {
+    if (mode.isClone) return "Clone Unit";
+    if (mode.isEdit) return "Edit Unit";
+    if (mode.isCreate) return "Create Unit";
+    return "Unit Form";
+  };
+
+  const getSubmitButtonText = (): string => {
+    if (mode.isClone) return "Clone Unit";
+    if (mode.isEdit) return "Update Unit";
+    return "Create Unit";
   };
 
   if (isLoading) {
@@ -497,6 +586,9 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)}>
+        {/* Clone Information Display */}
+        {mode.isClone && sourceUnit && <CloneInfoDisplay sourceUnit={sourceUnit} />}
+
         {/* Property Information Display */}
         {propertySummary && <PropertyInfoDisplay propertySummary={propertySummary} />}
 
@@ -550,7 +642,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">Select Property</SelectItem>
-                              {dropdownData.properties.map((property: any) => (
+                              {dropdownData.properties.map((property) => (
                                 <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
                                   {property.PropertyName}
                                 </SelectItem>
@@ -570,6 +662,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                           <FormControl>
                             <Input placeholder="Enter unit number" {...field} />
                           </FormControl>
+                          {mode.isClone && <p className="text-sm text-orange-600">⚠️ Please update the unit number for the cloned unit</p>}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -589,7 +682,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">Select Unit Type</SelectItem>
-                              {dropdownData.unitTypes.map((type: any) => (
+                              {dropdownData.unitTypes.map((type) => (
                                 <SelectItem key={type.UnitTypeID} value={type.UnitTypeID.toString()}>
                                   {type.UnitTypeName}
                                 </SelectItem>
@@ -615,7 +708,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">Select Category</SelectItem>
-                              {dropdownData.unitCategories.map((category: any) => (
+                              {dropdownData.unitCategories.map((category) => (
                                 <SelectItem key={category.UnitCategoryID} value={category.UnitCategoryID.toString()}>
                                   {category.UnitCategoryName}
                                 </SelectItem>
@@ -641,7 +734,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">None</SelectItem>
-                              {dropdownData.unitViews.map((view: any) => (
+                              {dropdownData.unitViews.map((view) => (
                                 <SelectItem key={view.UnitViewID} value={view.UnitViewID.toString()}>
                                   {view.UnitViewName}
                                 </SelectItem>
@@ -667,7 +760,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">Select Floor</SelectItem>
-                              {dropdownData.floors.map((floor: any) => (
+                              {dropdownData.floors.map((floor) => (
                                 <SelectItem key={floor.FloorID} value={floor.FloorID.toString()}>
                                   {floor.FloorName}
                                 </SelectItem>
@@ -693,7 +786,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">None</SelectItem>
-                              {dropdownData.bedrooms.map((bedroom: any) => (
+                              {dropdownData.bedrooms.map((bedroom) => (
                                 <SelectItem key={bedroom.BedRoomID} value={bedroom.BedRoomID.toString()}>
                                   {bedroom.BedRoomCount} {bedroom.BedRoomCount === 1 ? "Bedroom" : "Bedrooms"}
                                 </SelectItem>
@@ -719,7 +812,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="0">None</SelectItem>
-                              {dropdownData.bathrooms.map((bathroom: any) => (
+                              {dropdownData.bathrooms.map((bathroom) => (
                                 <SelectItem key={bathroom.BathRoomID} value={bathroom.BathRoomID.toString()}>
                                   {bathroom.BathRoomCount} {bathroom.BathRoomCount === 1 ? "Bathroom" : "Bathrooms"}
                                 </SelectItem>
@@ -889,7 +982,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="0">None</SelectItem>
-                                {dropdownData.unitStyles.map((style: any) => (
+                                {dropdownData.unitStyles.map((style) => (
                                   <SelectItem key={style.UnitStyleID} value={style.UnitStyleID.toString()}>
                                     {style.UnitStyleName}
                                   </SelectItem>
@@ -936,7 +1029,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="0">Select Country</SelectItem>
-                                {dropdownData.countries.map((country: any) => (
+                                {dropdownData.countries.map((country) => (
                                   <SelectItem key={country.CountryID} value={country.CountryID.toString()}>
                                     {country.CountryName}
                                   </SelectItem>
@@ -962,7 +1055,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="0">Select City</SelectItem>
-                                {cities.map((city: any) => (
+                                {cities.map((city) => (
                                   <SelectItem key={city.CityID} value={city.CityID.toString()}>
                                     {city.CityName}
                                   </SelectItem>
@@ -988,7 +1081,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="0">None</SelectItem>
-                                {dropdownData.communities.map((community: any) => (
+                                {dropdownData.communities.map((community) => (
                                   <SelectItem key={community.CommunityID} value={community.CommunityID.toString()}>
                                     {community.CommunityName}
                                   </SelectItem>
@@ -1128,6 +1221,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
                           <FormControl>
                             <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)} />
                           </FormControl>
+                          {mode.isClone && <p className="text-sm text-blue-600">💡 Sale price has been cleared for the cloned unit</p>}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1269,7 +1363,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
           </Button>
           <Button type="submit" disabled={mode.isView}>
             <Save className="mr-2 h-4 w-4" />
-            {mode.isCreate ? "Create Unit" : "Update Unit"}
+            {getSubmitButtonText()}
           </Button>
         </div>
       </form>

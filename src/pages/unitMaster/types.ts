@@ -5,11 +5,13 @@ export interface FormMode {
   isCreate: boolean;
   isEdit: boolean;
   isView: boolean;
+  isClone: boolean;
 }
 
 export interface UnitFormProps {
   unit?: Unit;
   mode: FormMode;
+  sourceUnit?: Unit; // Unit to clone from
   onSave: (unit: Partial<Unit>, contacts: Partial<UnitContact>[]) => Promise<void>;
   onCancel: () => void;
 }
@@ -21,6 +23,7 @@ export interface UnitListProps {
   onView: (unitId: number) => void;
   onDelete: (unitId: number) => void;
   onStatusChange: (unitId: number, status: string) => Promise<void>;
+  onClone?: (unitId: number) => void; // New clone handler
 }
 
 export interface UnitDetailsProps {
@@ -29,6 +32,7 @@ export interface UnitDetailsProps {
   isLoading: boolean;
   onEdit: () => void;
   onBack: () => void;
+  onClone?: () => void; // New clone handler
 }
 
 export interface UnitContactsProps {
@@ -77,4 +81,18 @@ export interface ContactOption {
 export interface ContactRow extends UnitContact {
   isNew?: boolean;
   isDeleted?: boolean;
+}
+
+// Clone-specific interfaces
+export interface CloneUnitRequest {
+  sourceUnitId: number;
+  newUnitData: Partial<Unit>;
+  includeContacts?: boolean;
+  includePricing?: boolean;
+}
+
+export interface CloneUnitResponse {
+  success: boolean;
+  newUnitId?: number;
+  message?: string;
 }

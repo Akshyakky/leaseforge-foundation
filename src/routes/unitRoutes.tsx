@@ -80,6 +80,14 @@ const unitRoutes = (
         </ProtectedRoute>
       }
     />
+    <Route
+      path="units/clone/:sourceUnitId"
+      element={
+        <ProtectedRoute requiredRoles={["admin", "manager"]}>
+          <UnitMasterPage />
+        </ProtectedRoute>
+      }
+    />
   </>
 );
 
