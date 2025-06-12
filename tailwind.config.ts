@@ -47,7 +47,28 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Custom ERP colors
+        // Renexx Brand Colors
+        "renexx-navy": {
+          DEFAULT: "hsl(215, 28%, 17%)", // Main dark navy
+          light: "hsl(215, 28%, 25%)",
+          dark: "hsl(215, 28%, 10%)",
+        },
+        "renexx-orange": {
+          DEFAULT: "hsl(20, 90%, 50%)", // Main orange
+          light: "hsl(20, 90%, 60%)",
+          dark: "hsl(20, 90%, 40%)",
+          50: "hsl(20, 90%, 95%)",
+          100: "hsl(20, 90%, 90%)",
+          200: "hsl(20, 90%, 80%)",
+          300: "hsl(20, 90%, 70%)",
+          400: "hsl(20, 90%, 60%)",
+          500: "hsl(20, 90%, 50%)",
+          600: "hsl(20, 90%, 40%)",
+          700: "hsl(20, 90%, 30%)",
+          800: "hsl(20, 90%, 20%)",
+          900: "hsl(20, 90%, 10%)",
+        },
+        // Enhanced ERP colors with Renexx theme
         erp: {
           "50": "#f9fafb",
           "100": "#f3f4f6",
@@ -60,8 +81,8 @@ export default {
           "800": "#1f2937",
           "900": "#111827",
           "950": "#030712",
-          accent: "#0070f3",
-          "accent-light": "#3291ff",
+          accent: "hsl(20, 90%, 50%)", // Renexx orange
+          "accent-light": "hsl(20, 90%, 60%)",
           success: "#10b981",
           warning: "#f59e0b",
           danger: "#ef4444",
@@ -105,6 +126,10 @@ export default {
           from: { transform: "scale(0.95)", opacity: "0" },
           to: { transform: "scale(1)", opacity: "1" },
         },
+        glow: {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(20, 90%, 50%)" },
+          "50%": { boxShadow: "0 0 20px hsl(20, 90%, 50%), 0 0 30px hsl(20, 90%, 50%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -115,6 +140,7 @@ export default {
         "slide-out": "slide-out 0.3s ease-out",
         spin: "spin 1.5s linear infinite",
         "scale-in": "scale-in 0.2s ease-out",
+        glow: "glow 2s ease-in-out infinite alternate",
       },
       transitionProperty: {
         height: "height",
@@ -128,6 +154,12 @@ export default {
         medium: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
         card: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
         elevated: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+        "renexx-glow": "0 0 20px hsla(20, 90%, 50%, 0.3)",
+        "renexx-glow-strong": "0 0 30px hsla(20, 90%, 50%, 0.5)",
+      },
+      backgroundImage: {
+        "renexx-gradient": "linear-gradient(135deg, hsl(215, 28%, 17%) 0%, hsl(215, 28%, 10%) 100%)",
+        "renexx-orange-gradient": "linear-gradient(135deg, hsl(20, 90%, 50%) 0%, hsl(20, 90%, 40%) 100%)",
       },
     },
   },

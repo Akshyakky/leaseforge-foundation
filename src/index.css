@@ -1,69 +1,90 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    /* Renexx Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 215 28% 17%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 28% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 215 28% 17%;
 
-    --primary: 221.2 83% 53.9%;
-    --primary-foreground: 210 40% 98%;
+    /* Renexx Orange Accent */
+    --primary: 20 90% 50%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-foreground: 215 28% 17%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 217.2 91.2% 59.8%;
-    --accent-foreground: 210 40% 98%;
+    /* Renexx Orange Accent for highlights */
+    --accent: 20 90% 50%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83% 53.9%;
+    --ring: 20 90% 50%;
 
     --radius: 0.5rem;
+
+    /* Renexx Specific Colors */
+    --renexx-navy: 215 28% 17%;
+    --renexx-orange: 20 90% 50%;
+    --renexx-orange-light: 20 90% 60%;
+    --renexx-orange-dark: 20 90% 40%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Renexx Dark Theme - Navy Background */
+    --background: 215 28% 17%;
+    --foreground: 0 0% 100%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 215 28% 17%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 215 28% 17%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* Renexx Orange remains vibrant in dark mode */
+    --primary: 20 90% 50%;
+    --primary-foreground: 215 28% 17%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 215 25% 25%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 215 25% 25%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 91.2% 59.8%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Renexx Orange Accent */
+    --accent: 20 90% 50%;
+    --accent-foreground: 215 28% 17%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --border: 215 25% 25%;
+    --input: 215 25% 25%;
+    --ring: 20 90% 50%;
+  }
+
+  /* Renexx Theme Variant */
+  .renexx-theme {
+    --background: 215 28% 17%;
+    --foreground: 0 0% 100%;
+    --primary: 20 90% 50%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 20 90% 50%;
+    --accent-foreground: 0 0% 100%;
   }
 }
 
@@ -80,7 +101,7 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 
-  /* Typography styling */
+  /* Typography styling with Renexx emphasis */
   h1 {
     @apply text-3xl font-medium tracking-tight;
   }
@@ -99,6 +120,31 @@
 }
 
 @layer components {
+  /* Renexx Specific Components */
+  .renexx-header {
+    @apply bg-renexx-navy text-white;
+  }
+
+  .renexx-button {
+    @apply bg-renexx-orange hover:bg-renexx-orange-dark text-white font-medium px-6 py-3 rounded-lg transition-colors;
+  }
+
+  .renexx-button-outline {
+    @apply border-2 border-renexx-orange text-renexx-orange hover:bg-renexx-orange hover:text-white px-6 py-3 rounded-lg transition-colors;
+  }
+
+  .renexx-card {
+    @apply bg-white border border-gray-200 rounded-lg shadow-medium hover:shadow-card transition-shadow;
+  }
+
+  .renexx-section {
+    @apply bg-renexx-navy text-white;
+  }
+
+  .renexx-accent-text {
+    @apply text-renexx-orange font-medium;
+  }
+
   /* Animations */
   .animate-in {
     animation: fadeIn 0.3s ease-in-out;
@@ -110,7 +156,7 @@
     opacity: 0;
   }
 
-  /* Cards */
+  /* Cards with Renexx styling */
   .card-hover {
     @apply transition-all duration-200 hover:shadow-medium;
   }
@@ -121,7 +167,7 @@
   }
 
   .dark .glass {
-    @apply bg-black/40 backdrop-blur-sm border border-white/10;
+    @apply bg-renexx-navy/40 backdrop-blur-sm border border-white/10;
   }
 
   /* Containers */
@@ -129,9 +175,9 @@
     @apply py-12 md:py-20;
   }
 
-  /* Inputs */
+  /* Inputs with Renexx focus colors */
   .focus-ring {
-    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-renexx-orange focus-visible:ring-offset-2;
   }
 
   /* Transitions */
@@ -158,7 +204,7 @@
   to { opacity: 0; }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar with Renexx colors */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -168,5 +214,5 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/30 transition-colors;
+  @apply bg-renexx-orange/30 rounded-full hover:bg-renexx-orange/50 transition-colors;
 }
