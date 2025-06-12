@@ -101,6 +101,21 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
   const watchCountry = form.watch("CountryID");
   const watchProperty = form.watch("PropertyID");
 
+  // **FIX: Reset form based on mode and unit data availability**
+  useEffect(() => {
+    if (mode.isEdit && unit) {
+      // Edit mode: Reset form with unit data when unit becomes available
+      const formValues: UnitFormValues = {
+        ...DEFAULT_FORM_VALUES,
+        ...unit,
+      };
+      form.reset(formValues);
+    } else if (mode.isCreate) {
+      // Create mode: Always reset to default values
+      form.reset(DEFAULT_FORM_VALUES);
+    }
+  }, [unit, mode.isEdit, mode.isCreate, form]);
+
   // Load dropdown data
   useEffect(() => {
     const loadDropdownData = async () => {
@@ -176,6 +191,21 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, onSave, onCancel
       setCities([]);
     }
   }, [watchCountry, form]);
+
+  // **FIX: Load cities immediately when editing and country is already selected**
+  useEffect(() => {
+    if (unit && unit.CountryID && mode.isEdit) {
+      const loadInitialCities = async () => {
+        try {
+          const cityResponse = await cityService.getCitiesByCountry(unit.CountryID);
+          setCities(cityResponse);
+        } catch (error) {
+          console.error("Error loading initial cities:", error);
+        }
+      };
+      loadInitialCities();
+    }
+  }, [unit, mode.isEdit]);
 
   // Initialize contacts
   useEffect(() => {
