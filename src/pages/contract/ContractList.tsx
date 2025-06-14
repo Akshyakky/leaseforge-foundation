@@ -1,11 +1,13 @@
-// src/pages/contract/ContractList.tsx
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/contract/ContractList.tsx - Enhanced Implementation
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Loader2,
   MoreHorizontal,
@@ -24,42 +26,142 @@ import {
   XCircle,
   AlertCircle,
   RefreshCw,
+  Download,
+  Filter,
+  X,
+  ChevronDown,
+  Settings,
+  BarChart3,
+  TrendingUp,
+  SortAsc,
+  SortDesc,
+  ArrowUpDown,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Separator } from "@/components/ui/separator";
 import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
+import { propertyService } from "@/services/propertyService";
 import { debounce } from "lodash";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+// PDF Report Components
+import { PdfPreviewModal, GenericPdfReport } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
+
+// Types and interfaces
+interface ContractFilter {
+  searchTerm: string;
+  selectedCustomerId: string;
+  selectedStatus: string;
+  selectedPropertyId: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+}
+
+interface SortConfig {
+  key: keyof Contract | null;
+  direction: "asc" | "desc";
+}
+
+interface ContractListStats {
+  total: number;
+  draft: number;
+  pending: number;
+  active: number;
+  completed: number;
+  expired: number;
+  cancelled: number;
+  totalValue: number;
+  averageValue: number;
+}
 
 const ContractList: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // State variables
-  const [searchTerm, setSearchTerm] = useState("");
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedContracts, setSelectedContracts] = useState<Set<number>>(new Set());
 
-  // Filter states
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState<Date | undefined>();
-  const [dateTo, setDateTo] = useState<Date | undefined>();
+  // Filter and sort state
+  const [filters, setFilters] = useState<ContractFilter>({
+    searchTerm: searchParams.get("search") || "",
+    selectedCustomerId: searchParams.get("customer") || "",
+    selectedStatus: searchParams.get("status") || "",
+    selectedPropertyId: searchParams.get("property") || "",
+    dateFrom: searchParams.get("from") ? new Date(searchParams.get("from")!) : undefined,
+    dateTo: searchParams.get("to") ? new Date(searchParams.get("to")!) : undefined,
+  });
+
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: "asc" });
+  const [showFilters, setShowFilters] = useState(false);
+
+  // PDF Generation
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const contractListPdf = useGenericPdfReport();
 
   // Contract status options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
 
-  // Fetch data on component mount
+  // Initialize data on component mount
   useEffect(() => {
-    fetchContracts();
-    fetchCustomers();
+    initializeData();
   }, []);
+
+  // Update URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.searchTerm) params.set("search", filters.searchTerm);
+    if (filters.selectedCustomerId) params.set("customer", filters.selectedCustomerId);
+    if (filters.selectedStatus) params.set("status", filters.selectedStatus);
+    if (filters.selectedPropertyId) params.set("property", filters.selectedPropertyId);
+    if (filters.dateFrom) params.set("from", filters.dateFrom.toISOString().split("T")[0]);
+    if (filters.dateTo) params.set("to", filters.dateTo.toISOString().split("T")[0]);
+
+    setSearchParams(params);
+  }, [filters, setSearchParams]);
+
+  // Apply filters and sorting whenever contracts or filters change
+  useEffect(() => {
+    applyFiltersAndSort();
+  }, [contracts, filters, sortConfig]);
+
+  // Initialize component data
+  const initializeData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchContracts(), fetchCustomers(), fetchProperties()]);
+    } catch (error) {
+      console.error("Error initializing data:", error);
+      toast.error("Failed to load initial data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch all contracts
+  const fetchContracts = async () => {
+    try {
+      const contractsData = await contractService.getAllContracts();
+      setContracts(contractsData);
+    } catch (error) {
+      console.error("Error fetching contracts:", error);
+      toast.error("Failed to load contracts");
+    }
+  };
 
   // Fetch customers for filter dropdown
   const fetchCustomers = async () => {
@@ -72,83 +174,137 @@ const ContractList: React.FC = () => {
     }
   };
 
-  // Fetch all contracts with filters
-  const fetchContracts = async (filters?: { searchText?: string; customerID?: number; contractStatus?: string; fromDate?: Date; toDate?: Date }) => {
+  // Fetch properties for filter dropdown
+  const fetchProperties = async () => {
     try {
-      setLoading(true);
-      const contractsData = await contractService.searchContracts(filters || {});
-      setContracts(contractsData);
+      const propertiesData = await propertyService.getAllProperties();
+      setProperties(propertiesData);
     } catch (error) {
-      console.error("Error fetching contracts:", error);
-      toast.error("Failed to load contracts");
-    } finally {
-      setLoading(false);
+      console.error("Error fetching properties:", error);
+      // Don't show error toast for properties as it's not critical
+      console.warn("Properties filter will not be available");
     }
   };
 
-  // Debounced search function
-  const debouncedSearch = debounce((value: string) => {
-    if (value.length >= 2 || value === "") {
-      handleFilterChange();
+  // Refresh data
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchContracts();
+      toast.success("Data refreshed successfully");
+    } catch (error) {
+      toast.error("Failed to refresh data");
+    } finally {
+      setRefreshing(false);
     }
-  }, 500);
+  };
+
+  // Apply filters and sorting
+  const applyFiltersAndSort = useCallback(() => {
+    let filtered = [...contracts];
+
+    // Apply text search
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (contract) =>
+          contract.ContractNo?.toLowerCase().includes(searchLower) ||
+          contract.CustomerName?.toLowerCase().includes(searchLower) ||
+          contract.JointCustomerName?.toLowerCase().includes(searchLower) ||
+          contract.Remarks?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply customer filter
+    if (filters.selectedCustomerId) {
+      filtered = filtered.filter(
+        (contract) => contract.CustomerID.toString() === filters.selectedCustomerId || contract.JointCustomerID?.toString() === filters.selectedCustomerId
+      );
+    }
+
+    // Apply status filter
+    if (filters.selectedStatus) {
+      filtered = filtered.filter((contract) => contract.ContractStatus === filters.selectedStatus);
+    }
+
+    // Apply property filter (if available)
+    if (filters.selectedPropertyId) {
+      // This would require property information in contract data or a separate call
+      // For now, we'll skip this filter if property data isn't available
+    }
+
+    // Apply date filters
+    if (filters.dateFrom) {
+      filtered = filtered.filter((contract) => new Date(contract.TransactionDate) >= filters.dateFrom!);
+    }
+
+    if (filters.dateTo) {
+      filtered = filtered.filter((contract) => new Date(contract.TransactionDate) <= filters.dateTo!);
+    }
+
+    // Apply sorting
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const aValue = a[sortConfig.key!];
+        const bValue = b[sortConfig.key!];
+
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return sortConfig.direction === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        }
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue;
+        }
+
+        return 0;
+      });
+    }
+
+    setFilteredContracts(filtered);
+  }, [contracts, filters, sortConfig]);
+
+  // Debounced search function
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((value: string) => {
+        setFilters((prev) => ({ ...prev, searchTerm: value }));
+      }, 300),
+    []
+  );
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setSearchTerm(value);
     debouncedSearch(value);
   };
 
   // Handle filter changes
-  const handleFilterChange = () => {
-    const filters = {
-      searchText: searchTerm || undefined,
-      customerID: selectedCustomerId ? parseInt(selectedCustomerId) : undefined,
-      contractStatus: selectedStatus || undefined,
-      fromDate: dateFrom,
-      toDate: dateTo,
-    };
-
-    // Remove undefined values
-    Object.keys(filters).forEach((key) => {
-      if (filters[key as keyof typeof filters] === undefined) {
-        delete filters[key as keyof typeof filters];
-      }
-    });
-
-    fetchContracts(filters);
-  };
-
-  // Handle filter dropdown changes
-  const handleCustomerChange = (value: string) => {
-    setSelectedCustomerId(value === "all" ? "" : value);
-    setTimeout(handleFilterChange, 100);
-  };
-
-  const handleStatusChange = (value: string) => {
-    setSelectedStatus(value === "all" ? "" : value);
-    setTimeout(handleFilterChange, 100);
-  };
-
-  const handleDateFromChange = (date: Date | undefined) => {
-    setDateFrom(date);
-    setTimeout(handleFilterChange, 100);
-  };
-
-  const handleDateToChange = (date: Date | undefined) => {
-    setDateTo(date);
-    setTimeout(handleFilterChange, 100);
+  const handleFilterChange = (key: keyof ContractFilter, value: any) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   // Clear all filters
   const clearFilters = () => {
-    setSearchTerm("");
-    setSelectedCustomerId("");
-    setSelectedStatus("");
-    setDateFrom(undefined);
-    setDateTo(undefined);
-    fetchContracts();
+    setFilters({
+      searchTerm: "",
+      selectedCustomerId: "",
+      selectedStatus: "",
+      selectedPropertyId: "",
+      dateFrom: undefined,
+      dateTo: undefined,
+    });
+    setSearchParams(new URLSearchParams());
+  };
+
+  // Handle sorting
+  const handleSort = (key: keyof Contract) => {
+    setSortConfig((prevSort) => ({
+      key,
+      direction: prevSort.key === key && prevSort.direction === "asc" ? "desc" : "asc",
+    }));
   };
 
   // Navigation handlers
@@ -165,8 +321,50 @@ const ContractList: React.FC = () => {
   };
 
   const handleRenewContract = (contract: Contract) => {
-    // Redirect to contract details where renewal can be handled
-    navigate(`/contracts/${contract.ContractID}`);
+    navigate(`/contracts/${contract.ContractID}?action=renew`);
+  };
+
+  // Analytics navigation
+  const handleViewAnalytics = () => {
+    navigate("/contracts/analytics");
+  };
+
+  // Selection handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedContracts(new Set(filteredContracts.map((c) => c.ContractID)));
+    } else {
+      setSelectedContracts(new Set());
+    }
+  };
+
+  const handleSelectContract = (contractId: number, checked: boolean) => {
+    const newSelection = new Set(selectedContracts);
+    if (checked) {
+      newSelection.add(contractId);
+    } else {
+      newSelection.delete(contractId);
+    }
+    setSelectedContracts(newSelection);
+  };
+
+  // Bulk operations
+  const handleBulkStatusChange = async (newStatus: string) => {
+    if (selectedContracts.size === 0) return;
+
+    try {
+      const promises = Array.from(selectedContracts).map((contractId) => contractService.changeContractStatus(contractId, newStatus));
+
+      await Promise.all(promises);
+
+      // Update local state
+      setContracts((prev) => prev.map((contract) => (selectedContracts.has(contract.ContractID) ? { ...contract, ContractStatus: newStatus } : contract)));
+
+      setSelectedContracts(new Set());
+      toast.success(`${selectedContracts.size} contracts updated to ${newStatus}`);
+    } catch (error) {
+      toast.error("Failed to update contract statuses");
+    }
   };
 
   // Delete contract handlers
@@ -206,7 +404,6 @@ const ContractList: React.FC = () => {
       const response = await contractService.changeContractStatus(contract.ContractID, newStatus);
 
       if (response.Status === 1) {
-        // Update contract in the list
         setContracts(contracts.map((c) => (c.ContractID === contract.ContractID ? { ...c, ContractStatus: newStatus } : c)));
         toast.success(`Contract status changed to ${newStatus}`);
       } else {
@@ -215,6 +412,70 @@ const ContractList: React.FC = () => {
     } catch (error) {
       console.error("Error changing contract status:", error);
       toast.error("Failed to change contract status");
+    }
+  };
+
+  const filterEmptyParameters = (params) => {
+    const filtered = {};
+
+    Object.entries(params).forEach(([key, value]) => {
+      // Include parameter only if it's not null, not undefined, not empty string, and not 0
+      if (value !== null && value !== undefined && value !== "" && value !== 0) {
+        filtered[key] = value;
+      }
+    });
+
+    return filtered;
+  };
+
+  const handleGenerateContractList = async () => {
+    const parameters = {
+      SearchText: filters.searchTerm || "",
+      FilterCustomerID: filters.selectedCustomerId ? parseInt(filters.selectedCustomerId) : null,
+      FilterContractStatus: filters.selectedStatus || "",
+      FilterFromDate: filters.dateFrom,
+      FilterToDate: filters.dateTo,
+      FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    const response = await contractListPdf.generateReport("contract-list", filteredParameters, {
+      orientation: "Landscape",
+      download: true,
+      showToast: true,
+      filename: `Contract_List_${new Date().toISOString().split("T")[0]}.pdf`,
+    });
+
+    if (response.success) {
+      toast.success("Contract list report generated successfully");
+    }
+  };
+
+  const handlePreviewContractList = async () => {
+    const parameters = {
+      SearchText: filters.searchTerm || "",
+      FilterCustomerID: filters.selectedCustomerId ? parseInt(filters.selectedCustomerId) : null,
+      FilterContractStatus: filters.selectedStatus || "",
+      FilterFromDate: filters.dateFrom,
+      FilterToDate: filters.dateTo,
+      FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    setShowPdfPreview(true);
+
+    const response = await contractListPdf.generateReport("contract-list", filteredParameters, {
+      orientation: "Landscape",
+      download: false,
+      showToast: false,
+    });
+
+    if (!response.success) {
+      toast.error("Failed to generate contract list preview");
     }
   };
 
@@ -261,192 +522,430 @@ const ContractList: React.FC = () => {
     }).format(amount);
   };
 
-  // Calculate summary statistics
-  const stats = {
-    total: contracts.length,
-    draft: contracts.filter((c) => c.ContractStatus === "Draft").length,
-    pending: contracts.filter((c) => c.ContractStatus === "Pending").length,
-    active: contracts.filter((c) => c.ContractStatus === "Active").length,
-    completed: contracts.filter((c) => c.ContractStatus === "Completed").length,
-    expired: contracts.filter((c) => c.ContractStatus === "Expired").length,
-    cancelled: contracts.filter((c) => c.ContractStatus === "Cancelled" || c.ContractStatus === "Terminated").length,
-    totalValue: contracts.reduce((sum, c) => sum + (c.GrandTotal || 0), 0),
-    totalUnits: contracts.reduce((sum, c) => sum + (c.UnitCount || 0), 0),
-  };
+  // Calculate statistics
+  const stats: ContractListStats = useMemo(() => {
+    const filtered = filteredContracts;
+    return {
+      total: filtered.length,
+      draft: filtered.filter((c) => c.ContractStatus === "Draft").length,
+      pending: filtered.filter((c) => c.ContractStatus === "Pending").length,
+      active: filtered.filter((c) => c.ContractStatus === "Active").length,
+      completed: filtered.filter((c) => c.ContractStatus === "Completed").length,
+      expired: filtered.filter((c) => c.ContractStatus === "Expired").length,
+      cancelled: filtered.filter((c) => c.ContractStatus === "Cancelled" || c.ContractStatus === "Terminated").length,
+      totalValue: filtered.reduce((sum, c) => sum + (c.GrandTotal || 0), 0),
+      averageValue: filtered.length > 0 ? filtered.reduce((sum, c) => sum + (c.GrandTotal || 0), 0) / filtered.length : 0,
+    };
+  }, [filteredContracts]);
+
+  // Check if any filters are active
+  const hasActiveFilters = filters.searchTerm || filters.selectedCustomerId || filters.selectedStatus || filters.selectedPropertyId || filters.dateFrom || filters.dateTo;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold">Contract Management</h1>
           <p className="text-muted-foreground">Manage rental and property contracts</p>
         </div>
-        <Button onClick={handleAddContract}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Contract
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleViewAnalytics}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Analytics
+          </Button>
+          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Refresh
+          </Button>
+          <Button onClick={handleAddContract}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Contract
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Total</span>
+            </div>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-xs text-muted-foreground">{hasActiveFilters ? `of ${contracts.length} total` : "contracts"}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-gray-600" />
+              <span className="text-sm text-muted-foreground">Draft</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-yellow-600" />
+              <span className="text-sm text-muted-foreground">Pending</span>
+            </div>
+            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-muted-foreground">Active</span>
+            </div>
+            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-blue-600" />
+              <span className="text-sm text-muted-foreground">Completed</span>
+            </div>
+            <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-orange-600" />
+              <span className="text-sm text-muted-foreground">Expired</span>
+            </div>
+            <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-blue-600" />
+              <span className="text-sm text-muted-foreground">Total Value</span>
+            </div>
+            <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-purple-600" />
+              <span className="text-sm text-muted-foreground">Average</span>
+            </div>
+            <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageValue)}</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Contracts</CardTitle>
-          <CardDescription>View and manage all rental contracts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Summary Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Total</span>
-                </div>
-                <div className="text-2xl font-bold">{stats.total}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm text-muted-foreground">Draft</span>
-                </div>
-                <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                  <span className="text-sm text-muted-foreground">Pending</span>
-                </div>
-                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-muted-foreground">Active</span>
-                </div>
-                <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-muted-foreground">Completed</span>
-                </div>
-                <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-orange-600" />
-                  <span className="text-sm text-muted-foreground">Expired</span>
-                </div>
-                <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm text-muted-foreground">Terminated</span>
-                </div>
-                <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-muted-foreground">Total Value</span>
-                </div>
-                <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4 mb-6">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input type="text" placeholder="Search contracts..." className="pl-9" value={searchTerm} onChange={handleSearchChange} />
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Contracts</CardTitle>
+              <CardDescription>
+                {hasActiveFilters ? `Showing ${filteredContracts.length} of ${contracts.length} contracts` : `Showing all ${contracts.length} contracts`}
+              </CardDescription>
             </div>
-            <div className="flex items-center gap-3 overflow-x-auto">
-              <Select value={selectedCustomerId || "all"} onValueChange={handleCustomerChange}>
-                <SelectTrigger className="w-[200px] flex-shrink-0">
-                  <SelectValue placeholder="Filter by customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
-                      {customer.CustomerFullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              {/* PDF Generation */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={contractListPdf.isLoading}>
+                    {contractListPdf.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Export
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewContractList}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGenerateContractList}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-              <Select value={selectedStatus || "all"} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[160px] flex-shrink-0">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {contractStatusOptions.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Bulk Operations */}
+              {selectedContracts.size > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      Bulk Actions ({selectedContracts.size})
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Change Status</DropdownMenuLabel>
+                    {contractStatusOptions.map((status) => (
+                      <DropdownMenuItem key={status} onClick={() => handleBulkStatusChange(status)}>
+                        Set as {status}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
-              <div className="flex-shrink-0">
-                <DatePicker value={dateFrom} onChange={handleDateFromChange} placeholder="From date" />
-              </div>
-
-              <div className="flex-shrink-0">
-                <DatePicker value={dateTo} onChange={handleDateToChange} placeholder="To date" />
-              </div>
-
-              <Button variant="outline" onClick={clearFilters} className="flex-shrink-0 whitespace-nowrap">
-                Clear Filters
+              <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className={cn(showFilters && "bg-accent")}>
+                <Filter className="mr-2 h-4 w-4" />
+                Filters
+                {hasActiveFilters && (
+                  <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
+                    !
+                  </Badge>
+                )}
               </Button>
             </div>
           </div>
+        </CardHeader>
+
+        <CardContent>
+          {/* Search and Filters */}
+          <div className="space-y-4 mb-6">
+            {/* Search Bar */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input type="text" placeholder="Search contracts..." className="pl-9" defaultValue={filters.searchTerm} onChange={handleSearchChange} />
+            </div>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-muted/50 rounded-lg">
+                <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Customers</SelectItem>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
+                        {customer.CustomerFullName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.selectedStatus || "all"} onValueChange={(value) => handleFilterChange("selectedStatus", value === "all" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {contractStatusOptions.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {properties.length > 0 && (
+                  <Select value={filters.selectedPropertyId || "all"} onValueChange={(value) => handleFilterChange("selectedPropertyId", value === "all" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Properties</SelectItem>
+                      {properties.map((property) => (
+                        <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
+                          {property.PropertyName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <DatePicker value={filters.dateFrom} onChange={(date) => handleFilterChange("dateFrom", date)} placeholder="From date" />
+
+                <DatePicker value={filters.dateTo} onChange={(date) => handleFilterChange("dateTo", date)} placeholder="To date" />
+
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={clearFilters} size="sm">
+                    <X className="mr-2 h-4 w-4" />
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Active Filters Display */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Active filters:</span>
+                {filters.searchTerm && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("searchTerm", "")}>
+                    Search: {filters.searchTerm} <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                {filters.selectedCustomerId && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedCustomerId", "")}>
+                    Customer: {customers.find((c) => c.CustomerID.toString() === filters.selectedCustomerId)?.CustomerFullName}
+                    <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                {filters.selectedStatus && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedStatus", "")}>
+                    Status: {filters.selectedStatus} <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                {filters.dateFrom && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateFrom", undefined)}>
+                    From: {formatDate(filters.dateFrom)} <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                {filters.dateTo && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateTo", undefined)}>
+                    To: {formatDate(filters.dateTo)} <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear all
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Contracts Table */}
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : contracts.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              {searchTerm || selectedCustomerId || selectedStatus || dateFrom || dateTo
-                ? "No contracts found matching your criteria."
-                : "No contracts found. Create your first contract to get started."}
+          {filteredContracts.length === 0 ? (
+            <div className="text-center py-10">
+              {hasActiveFilters ? (
+                <div>
+                  <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-4">No contracts found matching your criteria.</p>
+                  <Button variant="outline" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-4">No contracts found. Create your first contract to get started.</p>
+                  <Button onClick={handleAddContract}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Contract
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[180px]">Contract #</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Total Amount</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectedContracts.size === filteredContracts.length && filteredContracts.length > 0}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all contracts"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[180px] cursor-pointer" onClick={() => handleSort("ContractNo")}>
+                      <div className="flex items-center gap-1">
+                        Contract #
+                        {sortConfig.key === "ContractNo" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort("CustomerName")}>
+                      <div className="flex items-center gap-1">
+                        Customer
+                        {sortConfig.key === "CustomerName" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort("TransactionDate")}>
+                      <div className="flex items-center gap-1">
+                        Date
+                        {sortConfig.key === "TransactionDate" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort("GrandTotal")}>
+                      <div className="flex items-center gap-1">
+                        Total Amount
+                        {sortConfig.key === "GrandTotal" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort("ContractStatus")}>
+                      <div className="flex items-center gap-1">
+                        Status
+                        {sortConfig.key === "ContractStatus" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
                     <TableHead>Units</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {contracts.map((contract) => (
-                    <TableRow key={contract.ContractID}>
+                  {filteredContracts.map((contract) => (
+                    <TableRow key={contract.ContractID} className={cn("hover:bg-muted/50 transition-colors", selectedContracts.has(contract.ContractID) && "bg-accent/50")}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedContracts.has(contract.ContractID)}
+                          onCheckedChange={(checked) => handleSelectContract(contract.ContractID, checked as boolean)}
+                          aria-label={`Select contract ${contract.ContractNo}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{contract.ContractNo}</div>
                         <div className="text-sm text-muted-foreground">ID: {contract.ContractID}</div>
@@ -542,6 +1041,18 @@ const ContractList: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={contractListPdf.data}
+        title="Contract List Report"
+        isLoading={contractListPdf.isLoading}
+        error={contractListPdf.error}
+        onDownload={() => contractListPdf.downloadCurrentPdf("Contract_List_Report.pdf")}
+        onRefresh={handlePreviewContractList}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
