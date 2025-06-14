@@ -1,11 +1,30 @@
-// src/pages/contract/ContractDetails.tsx
+// src/pages/contract/ContractDetails.tsx - Updated with Contract Slip PDF Generation
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractService, Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment } from "@/services/contractService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag, Eye, Image, RefreshCw, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit2,
+  Trash2,
+  FileText,
+  Building,
+  Calendar,
+  Users,
+  DollarSign,
+  Download,
+  PlusCircle,
+  Info,
+  Home,
+  Tag,
+  Eye,
+  Image,
+  RefreshCw,
+  Loader2,
+  Printer,
+} from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -19,6 +38,11 @@ import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
+// Import PDF components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +58,10 @@ const ContractDetails: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [activeTab, setActiveTab] = useState("details");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const contractPdfReport = useGenericPdfReport();
 
   // Attachment-related state
   const [previewAttachment, setPreviewAttachment] = useState<ContractAttachment | null>(null);
@@ -80,6 +108,45 @@ const ContractDetails: React.FC = () => {
 
     fetchContractDetails();
   }, [id, navigate]);
+
+  // PDF Generation Handlers
+  const handleGenerateContractSlip = async () => {
+    if (!contract) return;
+
+    const response = await contractPdfReport.generateReport(
+      "contract-slip",
+      { ContractId: contract.ContractID },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Contract_Slip_${contract.ContractNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Contract slip generated successfully");
+    }
+  };
+
+  const handlePreviewContractSlip = async () => {
+    if (!contract) return;
+
+    setShowPdfPreview(true);
+    const response = await contractPdfReport.generateReport(
+      "contract-slip",
+      { ContractId: contract.ContractID },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate contract slip preview");
+    }
+  };
 
   // Attachment handlers
   const openAttachmentPreview = (attachment: ContractAttachment) => {
@@ -295,30 +362,37 @@ const ContractDetails: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-2">
-          <div className="relative">
-            <Button variant="outline" onClick={() => setStatusDropdownOpen(!statusDropdownOpen)} onBlur={() => setTimeout(() => setStatusDropdownOpen(false), 100)}>
-              Change Status
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-            {statusDropdownOpen && (
-              <div className="absolute right-0 top-10 z-10 w-56 rounded-md border border-gray-100 shadow-lg">
-                {contractStatusOptions
-                  .filter((status) => status !== contract.ContractStatus)
-                  .map((status) => (
-                    <button
-                      key={status}
-                      className="block w-full px-4 py-2 text-left text-sm"
-                      onClick={() => {
-                        openStatusChangeDialog(status);
-                        setStatusDropdownOpen(false);
-                      }}
-                    >
-                      Set as {status}
-                    </button>
-                  ))}
-              </div>
-            )}
+          {/* PDF Generation Actions */}
+          <div className="flex space-x-2 mr-2">
+            <PdfActionButtons
+              onDownload={handleGenerateContractSlip}
+              onPreview={handlePreviewContractSlip}
+              isLoading={contractPdfReport.isLoading}
+              downloadLabel="Download Contract Slip"
+              previewLabel="Preview Contract Slip"
+              variant="outline"
+              size="default"
+            />
           </div>
+
+          <DropdownMenu open={statusDropdownOpen} onOpenChange={setStatusDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                Change Status
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {contractStatusOptions
+                .filter((status) => status !== contract.ContractStatus)
+                .map((status) => (
+                  <DropdownMenuItem key={status} onClick={() => openStatusChangeDialog(status)}>
+                    Set as {status}
+                  </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="outline" onClick={handleEdit}>
             <Edit2 className="mr-2 h-4 w-4" />
             Edit
@@ -654,6 +728,18 @@ const ContractDetails: React.FC = () => {
         </TabsContent>
       </Tabs>
 
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={contractPdfReport.data}
+        title={`Contract Slip - ${contract.ContractNo}`}
+        isLoading={contractPdfReport.isLoading}
+        error={contractPdfReport.error}
+        onDownload={() => contractPdfReport.downloadCurrentPdf(`Contract_Slip_${contract.ContractNo}.pdf`)}
+        onRefresh={handlePreviewContractSlip}
+      />
+
       {/* Confirmation Dialog for Delete */}
       <ConfirmationDialog
         isOpen={isDeleteDialogOpen}
@@ -775,8 +861,5 @@ const ContractDetails: React.FC = () => {
     </div>
   );
 };
-
-// Import ChevronDown icon
-import { ChevronDown } from "lucide-react";
 
 export default ContractDetails;
