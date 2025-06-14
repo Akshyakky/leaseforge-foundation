@@ -1,11 +1,28 @@
-// src/pages/termination/TerminationDetails.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { terminationService, ContractTermination, TerminationDeduction, TerminationAttachment } from "@/services/terminationService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, FileText, Building, Calendar, Users, DollarSign, Download, PlusCircle, Info, Home, Tag, Calculator, ChevronDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit2,
+  Trash2,
+  FileText,
+  Building,
+  Calendar,
+  Users,
+  DollarSign,
+  Download,
+  PlusCircle,
+  Info,
+  Home,
+  Tag,
+  Calculator,
+  ChevronDown,
+  Printer,
+  Eye,
+} from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -17,7 +34,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-// Import attachment components from customer module
+// Import PDF components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
+// Import attachment components
 import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
@@ -40,6 +60,10 @@ const TerminationDetails: React.FC = () => {
   const [refundDate, setRefundDate] = useState<Date | null>(new Date());
   const [refundReference, setRefundReference] = useState("");
   const [calculationResult, setCalculationResult] = useState<any>(null);
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const terminationPdfReport = useGenericPdfReport();
 
   // Attachment preview and gallery state
   const [previewAttachment, setPreviewAttachment] = useState<TerminationAttachment | null>(null);
@@ -80,6 +104,45 @@ const TerminationDetails: React.FC = () => {
 
     fetchTerminationDetails();
   }, [id, navigate]);
+
+  // PDF Generation Handlers
+  const handleGenerateTerminationSlip = async () => {
+    if (!termination) return;
+
+    const response = await terminationPdfReport.generateReport(
+      "termination-slip",
+      { TerminationId: termination.TerminationID },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Termination_Slip_${termination.TerminationNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Termination slip generated successfully");
+    }
+  };
+
+  const handlePreviewTerminationSlip = async () => {
+    if (!termination) return;
+
+    setShowPdfPreview(true);
+    const response = await terminationPdfReport.generateReport(
+      "termination-slip",
+      { TerminationId: termination.TerminationID },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate termination slip preview");
+    }
+  };
 
   // Attachment handlers
   const openAttachmentPreview = (attachment: TerminationAttachment) => {
@@ -216,7 +279,6 @@ const TerminationDetails: React.FC = () => {
       if (response.success) {
         setCalculationResult(response.figures);
 
-        // Update termination with new figures
         if (response.figures) {
           setTermination({
             ...termination,
@@ -232,7 +294,6 @@ const TerminationDetails: React.FC = () => {
 
         toast.success("Termination figures calculated successfully");
 
-        // Close the dialog after a delay to show the results
         setTimeout(() => {
           closeCalculationDialog();
         }, 2000);
@@ -308,6 +369,19 @@ const TerminationDetails: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-2">
+          {/* PDF Generation Actions */}
+          <div className="flex space-x-2 mr-2">
+            <PdfActionButtons
+              onDownload={handleGenerateTerminationSlip}
+              onPreview={handlePreviewTerminationSlip}
+              isLoading={terminationPdfReport.isLoading}
+              downloadLabel="Download Slip"
+              previewLabel="Preview Slip"
+              variant="outline"
+              size="default"
+            />
+          </div>
+
           <div className="relative">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -679,7 +753,6 @@ const TerminationDetails: React.FC = () => {
                               {attachment.Remarks && <div className="text-muted-foreground mt-1">{attachment.Remarks}</div>}
                             </div>
 
-                            {/* Document preview and download buttons */}
                             {attachment.fileUrl && (
                               <div className="flex items-center gap-2 mt-2">
                                 <Button variant="outline" size="sm" onClick={() => openAttachmentGallery(attachment.TerminationAttachmentID)} className="h-8 px-3">
@@ -709,6 +782,18 @@ const TerminationDetails: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={terminationPdfReport.data}
+        title={`Termination Slip - ${termination.TerminationNo}`}
+        isLoading={terminationPdfReport.isLoading}
+        error={terminationPdfReport.error}
+        onDownload={() => terminationPdfReport.downloadCurrentPdf(`Termination_Slip_${termination.TerminationNo}.pdf`)}
+        onRefresh={handlePreviewTerminationSlip}
+      />
 
       {/* Confirmation Dialog for Delete */}
       <ConfirmationDialog
