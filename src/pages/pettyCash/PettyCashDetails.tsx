@@ -33,10 +33,16 @@ import {
   XCircle,
   User,
   DollarSign,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, VoucherStatus, ApprovalAction } from "@/types/pettyCashTypes";
 import { format } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+// PDF Report Components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 export const PettyCashDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -54,6 +60,10 @@ export const PettyCashDetails = () => {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const pettyCashPdfReport = useGenericPdfReport();
 
   // Form states
   const [approvalAction, setApprovalAction] = useState<ApprovalAction>(ApprovalAction.APPROVE);
@@ -90,6 +100,45 @@ export const PettyCashDetails = () => {
 
     fetchVoucherData();
   }, [id]);
+
+  // PDF Generation Handlers
+  const handleGeneratePettyCashSlip = async () => {
+    if (!voucher) return;
+
+    const response = await pettyCashPdfReport.generateReport(
+      "petty-cash-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Petty_Cash_Slip_${voucher.VoucherNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Petty cash slip generated successfully");
+    }
+  };
+
+  const handlePreviewPettyCashSlip = async () => {
+    if (!voucher) return;
+
+    setShowPdfPreview(true);
+    const response = await pettyCashPdfReport.generateReport(
+      "petty-cash-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate petty cash slip preview");
+    }
+  };
 
   // Format date for display
   const formatDate = (dateString?: string | Date) => {
@@ -314,6 +363,50 @@ export const PettyCashDetails = () => {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
+
+            {/* PDF Generation Actions */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={pettyCashPdfReport.isLoading}>
+                    {pettyCashPdfReport.isLoading ? (
+                      <>
+                        <Download className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print/PDF
+                      </>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewPettyCashSlip}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview Voucher Slip
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGeneratePettyCashSlip}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Voucher Slip
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Alternative approach with direct buttons */}
+              <PdfActionButtons
+                onDownload={handleGeneratePettyCashSlip}
+                onPreview={handlePreviewPettyCashSlip}
+                isLoading={pettyCashPdfReport.isLoading}
+                downloadLabel="Download Voucher Slip"
+                previewLabel="Preview Voucher Slip"
+                variant="outline"
+                size="default"
+              />
+            </div>
+
             {canEdit && (
               <Button variant="outline" onClick={handleEdit}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -667,6 +760,18 @@ export const PettyCashDetails = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={pettyCashPdfReport.data}
+        title={`Petty Cash Voucher Slip - ${voucher.VoucherNo}`}
+        isLoading={pettyCashPdfReport.isLoading}
+        error={pettyCashPdfReport.error}
+        onDownload={() => pettyCashPdfReport.downloadCurrentPdf(`Petty_Cash_Slip_${voucher.VoucherNo}.pdf`)}
+        onRefresh={handlePreviewPettyCashSlip}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
