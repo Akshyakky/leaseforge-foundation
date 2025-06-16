@@ -284,10 +284,6 @@ export const PaymentVoucherDetails = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   // Calculate totals
   const totalDebits = lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
 
@@ -347,10 +343,6 @@ export const PaymentVoucherDetails = () => {
                 Edit
               </Button>
             )}
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
           </div>
         </CardHeader>
       </Card>

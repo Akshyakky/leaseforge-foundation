@@ -1,7 +1,9 @@
-// src/pages/contractReceipt/ContractReceiptDetails.tsx
+// src/pages/contractReceipt/ContractReceiptDetails.tsx - Updated with PDF Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { leaseReceiptService } from "@/services/contractReceiptService";
+import { accountService } from "@/services/accountService";
+import { bankService } from "@/services/bankService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +18,7 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormField } from "@/components/forms/FormField";
 import { Form } from "@/components/ui/form";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft,
   Receipt,
@@ -45,6 +48,7 @@ import {
   History,
   Loader2,
   Banknote,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -52,6 +56,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ContractReceipt, ReceiptPosting, ReceiptPostingRequest, PostingReversalRequest, PAYMENT_TYPE, PAYMENT_STATUS } from "@/types/contractReceiptTypes";
+import { Account } from "@/types/accountTypes";
+import { Bank } from "@/types/bankTypes";
+
+// PDF Report Components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 // Status change schema
 const statusChangeSchema = z.object({
@@ -87,6 +97,8 @@ export const ContractReceiptDetails = () => {
   const [postings, setPostings] = useState<ReceiptPosting[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
 
   // Dialog states
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
@@ -105,19 +117,9 @@ export const ContractReceiptDetails = () => {
   // Active tab
   const [activeTab, setActiveTab] = useState("details");
 
-  // Mock reference data (would be fetched from actual services)
-  const accounts = [
-    { AccountID: 1, AccountCode: "1100", AccountName: "Cash on Hand" },
-    { AccountID: 2, AccountCode: "1110", AccountName: "Cash in Bank" },
-    { AccountID: 3, AccountCode: "1200", AccountName: "Accounts Receivable" },
-    { AccountID: 4, AccountCode: "4100", AccountName: "Rental Revenue" },
-  ];
-
-  const banks = [
-    { BankID: 1, BankName: "First National Bank" },
-    { BankID: 2, BankName: "Commerce Bank" },
-    { BankID: 3, BankName: "Metro Bank" },
-  ];
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const receiptPdfReport = useGenericPdfReport();
 
   const paymentStatusOptions = Object.values(PAYMENT_STATUS);
 
@@ -142,7 +144,7 @@ export const ContractReceiptDetails = () => {
   });
 
   useEffect(() => {
-    const fetchReceiptDetails = async () => {
+    const fetchData = async () => {
       if (!id) {
         navigate("/receipts");
         return;
@@ -150,8 +152,8 @@ export const ContractReceiptDetails = () => {
 
       setLoading(true);
       try {
+        // Fetch receipt details
         const data = await leaseReceiptService.getReceiptById(parseInt(id));
-
         if (data.receipt) {
           setReceipt(data.receipt);
           setPostings(data.postings);
@@ -159,17 +161,61 @@ export const ContractReceiptDetails = () => {
           setError("Receipt not found");
           toast.error("Receipt not found");
         }
+
+        // Fetch accounts and banks
+        const [accountsData, banksData] = await Promise.all([accountService.getAllAccounts(), bankService.getAllBanks()]);
+        setAccounts(accountsData);
+        setBanks(banksData);
       } catch (err) {
-        console.error("Error fetching receipt details:", err);
-        setError("Failed to load receipt details");
-        toast.error("Failed to load receipt details");
+        console.error("Error fetching data:", err);
+        setError("Failed to load data");
+        toast.error("Failed to load data");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchReceiptDetails();
+    fetchData();
   }, [id, navigate]);
+
+  // PDF Generation Handlers
+  const handleGenerateReceiptSlip = async () => {
+    if (!receipt) return;
+
+    const response = await receiptPdfReport.generateReport(
+      "receipt-slip",
+      { LeaseReceiptId: receipt.LeaseReceiptID },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Receipt_Slip_${receipt.ReceiptNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Receipt slip generated successfully");
+    }
+  };
+
+  const handlePreviewReceiptSlip = async () => {
+    if (!receipt) return;
+
+    setShowPdfPreview(true);
+    const response = await receiptPdfReport.generateReport(
+      "receipt-slip",
+      { LeaseReceiptId: receipt.LeaseReceiptID },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate receipt slip preview");
+    }
+  };
 
   // Format date for display
   const formatDate = (dateString?: string | Date) => {
@@ -227,10 +273,6 @@ export const ContractReceiptDetails = () => {
       navigator.clipboard.writeText(receipt.ReceiptNo);
       toast.success("Receipt number copied to clipboard");
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleEdit = () => {
@@ -466,10 +508,19 @@ export const ContractReceiptDetails = () => {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
+
+            {/* PDF Generation Actions */}
+            <div className="flex space-x-2">
+              <PdfActionButtons
+                onDownload={handleGenerateReceiptSlip}
+                onPreview={handlePreviewReceiptSlip}
+                isLoading={receiptPdfReport.isLoading}
+                downloadLabel="Download Receipt Slip"
+                previewLabel="Preview Receipt Slip"
+                variant="outline"
+                size="default"
+              />
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -954,6 +1005,18 @@ export const ContractReceiptDetails = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={receiptPdfReport.data}
+        title={`Receipt Slip - ${receipt.ReceiptNo}`}
+        isLoading={receiptPdfReport.isLoading}
+        error={receiptPdfReport.error}
+        onDownload={() => receiptPdfReport.downloadCurrentPdf(`Receipt_Slip_${receipt.ReceiptNo}.pdf`)}
+        onRefresh={handlePreviewReceiptSlip}
+      />
 
       {/* Status Change Dialog */}
       <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>

@@ -277,10 +277,6 @@ export const JournalVoucherDetails = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   // Calculate totals
   const totalDebits = lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
   const totalCredits = lines.reduce((sum, line) => sum + (line.CreditAmount || 0), 0);
@@ -342,10 +338,6 @@ export const JournalVoucherDetails = () => {
                 Edit
               </Button>
             )}
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
           </div>
         </CardHeader>
       </Card>

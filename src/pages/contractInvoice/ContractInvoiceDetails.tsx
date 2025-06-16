@@ -46,6 +46,8 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ContractInvoice, InvoicePayment, InvoicePosting, InvoicePostingRequest, InvoicePaymentRequest, PostingReversalRequest } from "@/types/contractInvoiceTypes";
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 export const ContractInvoiceDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -64,6 +66,9 @@ export const ContractInvoiceDetails = () => {
   const [postingDialogOpen, setPostingDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [showInvoicePdfPreview, setShowInvoicePdfPreview] = useState(false);
+  const invoiceSlipPdf = useGenericPdfReport();
 
   // Form states
   const [newStatus, setNewStatus] = useState<string>("");
@@ -198,16 +203,50 @@ export const ContractInvoiceDetails = () => {
     );
   };
 
+  const handleGenerateInvoiceSlip = async () => {
+    if (!invoice) return;
+
+    const response = await invoiceSlipPdf.generateReport(
+      "invoice-slip",
+      { LeaseInvoiceID: invoice.LeaseInvoiceID },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Invoice_Slip_${invoice.InvoiceNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Invoice slip generated successfully");
+    }
+  };
+
+  const handlePreviewInvoiceSlip = async () => {
+    if (!invoice) return;
+
+    setShowInvoicePdfPreview(true);
+    const response = await invoiceSlipPdf.generateReport(
+      "invoice-slip",
+      { LeaseInvoiceID: invoice.LeaseInvoiceID },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate invoice slip preview");
+    }
+  };
+
   // Action handlers
   const handleCopyInvoiceNo = () => {
     if (invoice?.InvoiceNo) {
       navigator.clipboard.writeText(invoice.InvoiceNo);
       toast.success("Invoice number copied to clipboard");
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleEdit = () => {
@@ -481,13 +520,22 @@ export const ContractInvoiceDetails = () => {
             <CardDescription>View and manage invoice information</CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            {/* PDF Generation Actions */}
+            <div className="flex space-x-2 mr-2">
+              <PdfActionButtons
+                onDownload={handleGenerateInvoiceSlip}
+                onPreview={handlePreviewInvoiceSlip}
+                isLoading={invoiceSlipPdf.isLoading}
+                downloadLabel="Download Invoice Slip"
+                previewLabel="Preview Invoice Slip"
+                variant="outline"
+                size="default"
+              />
+            </div>
+
             <Button variant="outline" onClick={() => navigate("/invoices")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
-            </Button>
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
             </Button>
           </div>
         </CardHeader>
@@ -1246,6 +1294,17 @@ export const ContractInvoiceDetails = () => {
         confirmText="Delete"
         type="danger"
         loading={actionLoading}
+      />
+      {/* Invoice PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showInvoicePdfPreview}
+        onClose={() => setShowInvoicePdfPreview(false)}
+        pdfBlob={invoiceSlipPdf.data}
+        title={`Invoice Slip - ${invoice.InvoiceNo}`}
+        isLoading={invoiceSlipPdf.isLoading}
+        error={invoiceSlipPdf.error}
+        onDownload={() => invoiceSlipPdf.downloadCurrentPdf(`Invoice_Slip_${invoice.InvoiceNo}.pdf`)}
+        onRefresh={handlePreviewInvoiceSlip}
       />
     </div>
   );

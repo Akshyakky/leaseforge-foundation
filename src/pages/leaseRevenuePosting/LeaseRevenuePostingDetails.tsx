@@ -157,10 +157,6 @@ export const LeaseRevenuePostingDetails = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handlePostTransaction = () => {
     // Navigate back to main list with this transaction selected for posting
     navigate("/lease-revenue-posting", {
@@ -246,10 +242,6 @@ export const LeaseRevenuePostingDetails = () => {
             <Button variant="outline" onClick={() => navigate("/lease-revenue-posting")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
-            </Button>
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
             </Button>
           </div>
         </CardHeader>

@@ -141,11 +141,6 @@ export const BalanceSheet: React.FC = () => {
       });
   };
 
-  // Print function
-  const handlePrint = () => {
-    window.print();
-  };
-
   // Export to Excel function (simplified)
   const handleExport = () => {
     toast.info("Export functionality will be implemented based on your export library of choice");
@@ -173,10 +168,7 @@ export const BalanceSheet: React.FC = () => {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="mr-2 h-4 w-4" />
-            Print
-          </Button>
+
           <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             Export

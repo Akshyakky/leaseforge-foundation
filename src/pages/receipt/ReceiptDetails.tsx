@@ -98,10 +98,6 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handleDownload = () => {
     toast.info("Download functionality will be implemented");
   };
@@ -381,11 +377,6 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
             {getPaymentStatusIcon(receipt.PaymentStatus)}
             {receipt.PaymentStatus}
           </Badge>
-
-          <Button variant="outline" size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
 
           <Button variant="outline" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" />

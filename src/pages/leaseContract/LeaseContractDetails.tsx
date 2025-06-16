@@ -230,10 +230,6 @@ export const LeaseContractDetails = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   // Calculate totals
   const unitsTotal = units.reduce((sum, unit) => sum + unit.TotalAmount, 0);
   const chargesTotal = additionalCharges.reduce((sum, charge) => sum + charge.TotalAmount, 0);
@@ -295,10 +291,6 @@ export const LeaseContractDetails = () => {
                 Edit
               </Button>
             )}
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
           </div>
         </CardHeader>
       </Card>

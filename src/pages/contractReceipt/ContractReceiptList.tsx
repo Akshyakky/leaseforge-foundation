@@ -1,4 +1,4 @@
-// src/pages/contractReceipt/ContractReceiptList.tsx
+// src/pages/contractReceipt/ContractReceiptList.tsx - Updated with PDF Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   Users,
   Banknote,
   ArrowUpDown,
+  ChevronDown,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,6 +70,10 @@ import {
   BULK_OPERATION_TYPE,
 } from "@/types/contractReceiptTypes";
 import { bankService } from "@/services/bankService";
+
+// PDF Report Components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 // Posting schema
 const postingSchema = z.object({
@@ -141,6 +146,10 @@ const ContractReceiptList: React.FC = () => {
 
   // Active tab
   const [activeTab, setActiveTab] = useState("all");
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const receiptListPdf = useGenericPdfReport();
 
   // Form instances
   const postingForm = useForm<PostingFormValues>({
@@ -276,6 +285,84 @@ const ContractReceiptList: React.FC = () => {
     setShowAdvanceOnly(undefined);
     setSelectedReceipts(new Set());
     fetchReceipts();
+  };
+
+  // Filter empty parameters for PDF generation
+  const filterEmptyParameters = (params: any) => {
+    const filtered: any = {};
+
+    Object.entries(params).forEach(([key, value]) => {
+      // Include parameter only if it's not null, not undefined, not empty string, and not 0
+      if (value !== null && value !== undefined && value !== "" && value !== 0) {
+        filtered[key] = value;
+      }
+    });
+
+    return filtered;
+  };
+
+  // PDF Generation Handlers
+  const handleGenerateReceiptList = async () => {
+    const parameters = {
+      SearchText: searchTerm || "",
+      FilterCustomerID: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+      FilterPropertyID: selectedPropertyId ? parseInt(selectedPropertyId) : null,
+      FilterPaymentStatus: selectedPaymentStatus || "",
+      FilterPaymentType: selectedPaymentType || "",
+      FilterBankID: selectedBankId ? parseInt(selectedBankId) : null,
+      FilterFromDate: dateFrom,
+      FilterToDate: dateTo,
+      FilterDepositFromDate: depositDateFrom,
+      FilterDepositToDate: depositDateTo,
+      FilterPostedOnly: showPostedOnly,
+      FilterAdvanceOnly: showAdvanceOnly,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    const response = await receiptListPdf.generateReport("receipt-list", filteredParameters, {
+      orientation: "Landscape",
+      download: true,
+      showToast: true,
+      filename: `Receipt_List_${new Date().toISOString().split("T")[0]}.pdf`,
+    });
+
+    if (response.success) {
+      toast.success("Receipt list report generated successfully");
+    }
+  };
+
+  const handlePreviewReceiptList = async () => {
+    const parameters = {
+      SearchText: searchTerm || "",
+      FilterCustomerID: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+      FilterPropertyID: selectedPropertyId ? parseInt(selectedPropertyId) : null,
+      FilterPaymentStatus: selectedPaymentStatus || "",
+      FilterPaymentType: selectedPaymentType || "",
+      FilterBankID: selectedBankId ? parseInt(selectedBankId) : null,
+      FilterFromDate: dateFrom,
+      FilterToDate: dateTo,
+      FilterDepositFromDate: depositDateFrom,
+      FilterDepositToDate: depositDateTo,
+      FilterPostedOnly: showPostedOnly,
+      FilterAdvanceOnly: showAdvanceOnly,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    setShowPdfPreview(true);
+
+    const response = await receiptListPdf.generateReport("receipt-list", filteredParameters, {
+      orientation: "Landscape",
+      download: false,
+      showToast: false,
+    });
+
+    if (!response.success) {
+      toast.error("Failed to generate receipt list preview");
+    }
   };
 
   // Navigation handlers
@@ -631,9 +718,56 @@ const ContractReceiptList: React.FC = () => {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Contract Receipts</CardTitle>
-          <CardDescription>View and manage payment receipts</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Contract Receipts</CardTitle>
+              <CardDescription>View and manage payment receipts</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* PDF Generation */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={receiptListPdf.isLoading}>
+                    {receiptListPdf.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Export
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewReceiptList}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGenerateReceiptList}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Bulk Operations */}
+              {selectedReceipts.size > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      Bulk Actions ({selectedReceipts.size})
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Change Status</DropdownMenuLabel>
+                    {paymentStatusOptions.map((status) => (
+                      <DropdownMenuItem key={status} onClick={() => {}}>
+                        Set as {status}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
         </CardHeader>
+
         <CardContent>
           {/* Summary Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 mb-6">
@@ -1001,6 +1135,18 @@ const ContractReceiptList: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={receiptListPdf.data}
+        title="Receipt List Report"
+        isLoading={receiptListPdf.isLoading}
+        error={receiptListPdf.error}
+        onDownload={() => receiptListPdf.downloadCurrentPdf("Receipt_List_Report.pdf")}
+        onRefresh={handlePreviewReceiptList}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog

@@ -1,4 +1,4 @@
-// src/pages/invoice/InvoiceDetails.tsx - Updated for enhanced receipt integration
+// src/pages/invoice/InvoiceDetails.tsx - Enhanced with PDF Generation
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,17 @@ import {
   Plus,
   History,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 import { invoiceService, LeaseInvoice } from "@/services/invoiceService";
 import { receiptService, LeaseReceipt, PaymentStatus } from "@/services/receiptService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
+
+// PDF Generation Components and Hooks
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 const InvoiceDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +55,10 @@ const InvoiceDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+
+  // PDF Generation State
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const invoicePdfReport = useGenericPdfReport();
 
   // Invoice status and type options
   const invoiceStatusOptions = ["Draft", "Pending", "Sent", "Partial", "Paid", "Overdue", "Cancelled"];
@@ -98,6 +107,45 @@ const InvoiceDetails: React.FC = () => {
     }
   };
 
+  // PDF Generation Handlers
+  const handleGenerateInvoiceSlip = async () => {
+    if (!invoice) return;
+
+    const response = await invoicePdfReport.generateReport(
+      "invoice-slip",
+      { InvoiceId: invoice.LeaseInvoiceID },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Invoice_${invoice.InvoiceNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Invoice slip generated successfully");
+    }
+  };
+
+  const handlePreviewInvoiceSlip = async () => {
+    if (!invoice) return;
+
+    setShowPdfPreview(true);
+    const response = await invoicePdfReport.generateReport(
+      "invoice-slip",
+      { InvoiceId: invoice.LeaseInvoiceID },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate invoice slip preview");
+    }
+  };
+
   // Navigation handlers
   const handleBack = () => {
     navigate("/invoices");
@@ -107,14 +155,6 @@ const InvoiceDetails: React.FC = () => {
     if (invoice) {
       navigate(`/invoices/edit/${invoice.LeaseInvoiceID}`);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownload = () => {
-    toast.info("Download functionality will be implemented");
   };
 
   const handleSend = () => {
@@ -362,15 +402,18 @@ const InvoiceDetails: React.FC = () => {
             {invoice.InvoiceStatus}
           </Badge>
 
-          <Button variant="outline" size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
-
-          <Button variant="outline" size="sm" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </Button>
+          {/* PDF Generation Actions */}
+          <div className="flex space-x-2">
+            <PdfActionButtons
+              onDownload={handleGenerateInvoiceSlip}
+              onPreview={handlePreviewInvoiceSlip}
+              isLoading={invoicePdfReport.isLoading}
+              downloadLabel="Download Invoice"
+              previewLabel="Preview Invoice"
+              variant="outline"
+              size="default"
+            />
+          </div>
 
           <Button variant="outline" size="sm" onClick={handleEdit} disabled={invoice.InvoiceStatus === "Paid"}>
             <Edit className="h-4 w-4 mr-2" />
@@ -795,6 +838,18 @@ const InvoiceDetails: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={invoicePdfReport.data}
+        title={`Invoice - ${invoice.InvoiceNo}`}
+        isLoading={invoicePdfReport.isLoading}
+        error={invoicePdfReport.error}
+        onDownload={() => invoicePdfReport.downloadCurrentPdf(`Invoice_${invoice.InvoiceNo}.pdf`)}
+        onRefresh={handlePreviewInvoiceSlip}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog

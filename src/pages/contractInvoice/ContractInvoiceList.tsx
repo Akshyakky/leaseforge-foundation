@@ -31,6 +31,7 @@ import {
   Filter,
   Users,
   Receipt,
+  ChevronDown,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -62,6 +63,8 @@ import {
   SelectedInvoiceForPosting,
   InvoicePaymentRequest,
 } from "@/types/contractInvoiceTypes";
+import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 // Payment recording schema
 const paymentSchema = z.object({
@@ -133,6 +136,10 @@ const ContractInvoiceList: React.FC = () => {
 
   // Active tab
   const [activeTab, setActiveTab] = useState("all");
+
+  // PDF functionality
+  const [showInvoiceListPdfPreview, setShowInvoiceListPdfPreview] = useState(false);
+  const invoiceListPdf = useGenericPdfReport();
 
   // Form instances
   const paymentForm = useForm<PaymentFormValues>({
@@ -266,6 +273,81 @@ const ContractInvoiceList: React.FC = () => {
     fetchInvoices();
   };
 
+  // PDF functionality
+  const filterEmptyParameters = (params: any) => {
+    const filtered: any = {};
+
+    Object.entries(params).forEach(([key, value]) => {
+      // Include parameter only if it has meaningful value
+      if (value !== null && value !== undefined && value !== "" && value !== 0) {
+        filtered[key] = value;
+      }
+    });
+
+    return filtered;
+  };
+
+  const handleGenerateInvoiceListReport = async () => {
+    const parameters = {
+      SearchText: searchTerm || "",
+      FilterCustomerID: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+      FilterInvoiceStatus: selectedStatus || "",
+      FilterInvoiceType: selectedType || "",
+      FilterFromDate: dateFrom,
+      FilterToDate: dateTo,
+      FilterDueDateFrom: dueDateFrom,
+      FilterDueDateTo: dueDateTo,
+      FilterPropertyID: selectedPropertyId ? parseInt(selectedPropertyId) : null,
+      FilterPostedOnly: showPostedOnly,
+      FilterOverdueOnly: showOverdueOnly,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    const response = await invoiceListPdf.generateReport("invoice-list", filteredParameters, {
+      orientation: "Landscape",
+      download: true,
+      showToast: true,
+      filename: `Invoice_List_${new Date().toISOString().split("T")[0]}.pdf`,
+    });
+
+    if (response.success) {
+      toast.success("Invoice list report generated successfully");
+    }
+  };
+
+  const handlePreviewInvoiceListReport = async () => {
+    const parameters = {
+      SearchText: searchTerm || "",
+      FilterCustomerID: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+      FilterInvoiceStatus: selectedStatus || "",
+      FilterInvoiceType: selectedType || "",
+      FilterFromDate: dateFrom,
+      FilterToDate: dateTo,
+      FilterDueDateFrom: dueDateFrom,
+      FilterDueDateTo: dueDateTo,
+      FilterPropertyID: selectedPropertyId ? parseInt(selectedPropertyId) : null,
+      FilterPostedOnly: showPostedOnly,
+      FilterOverdueOnly: showOverdueOnly,
+    };
+
+    // Filter out empty parameters
+    const filteredParameters = filterEmptyParameters(parameters);
+
+    setShowInvoiceListPdfPreview(true);
+
+    const response = await invoiceListPdf.generateReport("invoice-list", filteredParameters, {
+      orientation: "Landscape",
+      download: false,
+      showToast: false,
+    });
+
+    if (!response.success) {
+      toast.error("Failed to generate invoice list preview");
+    }
+  };
+
   // Navigation handlers
   const handleCreateInvoice = () => {
     navigate("/invoices/new");
@@ -277,6 +359,10 @@ const ContractInvoiceList: React.FC = () => {
 
   const handleEditInvoice = (invoice: ContractInvoice) => {
     navigate(`/invoices/edit/${invoice.LeaseInvoiceID}`);
+  };
+
+  const handleViewInvoiceSlip = (invoice: ContractInvoice) => {
+    navigate(`/invoices/${invoice.LeaseInvoiceID}`);
   };
 
   // Selection handlers
@@ -777,13 +863,36 @@ const ContractInvoiceList: React.FC = () => {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
-              <TabsTrigger value="unposted">Unposted ({stats.unposted})</TabsTrigger>
-              <TabsTrigger value="posted">Posted ({stats.posted})</TabsTrigger>
-              <TabsTrigger value="overdue">Overdue ({stats.overdue})</TabsTrigger>
-              <TabsTrigger value="paid">Paid ({stats.paid})</TabsTrigger>
-            </TabsList>
+            <div className="flex justify-between items-center mb-4">
+              <TabsList className="grid w-full grid-cols-5 max-w-[600px]">
+                <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
+                <TabsTrigger value="unposted">Unposted ({stats.unposted})</TabsTrigger>
+                <TabsTrigger value="posted">Posted ({stats.posted})</TabsTrigger>
+                <TabsTrigger value="overdue">Overdue ({stats.overdue})</TabsTrigger>
+                <TabsTrigger value="paid">Paid ({stats.paid})</TabsTrigger>
+              </TabsList>
+
+              {/* PDF Generation */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={invoiceListPdf.isLoading}>
+                    {invoiceListPdf.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Export
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewInvoiceListReport}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGenerateInvoiceListReport}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             <TabsContent value={activeTab}>
               {/* Selection Summary */}
@@ -913,6 +1022,10 @@ const ContractInvoiceList: React.FC = () => {
                                   <Eye className="mr-2 h-4 w-4" />
                                   View details
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewInvoiceSlip(invoice)}>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  View Invoice Slip
+                                </DropdownMenuItem>
                                 {!invoice.IsPosted && (
                                   <DropdownMenuItem onClick={() => handleEditInvoice(invoice)}>
                                     <Edit className="mr-2 h-4 w-4" />
@@ -964,6 +1077,18 @@ const ContractInvoiceList: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Invoice List PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showInvoiceListPdfPreview}
+        onClose={() => setShowInvoiceListPdfPreview(false)}
+        pdfBlob={invoiceListPdf.data}
+        title="Invoice List Report"
+        isLoading={invoiceListPdf.isLoading}
+        error={invoiceListPdf.error}
+        onDownload={() => invoiceListPdf.downloadCurrentPdf("Invoice_List_Report.pdf")}
+        onRefresh={handlePreviewInvoiceListReport}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
