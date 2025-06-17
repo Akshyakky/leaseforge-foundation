@@ -35,10 +35,16 @@ import {
   Network,
   CreditCard,
   Building,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { JournalVoucher, JournalVoucherLine, JournalVoucherAttachment, JournalStatus, JournalType, ApprovalAction } from "@/types/journalVoucherTypes";
 import { format } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+// PDF Report Components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 export const JournalVoucherDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +62,10 @@ export const JournalVoucherDetails = () => {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const journalVoucherPdfReport = useGenericPdfReport();
 
   // Form states
   const [approvalAction, setApprovalAction] = useState<ApprovalAction>(ApprovalAction.APPROVE);
@@ -92,6 +102,45 @@ export const JournalVoucherDetails = () => {
 
     fetchVoucherData();
   }, [id]);
+
+  // PDF Generation Handlers
+  const handleGenerateJournalVoucherSlip = async () => {
+    if (!voucher) return;
+
+    const response = await journalVoucherPdfReport.generateReport(
+      "journal-voucher-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Journal_Voucher_Slip_${voucher.VoucherNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Journal voucher slip generated successfully");
+    }
+  };
+
+  const handlePreviewJournalVoucherSlip = async () => {
+    if (!voucher) return;
+
+    setShowPdfPreview(true);
+    const response = await journalVoucherPdfReport.generateReport(
+      "journal-voucher-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate journal voucher slip preview");
+    }
+  };
 
   // Format date for display
   const formatDate = (dateString?: string | Date) => {
@@ -332,6 +381,50 @@ export const JournalVoucherDetails = () => {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
+
+            {/* PDF Generation Actions */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={journalVoucherPdfReport.isLoading}>
+                    {journalVoucherPdfReport.isLoading ? (
+                      <>
+                        <Download className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print/PDF
+                      </>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewJournalVoucherSlip}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview Journal Slip
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGenerateJournalVoucherSlip}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Journal Slip
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Alternative approach with direct buttons */}
+              <PdfActionButtons
+                onDownload={handleGenerateJournalVoucherSlip}
+                onPreview={handlePreviewJournalVoucherSlip}
+                isLoading={journalVoucherPdfReport.isLoading}
+                downloadLabel="Download Journal Slip"
+                previewLabel="Preview Journal Slip"
+                variant="outline"
+                size="default"
+              />
+            </div>
+
             {canEdit && (
               <Button variant="outline" onClick={handleEdit}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -789,6 +882,18 @@ export const JournalVoucherDetails = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={journalVoucherPdfReport.data}
+        title={`Journal Voucher Slip - ${voucher.VoucherNo}`}
+        isLoading={journalVoucherPdfReport.isLoading}
+        error={journalVoucherPdfReport.error}
+        onDownload={() => journalVoucherPdfReport.downloadCurrentPdf(`Journal_Voucher_Slip_${voucher.VoucherNo}.pdf`)}
+        onRefresh={handlePreviewJournalVoucherSlip}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
