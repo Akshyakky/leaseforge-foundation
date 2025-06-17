@@ -36,10 +36,16 @@ import {
   Building,
   Users,
   Network,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PaymentVoucher, PaymentVoucherLine, PaymentVoucherAttachment, PaymentStatus, PaymentType, ApprovalAction } from "@/types/paymentVoucherTypes";
 import { format } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+// PDF Report Components
+import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
+import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
 export const PaymentVoucherDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +63,10 @@ export const PaymentVoucherDetails = () => {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  // PDF generation state
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const paymentVoucherPdfReport = useGenericPdfReport();
 
   // Form states
   const [approvalAction, setApprovalAction] = useState<ApprovalAction>(ApprovalAction.APPROVE);
@@ -93,6 +103,45 @@ export const PaymentVoucherDetails = () => {
 
     fetchVoucherData();
   }, [id]);
+
+  // PDF Generation Handlers
+  const handleGeneratePaymentVoucherSlip = async () => {
+    if (!voucher) return;
+
+    const response = await paymentVoucherPdfReport.generateReport(
+      "payment-voucher-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: true,
+        showToast: true,
+        filename: `Payment_Voucher_Slip_${voucher.VoucherNo}_${new Date().toISOString().split("T")[0]}.pdf`,
+      }
+    );
+
+    if (response.success) {
+      toast.success("Payment voucher slip generated successfully");
+    }
+  };
+
+  const handlePreviewPaymentVoucherSlip = async () => {
+    if (!voucher) return;
+
+    setShowPdfPreview(true);
+    const response = await paymentVoucherPdfReport.generateReport(
+      "payment-voucher-slip",
+      { VoucherNo: voucher.VoucherNo },
+      {
+        orientation: "Portrait",
+        download: false,
+        showToast: false,
+      }
+    );
+
+    if (!response.success) {
+      toast.error("Failed to generate payment voucher slip preview");
+    }
+  };
 
   // Format date for display
   const formatDate = (dateString?: string | Date) => {
@@ -337,6 +386,50 @@ export const PaymentVoucherDetails = () => {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
+
+            {/* PDF Generation Actions */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={paymentVoucherPdfReport.isLoading}>
+                    {paymentVoucherPdfReport.isLoading ? (
+                      <>
+                        <Download className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print/PDF
+                      </>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handlePreviewPaymentVoucherSlip}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview Payment Slip
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleGeneratePaymentVoucherSlip}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Payment Slip
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Alternative approach with direct buttons */}
+              <PdfActionButtons
+                onDownload={handleGeneratePaymentVoucherSlip}
+                onPreview={handlePreviewPaymentVoucherSlip}
+                isLoading={paymentVoucherPdfReport.isLoading}
+                downloadLabel="Download Payment Slip"
+                previewLabel="Preview Payment Slip"
+                variant="outline"
+                size="default"
+              />
+            </div>
+
             {canEdit && (
               <Button variant="outline" onClick={handleEdit}>
                 <Edit className="mr-2 h-4 w-4" />
@@ -758,6 +851,18 @@ export const PaymentVoucherDetails = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <PdfPreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        pdfBlob={paymentVoucherPdfReport.data}
+        title={`Payment Voucher Slip - ${voucher.VoucherNo}`}
+        isLoading={paymentVoucherPdfReport.isLoading}
+        error={paymentVoucherPdfReport.error}
+        onDownload={() => paymentVoucherPdfReport.downloadCurrentPdf(`Payment_Voucher_Slip_${voucher.VoucherNo}.pdf`)}
+        onRefresh={handlePreviewPaymentVoucherSlip}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
