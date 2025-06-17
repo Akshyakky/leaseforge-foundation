@@ -1,10 +1,11 @@
-// src/pages/contract/ContractDetails.tsx - Updated with Contract Slip PDF Generation
+// src/pages/contract/ContractDetails.tsx - Updated with Approval Workflow
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractService, Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment } from "@/services/contractService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
   Edit2,
@@ -24,6 +25,11 @@ import {
   RefreshCw,
   Loader2,
   Printer,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -40,13 +46,16 @@ import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnai
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 // Import PDF components
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+import { useAppSelector } from "@/lib/hooks";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAppSelector((state) => state.auth);
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [units, setUnits] = useState<ContractUnit[]>([]);
@@ -58,6 +67,13 @@ const ContractDetails: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [activeTab, setActiveTab] = useState("details");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+
+  // Approval-related state
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | "reset">("approve");
+  const [approvalComments, setApprovalComments] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   // PDF generation state
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -76,6 +92,9 @@ const ContractDetails: React.FC = () => {
 
   // Contract status options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
+
+  // Check if user is manager
+  const isManager = user?.role === "admin" || user?.role === "manager";
 
   useEffect(() => {
     const fetchContractDetails = async () => {
@@ -145,6 +164,74 @@ const ContractDetails: React.FC = () => {
 
     if (!response.success) {
       toast.error("Failed to generate contract slip preview");
+    }
+  };
+
+  // Approval handlers
+  const openApprovalDialog = (action: "approve" | "reject" | "reset") => {
+    setApprovalAction(action);
+    setApprovalComments("");
+    setRejectionReason("");
+    setIsApprovalDialogOpen(true);
+  };
+
+  const closeApprovalDialog = () => {
+    setIsApprovalDialogOpen(false);
+    setApprovalComments("");
+    setRejectionReason("");
+  };
+
+  const handleApprovalAction = async () => {
+    if (!contract || !isManager) return;
+
+    if (approvalAction === "reject" && !rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+
+    setApprovalLoading(true);
+
+    try {
+      let response;
+
+      switch (approvalAction) {
+        case "approve":
+          response = await contractService.approveContract({
+            contractId: contract.ContractID,
+            approvalComments,
+          });
+          break;
+        case "reject":
+          response = await contractService.rejectContract({
+            contractId: contract.ContractID,
+            rejectionReason,
+          });
+          break;
+        case "reset":
+          response = await contractService.resetApprovalStatus(contract.ContractID);
+          break;
+        default:
+          return;
+      }
+
+      if (response.Status === 1) {
+        // Refresh contract data
+        const data = await contractService.getContractById(contract.ContractID);
+        if (data.contract) {
+          setContract(data.contract);
+        }
+
+        const actionText = approvalAction === "approve" ? "approved" : approvalAction === "reject" ? "rejected" : "reset";
+        toast.success(`Contract ${actionText} successfully`);
+      } else {
+        toast.error(response.Message || `Failed to ${approvalAction} contract`);
+      }
+    } catch (error) {
+      console.error(`Error ${approvalAction}ing contract:`, error);
+      toast.error(`Failed to ${approvalAction} contract`);
+    } finally {
+      setApprovalLoading(false);
+      closeApprovalDialog();
     }
   };
 
@@ -258,6 +345,32 @@ const ContractDetails: React.FC = () => {
     }
   };
 
+  const getApprovalStatusColor = (status: string) => {
+    switch (status) {
+      case "Approved":
+        return "bg-green-100 text-green-800";
+      case "Rejected":
+        return "bg-red-100 text-red-800";
+      case "Pending":
+        return "bg-yellow-100 text-yellow-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getApprovalIcon = (status: string) => {
+    switch (status) {
+      case "Approved":
+        return CheckCircle;
+      case "Rejected":
+        return XCircle;
+      case "Pending":
+        return Clock;
+      default:
+        return AlertTriangle;
+    }
+  };
+
   // Contract renewal functions
   const handleRenewContract = async () => {
     if (!contract) return;
@@ -349,6 +462,8 @@ const ContractDetails: React.FC = () => {
     );
   }
 
+  const ApprovalIcon = getApprovalIcon(contract.ApprovalStatus);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -357,8 +472,14 @@ const ContractDetails: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-2xl font-semibold">Contract {contract.ContractNo}</h1>
-          <div className="ml-2">
+          <div className="ml-2 flex items-center gap-2">
             <Badge variant={getStatusColor(contract.ContractStatus)}>{contract.ContractStatus}</Badge>
+            {contract.RequiresApproval && (
+              <Badge className={getApprovalStatusColor(contract.ApprovalStatus)}>
+                <ApprovalIcon className="h-3 w-3 mr-1" />
+                {contract.ApprovalStatus}
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex space-x-2">
@@ -374,6 +495,38 @@ const ContractDetails: React.FC = () => {
               size="default"
             />
           </div>
+
+          {/* Approval Actions - Manager Only */}
+          {isManager && contract.RequiresApproval && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  Approval Actions
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {contract.ApprovalStatus === "Pending" && (
+                  <>
+                    <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
+                      <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                      Approve Contract
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
+                      <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                      Reject Contract
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {contract.ApprovalStatus !== "Pending" && (
+                  <DropdownMenuItem onClick={() => openApprovalDialog("reset")}>
+                    <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                    Reset Approval
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <DropdownMenu open={statusDropdownOpen} onOpenChange={setStatusDropdownOpen}>
             <DropdownMenuTrigger asChild>
@@ -412,6 +565,37 @@ const ContractDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Approval Status Alert */}
+      {contract.RequiresApproval && (
+        <Alert
+          className={`border-l-4 ${
+            contract.ApprovalStatus === "Approved"
+              ? "border-l-green-500 bg-green-50"
+              : contract.ApprovalStatus === "Rejected"
+              ? "border-l-red-500 bg-red-50"
+              : "border-l-yellow-500 bg-yellow-50"
+          }`}
+        >
+          <ApprovalIcon className="h-4 w-4" />
+          <AlertDescription>
+            <div className="font-medium">Approval Status: {contract.ApprovalStatus}</div>
+            {contract.ApprovalStatus === "Approved" && contract.ApprovedBy && (
+              <div className="text-sm text-muted-foreground mt-1">
+                Approved by {contract.ApprovedBy} on {formatDate(contract.ApprovedOn)}
+                {contract.ApprovalComments && <div className="mt-1">Comments: {contract.ApprovalComments}</div>}
+              </div>
+            )}
+            {contract.ApprovalStatus === "Rejected" && contract.RejectedBy && (
+              <div className="text-sm text-muted-foreground mt-1">
+                Rejected by {contract.RejectedBy} on {formatDate(contract.RejectedOn)}
+                {contract.RejectionReason && <div className="mt-1 text-red-700">Reason: {contract.RejectionReason}</div>}
+              </div>
+            )}
+            {contract.ApprovalStatus === "Pending" && <div className="text-sm text-muted-foreground mt-1">This contract is awaiting approval from a manager.</div>}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-4 w-[400px]">
           <TabsTrigger value="details">Details</TabsTrigger>
@@ -449,6 +633,18 @@ const ContractDetails: React.FC = () => {
                     <h3 className="text-sm font-medium text-muted-foreground">Transaction Date</h3>
                     <p className="text-base">{formatDate(contract.TransactionDate)}</p>
                   </div>
+
+                  {contract.RequiresApproval && (
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Approval Status</h3>
+                      <div>
+                        <Badge className={`${getApprovalStatusColor(contract.ApprovalStatus)} mt-1`}>
+                          <ApprovalIcon className="h-3 w-3 mr-1" />
+                          {contract.ApprovalStatus}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -739,6 +935,76 @@ const ContractDetails: React.FC = () => {
         onDownload={() => contractPdfReport.downloadCurrentPdf(`Contract_Slip_${contract.ContractNo}.pdf`)}
         onRefresh={handlePreviewContractSlip}
       />
+
+      {/* Approval Dialog */}
+      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{approvalAction === "approve" ? "Approve Contract" : approvalAction === "reject" ? "Reject Contract" : "Reset Approval Status"}</DialogTitle>
+            <DialogDescription>
+              {approvalAction === "approve"
+                ? "Approve this contract to allow processing."
+                : approvalAction === "reject"
+                ? "Reject this contract with a reason."
+                : "Reset the approval status to pending."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {approvalAction === "approve" && (
+              <div className="space-y-2">
+                <Label htmlFor="approvalComments">Approval Comments (Optional)</Label>
+                <Textarea
+                  id="approvalComments"
+                  value={approvalComments}
+                  onChange={(e) => setApprovalComments(e.target.value)}
+                  placeholder="Enter any comments about the approval"
+                  rows={3}
+                />
+              </div>
+            )}
+            {approvalAction === "reject" && (
+              <div className="space-y-2">
+                <Label htmlFor="rejectionReason">Rejection Reason *</Label>
+                <Textarea
+                  id="rejectionReason"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter the reason for rejection"
+                  rows={3}
+                  required
+                />
+              </div>
+            )}
+            {approvalAction === "reset" && (
+              <div className="text-sm text-muted-foreground">This will reset the approval status to "Pending" and clear any previous approval or rejection details.</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeApprovalDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApprovalAction}
+              disabled={approvalLoading || (approvalAction === "reject" && !rejectionReason.trim())}
+              variant={approvalAction === "reject" ? "destructive" : "default"}
+            >
+              {approvalLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  {approvalAction === "approve" && <CheckCircle className="mr-2 h-4 w-4" />}
+                  {approvalAction === "reject" && <XCircle className="mr-2 h-4 w-4" />}
+                  {approvalAction === "reset" && <RotateCcw className="mr-2 h-4 w-4" />}
+                  {approvalAction === "approve" ? "Approve" : approvalAction === "reject" ? "Reject" : "Reset"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Dialog for Delete */}
       <ConfirmationDialog

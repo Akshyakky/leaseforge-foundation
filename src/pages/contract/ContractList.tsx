@@ -1,4 +1,4 @@
-// src/pages/contract/ContractList.tsx - Enhanced Implementation
+// src/pages/contract/ContractList.tsx - Enhanced with Approval Features
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,9 @@ import {
   SortAsc,
   SortDesc,
   ArrowUpDown,
+  Shield,
+  UserCheck,
+  RotateCcw,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,6 +52,7 @@ import { debounce } from "lodash";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/lib/hooks";
 
 // PDF Report Components
 import { PdfPreviewModal, GenericPdfReport } from "@/components/pdf/PdfReportComponents";
@@ -59,6 +63,7 @@ interface ContractFilter {
   searchTerm: string;
   selectedCustomerId: string;
   selectedStatus: string;
+  selectedApprovalStatus: string;
   selectedPropertyId: string;
   dateFrom?: Date;
   dateTo?: Date;
@@ -79,11 +84,15 @@ interface ContractListStats {
   cancelled: number;
   totalValue: number;
   averageValue: number;
+  approvalPending: number;
+  approvalApproved: number;
+  approvalRejected: number;
 }
 
 const ContractList: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAppSelector((state) => state.auth);
 
   // State variables
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -101,6 +110,7 @@ const ContractList: React.FC = () => {
     searchTerm: searchParams.get("search") || "",
     selectedCustomerId: searchParams.get("customer") || "",
     selectedStatus: searchParams.get("status") || "",
+    selectedApprovalStatus: searchParams.get("approval") || "",
     selectedPropertyId: searchParams.get("property") || "",
     dateFrom: searchParams.get("from") ? new Date(searchParams.get("from")!) : undefined,
     dateTo: searchParams.get("to") ? new Date(searchParams.get("to")!) : undefined,
@@ -113,8 +123,16 @@ const ContractList: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const contractListPdf = useGenericPdfReport();
 
-  // Contract status options
+  // Approval state
+  const [bulkApprovalAction, setBulkApprovalAction] = useState<"approve" | "reject" | null>(null);
+  const [bulkApprovalLoading, setBulkApprovalLoading] = useState(false);
+
+  // Contract status and approval options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
+  const approvalStatusOptions = ["Pending", "Approved", "Rejected"];
+
+  // Check if user is manager
+  const isManager = user?.role === "admin" || user?.role === "manager";
 
   // Initialize data on component mount
   useEffect(() => {
@@ -127,6 +145,7 @@ const ContractList: React.FC = () => {
     if (filters.searchTerm) params.set("search", filters.searchTerm);
     if (filters.selectedCustomerId) params.set("customer", filters.selectedCustomerId);
     if (filters.selectedStatus) params.set("status", filters.selectedStatus);
+    if (filters.selectedApprovalStatus) params.set("approval", filters.selectedApprovalStatus);
     if (filters.selectedPropertyId) params.set("property", filters.selectedPropertyId);
     if (filters.dateFrom) params.set("from", filters.dateFrom.toISOString().split("T")[0]);
     if (filters.dateTo) params.set("to", filters.dateTo.toISOString().split("T")[0]);
@@ -227,6 +246,11 @@ const ContractList: React.FC = () => {
       filtered = filtered.filter((contract) => contract.ContractStatus === filters.selectedStatus);
     }
 
+    // Apply approval status filter
+    if (filters.selectedApprovalStatus) {
+      filtered = filtered.filter((contract) => contract.ApprovalStatus === filters.selectedApprovalStatus);
+    }
+
     // Apply property filter (if available)
     if (filters.selectedPropertyId) {
       // This would require property information in contract data or a separate call
@@ -292,6 +316,7 @@ const ContractList: React.FC = () => {
       searchTerm: "",
       selectedCustomerId: "",
       selectedStatus: "",
+      selectedApprovalStatus: "",
       selectedPropertyId: "",
       dateFrom: undefined,
       dateTo: undefined,
@@ -329,6 +354,11 @@ const ContractList: React.FC = () => {
     navigate("/contracts/analytics");
   };
 
+  const handleViewPendingApprovals = () => {
+    setFilters((prev) => ({ ...prev, selectedApprovalStatus: "Pending" }));
+    setShowFilters(true);
+  };
+
   // Selection handlers
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -364,6 +394,48 @@ const ContractList: React.FC = () => {
       toast.success(`${selectedContracts.size} contracts updated to ${newStatus}`);
     } catch (error) {
       toast.error("Failed to update contract statuses");
+    }
+  };
+
+  // Bulk approval operations - Manager only
+  const handleBulkApproval = async (action: "approve" | "reject") => {
+    if (!isManager || selectedContracts.size === 0) return;
+
+    const pendingContracts = Array.from(selectedContracts).filter((contractId) => {
+      const contract = contracts.find((c) => c.ContractID === contractId);
+      return contract?.ApprovalStatus === "Pending";
+    });
+
+    if (pendingContracts.length === 0) {
+      toast.error("No pending contracts selected for approval action");
+      return;
+    }
+
+    setBulkApprovalLoading(true);
+
+    try {
+      const promises = pendingContracts.map((contractId) => {
+        if (action === "approve") {
+          return contractService.approveContract({ contractId });
+        } else {
+          return contractService.rejectContract({
+            contractId,
+            rejectionReason: "Bulk rejection",
+          });
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Refresh contracts to get updated approval status
+      await fetchContracts();
+
+      setSelectedContracts(new Set());
+      toast.success(`${pendingContracts.length} contracts ${action}d successfully`);
+    } catch (error) {
+      toast.error(`Failed to ${action} contracts`);
+    } finally {
+      setBulkApprovalLoading(false);
     }
   };
 
@@ -415,6 +487,46 @@ const ContractList: React.FC = () => {
     }
   };
 
+  // Approval handlers for individual contracts
+  const handleApproveContract = async (contract: Contract) => {
+    if (!isManager) return;
+
+    try {
+      const response = await contractService.approveContract({ contractId: contract.ContractID });
+
+      if (response.Status === 1) {
+        setContracts(contracts.map((c) => (c.ContractID === contract.ContractID ? { ...c, ApprovalStatus: "Approved" } : c)));
+        toast.success("Contract approved successfully");
+      } else {
+        toast.error(response.Message || "Failed to approve contract");
+      }
+    } catch (error) {
+      console.error("Error approving contract:", error);
+      toast.error("Failed to approve contract");
+    }
+  };
+
+  const handleRejectContract = async (contract: Contract) => {
+    if (!isManager) return;
+
+    try {
+      const response = await contractService.rejectContract({
+        contractId: contract.ContractID,
+        rejectionReason: "Quick rejection from list",
+      });
+
+      if (response.Status === 1) {
+        setContracts(contracts.map((c) => (c.ContractID === contract.ContractID ? { ...c, ApprovalStatus: "Rejected" } : c)));
+        toast.success("Contract rejected successfully");
+      } else {
+        toast.error(response.Message || "Failed to reject contract");
+      }
+    } catch (error) {
+      console.error("Error rejecting contract:", error);
+      toast.error("Failed to reject contract");
+    }
+  };
+
   const filterEmptyParameters = (params) => {
     const filtered = {};
 
@@ -433,6 +545,7 @@ const ContractList: React.FC = () => {
       SearchText: filters.searchTerm || "",
       FilterCustomerID: filters.selectedCustomerId ? parseInt(filters.selectedCustomerId) : null,
       FilterContractStatus: filters.selectedStatus || "",
+      FilterApprovalStatus: filters.selectedApprovalStatus || "",
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
@@ -458,6 +571,7 @@ const ContractList: React.FC = () => {
       SearchText: filters.searchTerm || "",
       FilterCustomerID: filters.selectedCustomerId ? parseInt(filters.selectedCustomerId) : null,
       FilterContractStatus: filters.selectedStatus || "",
+      FilterApprovalStatus: filters.selectedApprovalStatus || "",
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
@@ -502,6 +616,25 @@ const ContractList: React.FC = () => {
     );
   };
 
+  // Render approval status badge
+  const renderApprovalBadge = (status: string) => {
+    const approvalConfig = {
+      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
+      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+    };
+
+    const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
+    const Icon = config.icon;
+
+    return (
+      <Badge className={config.className}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </Badge>
+    );
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
@@ -535,11 +668,21 @@ const ContractList: React.FC = () => {
       cancelled: filtered.filter((c) => c.ContractStatus === "Cancelled" || c.ContractStatus === "Terminated").length,
       totalValue: filtered.reduce((sum, c) => sum + (c.GrandTotal || 0), 0),
       averageValue: filtered.length > 0 ? filtered.reduce((sum, c) => sum + (c.GrandTotal || 0), 0) / filtered.length : 0,
+      approvalPending: filtered.filter((c) => c.ApprovalStatus === "Pending").length,
+      approvalApproved: filtered.filter((c) => c.ApprovalStatus === "Approved").length,
+      approvalRejected: filtered.filter((c) => c.ApprovalStatus === "Rejected").length,
     };
   }, [filteredContracts]);
 
   // Check if any filters are active
-  const hasActiveFilters = filters.searchTerm || filters.selectedCustomerId || filters.selectedStatus || filters.selectedPropertyId || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters =
+    filters.searchTerm ||
+    filters.selectedCustomerId ||
+    filters.selectedStatus ||
+    filters.selectedApprovalStatus ||
+    filters.selectedPropertyId ||
+    filters.dateFrom ||
+    filters.dateTo;
 
   if (loading) {
     return (
@@ -558,6 +701,12 @@ const ContractList: React.FC = () => {
           <p className="text-muted-foreground">Manage rental and property contracts</p>
         </div>
         <div className="flex items-center gap-2">
+          {isManager && stats.approvalPending > 0 && (
+            <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Shield className="mr-2 h-4 w-4" />
+              {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
+            </Button>
+          )}
           <Button variant="outline" onClick={handleViewAnalytics}>
             <BarChart3 className="mr-2 h-4 w-4" />
             Analytics
@@ -574,7 +723,7 @@ const ContractList: React.FC = () => {
       </div>
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-11 gap-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -635,6 +784,40 @@ const ContractList: React.FC = () => {
             <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
           </CardContent>
         </Card>
+
+        {isManager && (
+          <>
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-muted-foreground">Approval Pending</span>
+                </div>
+                <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">Approved</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm text-muted-foreground">Rejected</span>
+                </div>
+                <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
@@ -704,6 +887,21 @@ const ContractList: React.FC = () => {
                         Set as {status}
                       </DropdownMenuItem>
                     ))}
+
+                    {isManager && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
+                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                          Approve Selected
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
+                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                          Reject Selected
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -732,7 +930,7 @@ const ContractList: React.FC = () => {
 
             {/* Advanced Filters */}
             {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
                 <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filter by customer" />
@@ -754,6 +952,20 @@ const ContractList: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     {contractStatusOptions.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filters.selectedApprovalStatus || "all"} onValueChange={(value) => handleFilterChange("selectedApprovalStatus", value === "all" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Approval Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Approval Status</SelectItem>
+                    {approvalStatusOptions.map((status) => (
                       <SelectItem key={status} value={status}>
                         {status}
                       </SelectItem>
@@ -808,6 +1020,11 @@ const ContractList: React.FC = () => {
                 {filters.selectedStatus && (
                   <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedStatus", "")}>
                     Status: {filters.selectedStatus} <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                )}
+                {filters.selectedApprovalStatus && (
+                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedApprovalStatus", "")}>
+                    Approval: {filters.selectedApprovalStatus} <X className="ml-1 h-3 w-3" />
                   </Badge>
                 )}
                 {filters.dateFrom && (
@@ -931,6 +1148,20 @@ const ContractList: React.FC = () => {
                         )}
                       </div>
                     </TableHead>
+                    <TableHead className="cursor-pointer" onClick={() => handleSort("ApprovalStatus")}>
+                      <div className="flex items-center gap-1">
+                        Approval
+                        {sortConfig.key === "ApprovalStatus" ? (
+                          sortConfig.direction === "asc" ? (
+                            <SortAsc className="h-4 w-4" />
+                          ) : (
+                            <SortDesc className="h-4 w-4" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </div>
+                    </TableHead>
                     <TableHead>Units</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
@@ -972,6 +1203,15 @@ const ContractList: React.FC = () => {
                       </TableCell>
                       <TableCell>{renderStatusBadge(contract.ContractStatus)}</TableCell>
                       <TableCell>
+                        {contract.RequiresApproval ? (
+                          renderApprovalBadge(contract.ApprovalStatus)
+                        ) : (
+                          <Badge variant="outline" className="bg-gray-50">
+                            No Approval Required
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1">
                           <Building className="h-3 w-3 text-muted-foreground" />
                           <Badge variant="outline" className="font-normal">
@@ -1006,6 +1246,33 @@ const ContractList: React.FC = () => {
                                 <RefreshCw className="mr-2 h-4 w-4" />
                                 Renew
                               </DropdownMenuItem>
+                            )}
+
+                            {isManager && contract.RequiresApproval && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="font-medium text-muted-foreground">Approval Actions</DropdownMenuLabel>
+
+                                {contract.ApprovalStatus === "Pending" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleApproveContract(contract)}>
+                                      <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                      Approve
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleRejectContract(contract)}>
+                                      <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                      Reject
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {contract.ApprovalStatus !== "Pending" && (
+                                  <DropdownMenuItem onClick={() => navigate(`/contracts/${contract.ContractID}`)}>
+                                    <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                                    Reset Approval
+                                  </DropdownMenuItem>
+                                )}
+                              </>
                             )}
 
                             <DropdownMenuSeparator />

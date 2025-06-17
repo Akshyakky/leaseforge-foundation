@@ -8,11 +8,12 @@ import {
   ContractRequest,
   ContractSearchParams,
   ContractStatistics,
+  ContractApprovalRequest,
   ApiResponse,
 } from "../types/contractTypes";
 
 // Re-export types from contractTypes
-export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment, ContractRequest, ContractSearchParams, ContractStatistics };
+export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment, ContractRequest, ContractSearchParams, ContractStatistics, ContractApprovalRequest };
 
 /**
  * Service for contract management operations
@@ -97,6 +98,11 @@ class ContractService extends BaseService {
         GrandTotal: data.contract.GrandTotal,
         Remarks: data.contract.Remarks,
 
+        // Approval fields
+        ApprovalStatus: data.contract.ApprovalStatus || "Pending",
+        RequiresApproval: data.contract.RequiresApproval !== undefined ? data.contract.RequiresApproval : true,
+        ApprovalComments: data.contract.ApprovalComments,
+
         // JSON parameters for child records
         UnitsJSON: unitsJSON,
         AdditionalChargesJSON: additionalChargesJSON,
@@ -152,6 +158,11 @@ class ContractService extends BaseService {
         AdditionalCharges: data.contract.AdditionalCharges,
         GrandTotal: data.contract.GrandTotal,
         Remarks: data.contract.Remarks,
+
+        // Approval fields
+        ApprovalStatus: data.contract.ApprovalStatus,
+        RequiresApproval: data.contract.RequiresApproval,
+        ApprovalComments: data.contract.ApprovalComments,
 
         // JSON parameters for child records
         UnitsJSON: unitsJSON,
@@ -272,6 +283,7 @@ class ContractService extends BaseService {
         SearchText: params.searchText,
         FilterCustomerID: params.customerID,
         FilterContractStatus: params.contractStatus,
+        FilterApprovalStatus: params.approvalStatus,
         FilterFromDate: params.fromDate,
         FilterToDate: params.toDate,
         FilterUnitID: params.unitID,
@@ -329,13 +341,15 @@ class ContractService extends BaseService {
     if (response.success) {
       return {
         statusCounts: response.table1 || [],
-        propertyUnitCounts: response.table2 || [],
-        customerCounts: response.table3 || [],
+        approvalCounts: response.table2 || [],
+        propertyUnitCounts: response.table3 || [],
+        customerCounts: response.table4 || [],
       };
     }
 
     return {
       statusCounts: [],
+      approvalCounts: [],
       propertyUnitCounts: [],
       customerCounts: [],
     };
@@ -524,7 +538,7 @@ class ContractService extends BaseService {
    */
   async updateAdditionalCharge(charge: Partial<ContractAdditionalCharge> & { ContractAdditionalChargeID: number }): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 14, // Mode 14: Update Additional Charge (assuming this is the correct mode)
+      mode: 14, // Mode 14: Update Additional Charge
       parameters: {
         ContractAdditionalChargeID: charge.ContractAdditionalChargeID,
         AdditionalChargesID: charge.AdditionalChargesID,
@@ -558,7 +572,7 @@ class ContractService extends BaseService {
    */
   async removeAdditionalCharge(chargeId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 15, // Mode 15: Remove Additional Charge (assuming this is the correct mode)
+      mode: 15, // Mode 15: Remove Additional Charge
       parameters: {
         ContractAdditionalChargeID: chargeId,
       },
@@ -590,7 +604,7 @@ class ContractService extends BaseService {
     const processedAttachment = await this.processAttachmentFile(attachment);
 
     const request: BaseRequest = {
-      mode: 16, // Mode 16: Add Attachment to Contract (assuming this is the correct mode)
+      mode: 16, // Mode 16: Add Attachment to Contract
       parameters: {
         ContractID: processedAttachment.ContractID,
         DocTypeID: processedAttachment.DocTypeID,
@@ -632,7 +646,7 @@ class ContractService extends BaseService {
     const processedAttachment = await this.processAttachmentFile(attachment);
 
     const request: BaseRequest = {
-      mode: 17, // Mode 17: Update Contract Attachment (assuming this is the correct mode)
+      mode: 17, // Mode 17: Update Contract Attachment
       parameters: {
         ContractAttachmentID: processedAttachment.ContractAttachmentID,
         DocTypeID: processedAttachment.DocTypeID,
@@ -670,7 +684,7 @@ class ContractService extends BaseService {
    */
   async removeAttachment(attachmentId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 18, // Mode 18: Remove Contract Attachment (assuming this is the correct mode)
+      mode: 18, // Mode 18: Remove Contract Attachment
       parameters: {
         ContractAttachmentID: attachmentId,
       },
@@ -690,6 +704,109 @@ class ContractService extends BaseService {
       Status: 0,
       Message: response.message || "Failed to remove attachment from contract",
     };
+  }
+
+  /**
+   * Approve contract (Mode 19) - Manager only
+   * @param approvalRequest - The approval request data
+   * @returns Response with status
+   */
+  async approveContract(approvalRequest: ContractApprovalRequest): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Approve Contract
+      parameters: {
+        ContractID: approvalRequest.contractId,
+        ApprovalComments: approvalRequest.approvalComments,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Contract approved successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Contract approved successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to approve contract",
+    };
+  }
+
+  /**
+   * Reject contract (Mode 20) - Manager only
+   * @param approvalRequest - The rejection request data
+   * @returns Response with status
+   */
+  async rejectContract(approvalRequest: ContractApprovalRequest): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Reject Contract
+      parameters: {
+        ContractID: approvalRequest.contractId,
+        RejectionReason: approvalRequest.rejectionReason,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Contract rejected successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Contract rejected successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reject contract",
+    };
+  }
+
+  /**
+   * Reset approval status (Mode 21) - Manager only
+   * @param contractId - The ID of the contract
+   * @returns Response with status
+   */
+  async resetApprovalStatus(contractId: number): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 21, // Mode 21: Reset Approval Status
+      parameters: {
+        ContractID: contractId,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Contract approval status reset successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Contract approval status reset successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reset contract approval status",
+    };
+  }
+
+  /**
+   * Get contracts pending approval (Mode 22)
+   * @returns Array of contracts pending approval
+   */
+  async getContractsPendingApproval(): Promise<Contract[]> {
+    const request: BaseRequest = {
+      mode: 22, // Mode 22: Get Contracts Pending Approval
+      parameters: {},
+    };
+
+    const response = await this.execute<Contract[]>(request);
+    return response.success ? response.data || [] : [];
   }
 }
 
