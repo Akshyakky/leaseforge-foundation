@@ -35,6 +35,18 @@ export interface ContractTermination extends BaseTermination {
   RefundReference?: string;
   Notes?: string;
 
+  // Approval fields
+  ApprovalStatus: string;
+  RequiresApproval: boolean;
+  ApprovalComments?: string;
+  RejectionReason?: string;
+  ApprovedID?: number;
+  ApprovedBy?: string;
+  ApprovedOn?: string | Date;
+  RejectedID?: number;
+  RejectedBy?: string;
+  RejectedOn?: string | Date;
+
   // Joined fields
   ContractNo?: string;
   CustomerFullName?: string;
@@ -92,7 +104,21 @@ export interface TerminationStatistics {
     TotalRefunds: number;
     ProcessedRefundCount: number;
   }[];
-  monthlyTerminations: { MonthNumber: number; MonthName: string; TerminationCount: number; TotalSecurityDeposit: number; TotalDeductions: number; TotalRefunds: number }[];
+  approvalStatusCounts: {
+    ApprovalStatus: string;
+    TerminationCount: number;
+    TotalSecurityDeposit: number;
+    TotalDeductions: number;
+    TotalRefunds: number;
+  }[];
+  monthlyTerminations: {
+    MonthNumber: number;
+    MonthName: string;
+    TerminationCount: number;
+    TotalSecurityDeposit: number;
+    TotalDeductions: number;
+    TotalRefunds: number;
+  }[];
   pendingRefunds: {
     TerminationID: number;
     TerminationNo: string;
@@ -103,6 +129,16 @@ export interface TerminationStatistics {
     EffectiveDate: string | Date;
     RefundAmount: number;
   }[];
+  pendingApprovals: {
+    TerminationID: number;
+    TerminationNo: string;
+    ContractID: number;
+    ContractNo: string;
+    CustomerFullName: string;
+    TerminationDate: string | Date;
+    CreatedBy: string;
+    CreatedOn: string | Date;
+  }[];
 }
 
 // Search parameters
@@ -110,6 +146,7 @@ export interface TerminationSearchParams {
   searchText?: string;
   contractID?: number;
   terminationStatus?: string;
+  approvalStatus?: string;
   fromDate?: string | Date;
   toDate?: string | Date;
   customerID?: number;
@@ -122,6 +159,17 @@ export interface TerminationRequest {
   termination: Partial<ContractTermination>;
   deductions?: Partial<TerminationDeduction>[];
   attachments?: Partial<TerminationAttachment>[];
+}
+
+// Approval request interfaces
+export interface TerminationApprovalRequest {
+  terminationId: number;
+  approvalComments?: string;
+}
+
+export interface TerminationRejectionRequest {
+  terminationId: number;
+  rejectionReason: string;
 }
 
 // API response

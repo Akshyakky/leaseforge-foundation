@@ -7,11 +7,23 @@ import {
   TerminationRequest,
   TerminationSearchParams,
   TerminationStatistics,
+  TerminationApprovalRequest,
+  TerminationRejectionRequest,
   ApiResponse,
 } from "../types/terminationTypes";
 
 // Re-export types from terminationTypes
-export type { ContractTermination, TerminationDeduction, TerminationAttachment, TerminationRequest, TerminationSearchParams, TerminationStatistics, ApiResponse };
+export type {
+  ContractTermination,
+  TerminationDeduction,
+  TerminationAttachment,
+  TerminationRequest,
+  TerminationSearchParams,
+  TerminationStatistics,
+  TerminationApprovalRequest,
+  TerminationRejectionRequest,
+  ApiResponse,
+};
 
 /**
  * Service for contract termination operations
@@ -109,6 +121,12 @@ class TerminationService extends BaseService {
         RefundReference: data.termination.RefundReference,
         Notes: data.termination.Notes,
 
+        // Approval fields
+        ApprovalStatus: data.termination.ApprovalStatus,
+        RequiresApproval: data.termination.RequiresApproval,
+        ApprovalComments: data.termination.ApprovalComments,
+        RejectionReason: data.termination.RejectionReason,
+
         // JSON parameters for child records
         DeductionsJSON: deductionsJSON,
         AttachmentsJSON: attachmentsJSON,
@@ -176,6 +194,12 @@ class TerminationService extends BaseService {
         RefundDate: data.termination.RefundDate,
         RefundReference: data.termination.RefundReference,
         Notes: data.termination.Notes,
+
+        // Approval fields
+        ApprovalStatus: data.termination.ApprovalStatus,
+        RequiresApproval: data.termination.RequiresApproval,
+        ApprovalComments: data.termination.ApprovalComments,
+        RejectionReason: data.termination.RejectionReason,
 
         // JSON parameters for child records
         DeductionsJSON: deductionsJSON,
@@ -293,6 +317,7 @@ class TerminationService extends BaseService {
         SearchText: params.searchText,
         FilterContractID: params.contractID,
         FilterTerminationStatus: params.terminationStatus,
+        FilterApprovalStatus: params.approvalStatus,
         FilterFromDate: params.fromDate,
         FilterToDate: params.toDate,
         FilterCustomerID: params.customerID,
@@ -417,6 +442,109 @@ class TerminationService extends BaseService {
       success: false,
       message: response.message || "Failed to calculate termination figures",
     };
+  }
+
+  /**
+   * Approve a termination
+   * @param data - Approval request data
+   * @returns Response with status
+   */
+  async approveTermination(data: TerminationApprovalRequest): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Approve Termination
+      parameters: {
+        TerminationID: data.terminationId,
+        ApprovalComments: data.approvalComments,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Termination approved successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Termination approved successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to approve termination",
+    };
+  }
+
+  /**
+   * Reject a termination
+   * @param data - Rejection request data
+   * @returns Response with status
+   */
+  async rejectTermination(data: TerminationRejectionRequest): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Reject Termination
+      parameters: {
+        TerminationID: data.terminationId,
+        RejectionReason: data.rejectionReason,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Termination rejected successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Termination rejected successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reject termination",
+    };
+  }
+
+  /**
+   * Reset termination approval status
+   * @param terminationId - The ID of the termination
+   * @returns Response with status
+   */
+  async resetApprovalStatus(terminationId: number): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 21, // Mode 21: Reset Termination Approval Status
+      parameters: {
+        TerminationID: terminationId,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Termination approval status reset successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Termination approval status reset successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reset approval status",
+    };
+  }
+
+  /**
+   * Get terminations pending approval
+   * @returns Array of terminations pending approval
+   */
+  async getTerminationsPendingApproval(): Promise<ContractTermination[]> {
+    const request: BaseRequest = {
+      mode: 22, // Mode 22: Get Terminations Pending Approval
+      parameters: {},
+    };
+
+    const response = await this.execute<ContractTermination[]>(request);
+    return response.success ? response.data || [] : [];
   }
 
   /**
@@ -665,15 +793,19 @@ class TerminationService extends BaseService {
     if (response.success) {
       return {
         statusCounts: response.table1 || [],
-        monthlyTerminations: response.table2 || [],
-        pendingRefunds: response.table3 || [],
+        approvalStatusCounts: response.table2 || [],
+        monthlyTerminations: response.table3 || [],
+        pendingRefunds: response.table4 || [],
+        pendingApprovals: response.table5 || [],
       };
     }
 
     return {
       statusCounts: [],
+      approvalStatusCounts: [],
       monthlyTerminations: [],
       pendingRefunds: [],
+      pendingApprovals: [],
     };
   }
 
