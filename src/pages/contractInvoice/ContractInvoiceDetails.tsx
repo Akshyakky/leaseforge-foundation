@@ -1,4 +1,4 @@
-// src/pages/contractInvoice/ContractInvoiceDetails.tsx
+// src/pages/contractInvoice/ContractInvoiceDetails.tsx - Updated with Approval Workflow
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
@@ -14,6 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
   Receipt,
@@ -42,16 +45,22 @@ import {
   Settings,
   History,
   Loader2,
+  ChevronDown,
+  Lock,
+  Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ContractInvoice, InvoicePayment, InvoicePosting, InvoicePostingRequest, InvoicePaymentRequest, PostingReversalRequest } from "@/types/contractInvoiceTypes";
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+import { useAppSelector } from "@/lib/hooks";
 
 export const ContractInvoiceDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAppSelector((state) => state.auth);
 
   // State variables
   const [invoice, setInvoice] = useState<ContractInvoice | null>(null);
@@ -66,6 +75,13 @@ export const ContractInvoiceDetails = () => {
   const [postingDialogOpen, setPostingDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Approval-related state
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | "reset">("approve");
+  const [approvalComments, setApprovalComments] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   const [showInvoicePdfPreview, setShowInvoicePdfPreview] = useState(false);
   const invoiceSlipPdf = useGenericPdfReport();
@@ -98,6 +114,13 @@ export const ContractInvoiceDetails = () => {
 
   // Active tab
   const [activeTab, setActiveTab] = useState("details");
+
+  // Check if user is manager
+  const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Check if invoice can be edited (not approved)
+  const canEditInvoice = invoice && invoice.ApprovalStatus !== "Approved";
+  const isApproved = invoice?.ApprovalStatus === "Approved";
 
   // Mock reference data
   const accounts = [
@@ -203,6 +226,100 @@ export const ContractInvoiceDetails = () => {
     );
   };
 
+  const getApprovalStatusColor = (status: string) => {
+    switch (status) {
+      case "Approved":
+        return "bg-green-100 text-green-800";
+      case "Rejected":
+        return "bg-red-100 text-red-800";
+      case "Pending":
+        return "bg-yellow-100 text-yellow-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getApprovalIcon = (status: string) => {
+    switch (status) {
+      case "Approved":
+        return CheckCircle;
+      case "Rejected":
+        return XCircle;
+      case "Pending":
+        return Clock;
+      default:
+        return AlertTriangle;
+    }
+  };
+
+  // Approval handlers
+  const openApprovalDialog = (action: "approve" | "reject" | "reset") => {
+    setApprovalAction(action);
+    setApprovalComments("");
+    setRejectionReason("");
+    setIsApprovalDialogOpen(true);
+  };
+
+  const closeApprovalDialog = () => {
+    setIsApprovalDialogOpen(false);
+    setApprovalComments("");
+    setRejectionReason("");
+  };
+
+  const handleApprovalAction = async () => {
+    if (!invoice || !isManager) return;
+
+    if (approvalAction === "reject" && !rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+
+    setApprovalLoading(true);
+
+    try {
+      let response;
+
+      switch (approvalAction) {
+        case "approve":
+          response = await contractInvoiceService.approveInvoice({
+            invoiceId: invoice.LeaseInvoiceID,
+            approvalComments,
+          });
+          break;
+        case "reject":
+          response = await contractInvoiceService.rejectInvoice({
+            invoiceId: invoice.LeaseInvoiceID,
+            rejectionReason,
+          });
+          break;
+        case "reset":
+          response = await contractInvoiceService.resetApprovalStatus(invoice.LeaseInvoiceID);
+          break;
+        default:
+          return;
+      }
+
+      if (response.Status === 1) {
+        // Refresh invoice data
+        const data = await contractInvoiceService.getInvoiceById(invoice.LeaseInvoiceID);
+        if (data.invoice) {
+          setInvoice(data.invoice);
+        }
+
+        const actionText = approvalAction === "approve" ? "approved" : approvalAction === "reject" ? "rejected" : "reset";
+        toast.success(`Invoice ${actionText} successfully`);
+      } else {
+        toast.error(response.Message || `Failed to ${approvalAction} invoice`);
+      }
+    } catch (error) {
+      console.error(`Error ${approvalAction}ing invoice:`, error);
+      toast.error(`Failed to ${approvalAction} invoice`);
+    } finally {
+      setApprovalLoading(false);
+      closeApprovalDialog();
+    }
+  };
+
   const handleGenerateInvoiceSlip = async () => {
     if (!invoice) return;
 
@@ -250,13 +367,23 @@ export const ContractInvoiceDetails = () => {
   };
 
   const handleEdit = () => {
-    if (invoice) {
-      navigate(`/invoices/edit/${invoice.LeaseInvoiceID}`);
+    if (!invoice) return;
+
+    if (!canEditInvoice) {
+      toast.error("Cannot edit approved invoices. Please reset approval status first if necessary.");
+      return;
     }
+
+    navigate(`/invoices/edit/${invoice.LeaseInvoiceID}`);
   };
 
   const handleDelete = async () => {
     if (!invoice) return;
+
+    if (!canEditInvoice) {
+      toast.error("Cannot delete approved invoices. Please reset approval status first if necessary.");
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -279,6 +406,11 @@ export const ContractInvoiceDetails = () => {
 
   const handleStatusChange = async () => {
     if (!invoice || !newStatus) return;
+
+    if (!canEditInvoice) {
+      toast.error("Cannot change status of approved invoices. Please reset approval status first if necessary.");
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -503,810 +635,1032 @@ export const ContractInvoiceDetails = () => {
     );
   }
 
-  // Determine available actions based on status
-  const canEdit = !invoice.IsPosted && invoice.InvoiceStatus !== "Paid";
-  const canDelete = !invoice.IsPosted && invoice.InvoiceStatus !== "Paid";
-  const canPost = !invoice.IsPosted && (invoice.InvoiceStatus === "Approved" || invoice.InvoiceStatus === "Active");
+  // Determine available actions based on status and approval
+  const canEdit = canEditInvoice && !invoice.IsPosted && invoice.InvoiceStatus !== "Paid";
+  const canDelete = canEditInvoice && !invoice.IsPosted && invoice.InvoiceStatus !== "Paid";
+  const canPost = !invoice.IsPosted && (invoice.InvoiceStatus === "Approved" || invoice.InvoiceStatus === "Active") && invoice.ApprovalStatus === "Approved";
   const canRecordPayment = invoice.BalanceAmount > 0;
   const canReverse = invoice.IsPosted && postings.some((p) => !p.IsReversed);
 
+  const ApprovalIcon = getApprovalIcon(invoice.ApprovalStatus);
+
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Invoice Details</CardTitle>
-            <CardDescription>View and manage invoice information</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* PDF Generation Actions */}
-            <div className="flex space-x-2 mr-2">
-              <PdfActionButtons
-                onDownload={handleGenerateInvoiceSlip}
-                onPreview={handlePreviewInvoiceSlip}
-                isLoading={invoiceSlipPdf.isLoading}
-                downloadLabel="Download Invoice Slip"
-                previewLabel="Preview Invoice Slip"
-                variant="outline"
-                size="default"
-              />
+    <TooltipProvider>
+      <div className="container mx-auto p-4 space-y-6">
+        {/* Header */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">Invoice Details</CardTitle>
+              <CardDescription>View and manage invoice information</CardDescription>
             </div>
-
-            <Button variant="outline" onClick={() => navigate("/invoices")}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Invoice Header Information */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-6 mb-6">
-            <div className="flex items-center justify-center md:justify-start">
-              <div className="h-24 w-24 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Receipt className="h-12 w-12 text-primary" />
+            <div className="flex items-center gap-2">
+              {/* PDF Generation Actions */}
+              <div className="flex space-x-2 mr-2">
+                <PdfActionButtons
+                  onDownload={handleGenerateInvoiceSlip}
+                  onPreview={handlePreviewInvoiceSlip}
+                  isLoading={invoiceSlipPdf.isLoading}
+                  downloadLabel="Download Invoice Slip"
+                  previewLabel="Preview Invoice Slip"
+                  variant="outline"
+                  size="default"
+                />
               </div>
+
+              {/* Approval Actions - Manager Only */}
+              {isManager && invoice.RequiresApproval && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      Approval Actions
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {invoice.ApprovalStatus === "Pending" && (
+                      <>
+                        <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
+                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                          Approve Invoice
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
+                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                          Reject Invoice
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {invoice.ApprovalStatus !== "Pending" && (
+                      <DropdownMenuItem onClick={() => openApprovalDialog("reset")}>
+                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                        Reset Approval
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Button variant="outline" onClick={() => navigate("/invoices")}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
             </div>
-            <div className="flex-1">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-bold">{invoice.InvoiceNo}</h2>
-                  <Button variant="ghost" size="sm" onClick={handleCopyInvoiceNo}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
+          </CardHeader>
+        </Card>
+
+        {/* Approval Status Alert */}
+        {invoice.RequiresApproval && (
+          <Alert
+            className={`border-l-4 ${
+              invoice.ApprovalStatus === "Approved"
+                ? "border-l-green-500 bg-green-50"
+                : invoice.ApprovalStatus === "Rejected"
+                ? "border-l-red-500 bg-red-50"
+                : "border-l-yellow-500 bg-yellow-50"
+            }`}
+          >
+            <ApprovalIcon className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Approval Status: {invoice.ApprovalStatus}</div>
+              {invoice.ApprovalStatus === "Approved" && invoice.ApprovedBy && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Approved by {invoice.ApprovedBy} on {formatDate(invoice.ApprovedOn)}
+                  {invoice.ApprovalComments && <div className="mt-1">Comments: {invoice.ApprovalComments}</div>}
+                  <div className="mt-2 text-green-700 font-medium flex items-center">
+                    <Shield className="h-4 w-4 mr-1" />
+                    This invoice is protected from modifications until approval is reset.
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">{renderStatusBadge(invoice.InvoiceStatus, invoice.IsPosted, invoice.IsOverdue)}</div>
+              )}
+              {invoice.ApprovalStatus === "Rejected" && invoice.RejectedBy && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Rejected by {invoice.RejectedBy} on {formatDate(invoice.RejectedOn)}
+                  {invoice.RejectionReason && <div className="mt-1 text-red-700">Reason: {invoice.RejectionReason}</div>}
+                </div>
+              )}
+              {invoice.ApprovalStatus === "Pending" && <div className="text-sm text-muted-foreground mt-1">This invoice is awaiting approval from a manager.</div>}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Invoice Header Information */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-6 mb-6">
+              <div className="flex items-center justify-center md:justify-start">
+                <div className="h-24 w-24 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Receipt className="h-12 w-12 text-primary" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Invoice Date:</span>
-                  <span>{formatDate(invoice.InvoiceDate)}</span>
+              <div className="flex-1">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-bold">{invoice.InvoiceNo}</h2>
+                    <Button variant="ghost" size="sm" onClick={handleCopyInvoiceNo}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderStatusBadge(invoice.InvoiceStatus, invoice.IsPosted, invoice.IsOverdue)}
+                    {invoice.RequiresApproval && (
+                      <Badge className={getApprovalStatusColor(invoice.ApprovalStatus)}>
+                        <ApprovalIcon className="h-3 w-3 mr-1" />
+                        {invoice.ApprovalStatus}
+                      </Badge>
+                    )}
+                    {isApproved && (
+                      <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                        <Lock className="h-3 w-3 mr-1" />
+                        Protected
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Due Date:</span>
-                  <span>{formatDate(invoice.DueDate)}</span>
-                  {invoice.IsOverdue && (
-                    <Badge variant="destructive" className="ml-2">
-                      {invoice.DaysOverdue} days overdue
-                    </Badge>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Invoice Date:</span>
+                    <span>{formatDate(invoice.InvoiceDate)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Due Date:</span>
+                    <span>{formatDate(invoice.DueDate)}</span>
+                    {invoice.IsOverdue && (
+                      <Badge variant="destructive" className="ml-2">
+                        {invoice.DaysOverdue} days overdue
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Total Amount:</span>
+                    <span className="text-lg font-semibold">{formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}</span>
+                  </div>
+                  {invoice.BalanceAmount > 0 && (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                      <span className="font-medium">Outstanding:</span>
+                      <span className="text-lg font-semibold text-red-600">{formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}</span>
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Total Amount:</span>
-                  <span className="text-lg font-semibold">{formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}</span>
-                </div>
-                {invoice.BalanceAmount > 0 && (
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                    <span className="font-medium">Outstanding:</span>
-                    <span className="text-lg font-semibold text-red-600">{formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}</span>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2">
-            {canEdit && (
-              <Button onClick={handleEdit}>
-                <Edit2 className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            )}
-            {canPost && (
-              <Button onClick={() => setPostingDialogOpen(true)}>
-                <Send className="mr-2 h-4 w-4" />
-                Post to GL
-              </Button>
-            )}
-            {canRecordPayment && (
-              <Button variant="outline" onClick={() => setPaymentDialogOpen(true)}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Record Payment
-              </Button>
-            )}
-            {invoice.InvoiceStatus !== "Paid" && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setNewStatus("");
-                  setStatusChangeDialogOpen(true);
-                }}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Change Status
-              </Button>
-            )}
-            {canDelete && (
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(true)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="details">
-            <FileText className="mr-2 h-4 w-4" />
-            Details
-          </TabsTrigger>
-          <TabsTrigger value="payments">
-            <CreditCard className="mr-2 h-4 w-4" />
-            Payments ({payments.length})
-          </TabsTrigger>
-          <TabsTrigger value="postings">
-            <History className="mr-2 h-4 w-4" />
-            Postings ({postings.length})
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            <Clock className="mr-2 h-4 w-4" />
-            History
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Details Tab */}
-        <TabsContent value="details">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Invoice Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoice Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Invoice No:</span>
-                  <span className="font-mono">{invoice.InvoiceNo}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Invoice Type:</span>
-                  <Badge variant="outline">{invoice.InvoiceType}</Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Invoice Date:</span>
-                  <span>{formatDate(invoice.InvoiceDate)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Due Date:</span>
-                  <span>{formatDate(invoice.DueDate)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Currency:</span>
-                  <span>{invoice.CurrencyCode}</span>
-                </div>
-                {invoice.ExchangeRate && invoice.ExchangeRate !== 1 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Exchange Rate:</span>
-                    <span>{invoice.ExchangeRate}</span>
-                  </div>
-                )}
-                {invoice.PeriodFromDate && invoice.PeriodToDate && (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Period From:</span>
-                      <span>{formatDate(invoice.PeriodFromDate)}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Period To:</span>
-                      <span>{formatDate(invoice.PeriodToDate)}</span>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Customer & Contract Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer & Contract Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Customer:</span>
-                  <span className="font-medium">{invoice.CustomerName}</span>
-                </div>
-                {invoice.CustomerNo && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Customer No:</span>
-                    <span>{invoice.CustomerNo}</span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Contract:</span>
-                  <span>{invoice.ContractNo}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Property:</span>
-                  <span>{invoice.PropertyName}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Unit:</span>
-                  <span>{invoice.UnitNo}</span>
-                </div>
-                {invoice.UnitStatus && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Unit Status:</span>
-                    <Badge variant="outline">{invoice.UnitStatus}</Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Amount Breakdown */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Amount Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Sub Total:</span>
-                  <div className="text-lg font-semibold">{formatCurrency(invoice.SubTotal, invoice.CurrencyCode)}</div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Tax Amount:</span>
-                  <div className="text-lg font-semibold">{formatCurrency(invoice.TaxAmount, invoice.CurrencyCode)}</div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Discount:</span>
-                  <div className="text-lg font-semibold">{formatCurrency(invoice.DiscountAmount, invoice.CurrencyCode)}</div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Total Amount:</span>
-                  <div className="text-xl font-bold text-primary">{formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}</div>
-                </div>
-              </div>
-
-              <Separator className="my-4" />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Paid Amount:</span>
-                  <div className="text-lg font-semibold text-green-600">{formatCurrency(invoice.PaidAmount, invoice.CurrencyCode)}</div>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-muted-foreground">Balance Amount:</span>
-                  <div className={`text-lg font-semibold ${invoice.BalanceAmount > 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notes */}
-          {(invoice.Notes || invoice.InternalNotes) && (
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Notes</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {invoice.Notes && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Customer Notes:</h4>
-                    <p className="text-sm bg-muted/50 p-3 rounded-md">{invoice.Notes}</p>
-                  </div>
-                )}
-                {invoice.InternalNotes && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Internal Notes:</h4>
-                    <p className="text-sm bg-muted/50 p-3 rounded-md">{invoice.InternalNotes}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Audit Information */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Audit Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Created By:</span>
-                    <span>{invoice.CreatedBy || "—"}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Created On:</span>
-                    <span>{formatDate(invoice.CreatedOn)}</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Updated By:</span>
-                    <span>{invoice.UpdatedBy || "—"}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Updated On:</span>
-                    <span>{invoice.UpdatedOn ? formatDate(invoice.UpdatedOn) : "—"}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Payments Tab */}
-        <TabsContent value="payments">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Payment History</CardTitle>
-              {canRecordPayment && (
-                <Button onClick={() => setPaymentDialogOpen(true)}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Record Payment
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2">
+              {canEdit ? (
+                <Button onClick={handleEdit}>
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit
                 </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              {payments.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CreditCard className="mx-auto h-12 w-12 mb-4 text-muted-foreground/50" />
-                  <p>No payments have been recorded for this invoice.</p>
-                </div>
               ) : (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Receipt No</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Reference</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payments.map((payment) => (
-                        <TableRow key={payment.LeaseReceiptID}>
-                          <TableCell className="font-medium">{payment.ReceiptNo}</TableCell>
-                          <TableCell>{formatDate(payment.ReceiptDate)}</TableCell>
-                          <TableCell>{formatCurrency(payment.ReceivedAmount, invoice.CurrencyCode)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{payment.PaymentType}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={payment.PaymentStatus === "Cleared" ? "default" : "secondary"}>{payment.PaymentStatus}</Badge>
-                          </TableCell>
-                          <TableCell>{payment.TransactionReference || "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button disabled onClick={handleEdit}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Approved invoices cannot be edited. Reset approval status first if changes are needed.</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Postings Tab */}
-        <TabsContent value="postings">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Posting Entries</CardTitle>
               {canPost && (
                 <Button onClick={() => setPostingDialogOpen(true)}>
                   <Send className="mr-2 h-4 w-4" />
                   Post to GL
                 </Button>
               )}
-            </CardHeader>
-            <CardContent>
-              {postings.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <History className="mx-auto h-12 w-12 mb-4 text-muted-foreground/50" />
-                  <p>This invoice has not been posted to the general ledger yet.</p>
-                  {canPost && (
-                    <Button className="mt-4" onClick={() => setPostingDialogOpen(true)}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Post Now
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="border rounded-md">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Voucher No</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Account</TableHead>
-                        <TableHead>Debit</TableHead>
-                        <TableHead>Credit</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {postings.map((posting) => (
-                        <TableRow key={posting.PostingID}>
-                          <TableCell className="font-medium">{posting.VoucherNo}</TableCell>
-                          <TableCell>{formatDate(posting.PostingDate)}</TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{posting.AccountCode}</div>
-                              <div className="text-sm text-muted-foreground">{posting.AccountName}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatCurrency(posting.DebitAmount, invoice.CurrencyCode)}</TableCell>
-                          <TableCell>{formatCurrency(posting.CreditAmount, invoice.CurrencyCode)}</TableCell>
-                          <TableCell>{posting.IsReversed ? <Badge variant="destructive">Reversed</Badge> : <Badge variant="default">Posted</Badge>}</TableCell>
-                          <TableCell>
-                            {!posting.IsReversed && canReverse && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedPosting(posting);
-                                  setReversalDialogOpen(true);
-                                }}
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* History Tab */}
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 p-3 border rounded-lg">
-                  <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">Invoice Created</div>
-                    <div className="text-sm text-muted-foreground">
-                      Invoice {invoice.InvoiceNo} was created by {invoice.CreatedBy}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">{formatDate(invoice.CreatedOn)}</div>
-                  </div>
-                </div>
-
-                {invoice.IsPosted && (
-                  <div className="flex items-start gap-3 p-3 border rounded-lg">
-                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <Send className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">Posted to General Ledger</div>
-                      <div className="text-sm text-muted-foreground">Invoice was posted to the general ledger</div>
-                    </div>
-                  </div>
-                )}
-
-                {payments.map((payment, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
-                    <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="h-4 w-4 text-purple-600" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">Payment Received</div>
-                      <div className="text-sm text-muted-foreground">
-                        Payment of {formatCurrency(payment.ReceivedAmount, invoice.CurrencyCode)} received via {payment.PaymentType}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">{formatDate(payment.ReceiptDate)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Status Change Dialog */}
-      <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Invoice Status</DialogTitle>
-            <DialogDescription>Select the new status for invoice {invoice.InvoiceNo}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>New Status</Label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select new status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {invoiceStatusOptions
-                    .filter((status) => status !== invoice.InvoiceStatus)
-                    .map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusChangeDialogOpen(false)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleStatusChange} disabled={actionLoading || !newStatus}>
-              {actionLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Changing...
-                </>
-              ) : (
-                "Change Status"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-            <DialogDescription>
-              Record a payment for invoice {invoice.InvoiceNo}
-              <br />
-              Outstanding balance: {formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="payment-amount">Payment Amount</Label>
-              <Input
-                id="payment-amount"
-                type="number"
-                step="0.01"
-                value={paymentForm.paymentAmount}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentAmount: parseFloat(e.target.value) || 0 }))}
-                placeholder="Enter payment amount"
-              />
-            </div>
-            <div>
-              <Label htmlFor="payment-date">Payment Date</Label>
-              <Input id="payment-date" type="date" value={paymentForm.paymentDate} onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentDate: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Payment Method</Label>
-              <Select value={paymentForm.paymentMethod} onValueChange={(value) => setPaymentForm((prev) => ({ ...prev, paymentMethod: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods.map((method) => (
-                    <SelectItem key={method} value={method}>
-                      {method}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="payment-reference">Reference Number</Label>
-              <Input
-                id="payment-reference"
-                value={paymentForm.paymentReference}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentReference: e.target.value }))}
-                placeholder="Check number, transaction ID, etc."
-              />
-            </div>
-            <div>
-              <Label htmlFor="payment-notes">Notes</Label>
-              <Textarea
-                id="payment-notes"
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Additional notes"
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleRecordPayment} disabled={actionLoading || paymentForm.paymentAmount <= 0}>
-              {actionLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Recording...
-                </>
-              ) : (
-                <>
+              {canRecordPayment && (
+                <Button variant="outline" onClick={() => setPaymentDialogOpen(true)}>
                   <CreditCard className="mr-2 h-4 w-4" />
                   Record Payment
-                </>
+                </Button>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {invoice.InvoiceStatus !== "Paid" && (
+                <Button
+                  variant="outline"
+                  disabled={!canEditInvoice}
+                  onClick={() => {
+                    if (!canEditInvoice) {
+                      toast.error("Cannot change status of approved invoices. Please reset approval status first if necessary.");
+                      return;
+                    }
+                    setNewStatus("");
+                    setStatusChangeDialogOpen(true);
+                  }}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  {!canEditInvoice && <Lock className="ml-1 h-3 w-3" />}
+                  Change Status
+                </Button>
+              )}
+              {canDelete ? (
+                <Button variant="outline" onClick={() => setDeleteDialogOpen(true)}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" disabled onClick={() => setDeleteDialogOpen(true)}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Approved invoices cannot be deleted. Reset approval status first if deletion is needed.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Posting Dialog */}
-      <Dialog open={postingDialogOpen} onOpenChange={setPostingDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Post Invoice to General Ledger</DialogTitle>
-            <DialogDescription>
-              Configure posting details for invoice {invoice.InvoiceNo}
-              <br />
-              Amount: {formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="details">
+              <FileText className="mr-2 h-4 w-4" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="payments">
+              <CreditCard className="mr-2 h-4 w-4" />
+              Payments ({payments.length})
+            </TabsTrigger>
+            <TabsTrigger value="postings">
+              <History className="mr-2 h-4 w-4" />
+              Postings ({postings.length})
+            </TabsTrigger>
+            <TabsTrigger value="history">
+              <Clock className="mr-2 h-4 w-4" />
+              History
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Details Tab */}
+          <TabsContent value="details">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Invoice Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Invoice Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Invoice No:</span>
+                    <span className="font-mono">{invoice.InvoiceNo}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Invoice Type:</span>
+                    <Badge variant="outline">{invoice.InvoiceType}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Invoice Date:</span>
+                    <span>{formatDate(invoice.InvoiceDate)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Due Date:</span>
+                    <span>{formatDate(invoice.DueDate)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Currency:</span>
+                    <span>{invoice.CurrencyCode}</span>
+                  </div>
+                  {invoice.ExchangeRate && invoice.ExchangeRate !== 1 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Exchange Rate:</span>
+                      <span>{invoice.ExchangeRate}</span>
+                    </div>
+                  )}
+                  {invoice.PeriodFromDate && invoice.PeriodToDate && (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-sm font-medium text-muted-foreground">Period From:</span>
+                        <span>{formatDate(invoice.PeriodFromDate)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-sm font-medium text-muted-foreground">Period To:</span>
+                        <span>{formatDate(invoice.PeriodToDate)}</span>
+                      </div>
+                    </>
+                  )}
+                  {invoice.RequiresApproval && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Approval Status:</span>
+                      <Badge className={getApprovalStatusColor(invoice.ApprovalStatus)}>
+                        <ApprovalIcon className="h-3 w-3 mr-1" />
+                        {invoice.ApprovalStatus}
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Customer & Contract Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer & Contract Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Customer:</span>
+                    <span className="font-medium">{invoice.CustomerName}</span>
+                  </div>
+                  {invoice.CustomerNo && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Customer No:</span>
+                      <span>{invoice.CustomerNo}</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Contract:</span>
+                    <span>{invoice.ContractNo}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Property:</span>
+                    <span>{invoice.PropertyName}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Unit:</span>
+                    <span>{invoice.UnitNo}</span>
+                  </div>
+                  {invoice.UnitStatus && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Unit Status:</span>
+                      <Badge variant="outline">{invoice.UnitStatus}</Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Amount Breakdown */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Amount Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Sub Total:</span>
+                    <div className="text-lg font-semibold">{formatCurrency(invoice.SubTotal, invoice.CurrencyCode)}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Tax Amount:</span>
+                    <div className="text-lg font-semibold">{formatCurrency(invoice.TaxAmount, invoice.CurrencyCode)}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Discount:</span>
+                    <div className="text-lg font-semibold">{formatCurrency(invoice.DiscountAmount, invoice.CurrencyCode)}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Total Amount:</span>
+                    <div className="text-xl font-bold text-primary">{formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}</div>
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Paid Amount:</span>
+                    <div className="text-lg font-semibold text-green-600">{formatCurrency(invoice.PaidAmount, invoice.CurrencyCode)}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-muted-foreground">Balance Amount:</span>
+                    <div className={`text-lg font-semibold ${invoice.BalanceAmount > 0 ? "text-red-600" : "text-green-600"}`}>
+                      {formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notes */}
+            {(invoice.Notes || invoice.InternalNotes) && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Notes</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {invoice.Notes && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Customer Notes:</h4>
+                      <p className="text-sm bg-muted/50 p-3 rounded-md">{invoice.Notes}</p>
+                    </div>
+                  )}
+                  {invoice.InternalNotes && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Internal Notes:</h4>
+                      <p className="text-sm bg-muted/50 p-3 rounded-md">{invoice.InternalNotes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Audit Information */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Audit Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Created By:</span>
+                      <span>{invoice.CreatedBy || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Created On:</span>
+                      <span>{formatDate(invoice.CreatedOn)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Updated By:</span>
+                      <span>{invoice.UpdatedBy || "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Updated On:</span>
+                      <span>{invoice.UpdatedOn ? formatDate(invoice.UpdatedOn) : "—"}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Payment History</CardTitle>
+                {canRecordPayment && (
+                  <Button onClick={() => setPaymentDialogOpen(true)}>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Record Payment
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {payments.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CreditCard className="mx-auto h-12 w-12 mb-4 text-muted-foreground/50" />
+                    <p>No payments have been recorded for this invoice.</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Receipt No</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Method</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Reference</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {payments.map((payment) => (
+                          <TableRow key={payment.LeaseReceiptID}>
+                            <TableCell className="font-medium">{payment.ReceiptNo}</TableCell>
+                            <TableCell>{formatDate(payment.ReceiptDate)}</TableCell>
+                            <TableCell>{formatCurrency(payment.ReceivedAmount, invoice.CurrencyCode)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{payment.PaymentType}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={payment.PaymentStatus === "Cleared" ? "default" : "secondary"}>{payment.PaymentStatus}</Badge>
+                            </TableCell>
+                            <TableCell>{payment.TransactionReference || "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Postings Tab */}
+          <TabsContent value="postings">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Posting Entries</CardTitle>
+                {canPost && (
+                  <Button onClick={() => setPostingDialogOpen(true)}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Post to GL
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {postings.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <History className="mx-auto h-12 w-12 mb-4 text-muted-foreground/50" />
+                    <p>This invoice has not been posted to the general ledger yet.</p>
+                    {canPost && (
+                      <Button className="mt-4" onClick={() => setPostingDialogOpen(true)}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Post Now
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Voucher No</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Debit</TableHead>
+                          <TableHead>Credit</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {postings.map((posting) => (
+                          <TableRow key={posting.PostingID}>
+                            <TableCell className="font-medium">{posting.VoucherNo}</TableCell>
+                            <TableCell>{formatDate(posting.PostingDate)}</TableCell>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{posting.AccountCode}</div>
+                                <div className="text-sm text-muted-foreground">{posting.AccountName}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatCurrency(posting.DebitAmount, invoice.CurrencyCode)}</TableCell>
+                            <TableCell>{formatCurrency(posting.CreditAmount, invoice.CurrencyCode)}</TableCell>
+                            <TableCell>{posting.IsReversed ? <Badge variant="destructive">Reversed</Badge> : <Badge variant="default">Posted</Badge>}</TableCell>
+                            <TableCell>
+                              {!posting.IsReversed && canReverse && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedPosting(posting);
+                                    setReversalDialogOpen(true);
+                                  }}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* History Tab */}
+          <TabsContent value="history">
+            <Card>
+              <CardHeader>
+                <CardTitle>Activity History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-3 border rounded-lg">
+                    <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">Invoice Created</div>
+                      <div className="text-sm text-muted-foreground">
+                        Invoice {invoice.InvoiceNo} was created by {invoice.CreatedBy}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">{formatDate(invoice.CreatedOn)}</div>
+                    </div>
+                  </div>
+
+                  {invoice.ApprovalStatus === "Approved" && invoice.ApprovedBy && (
+                    <div className="flex items-start gap-3 p-3 border rounded-lg">
+                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">Invoice Approved</div>
+                        <div className="text-sm text-muted-foreground">Invoice was approved by {invoice.ApprovedBy}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{formatDate(invoice.ApprovedOn)}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {invoice.ApprovalStatus === "Rejected" && invoice.RejectedBy && (
+                    <div className="flex items-start gap-3 p-3 border rounded-lg">
+                      <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">Invoice Rejected</div>
+                        <div className="text-sm text-muted-foreground">Invoice was rejected by {invoice.RejectedBy}</div>
+                        {invoice.RejectionReason && <div className="text-sm text-red-700 mt-1">Reason: {invoice.RejectionReason}</div>}
+                        <div className="text-xs text-muted-foreground mt-1">{formatDate(invoice.RejectedOn)}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {invoice.IsPosted && (
+                    <div className="flex items-start gap-3 p-3 border rounded-lg">
+                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <Send className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">Posted to General Ledger</div>
+                        <div className="text-sm text-muted-foreground">Invoice was posted to the general ledger</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {payments.map((payment, index) => (
+                    <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
+                      <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">Payment Received</div>
+                        <div className="text-sm text-muted-foreground">
+                          Payment of {formatCurrency(payment.ReceivedAmount, invoice.CurrencyCode)} received via {payment.PaymentType}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">{formatDate(payment.ReceiptDate)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Approval Dialog */}
+        <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{approvalAction === "approve" ? "Approve Invoice" : approvalAction === "reject" ? "Reject Invoice" : "Reset Approval Status"}</DialogTitle>
+              <DialogDescription>
+                {approvalAction === "approve"
+                  ? "Approve this invoice to allow processing. Note: Once approved, the invoice will be protected from modifications."
+                  : approvalAction === "reject"
+                  ? "Reject this invoice with a reason."
+                  : "Reset the approval status to pending."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {approvalAction === "approve" && (
+                <div className="space-y-2">
+                  <Label htmlFor="approvalComments">Approval Comments (Optional)</Label>
+                  <Textarea
+                    id="approvalComments"
+                    value={approvalComments}
+                    onChange={(e) => setApprovalComments(e.target.value)}
+                    placeholder="Enter any comments about the approval"
+                    rows={3}
+                  />
+                </div>
+              )}
+              {approvalAction === "reject" && (
+                <div className="space-y-2">
+                  <Label htmlFor="rejectionReason">Rejection Reason *</Label>
+                  <Textarea
+                    id="rejectionReason"
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Enter the reason for rejection"
+                    rows={3}
+                    required
+                  />
+                </div>
+              )}
+              {approvalAction === "reset" && (
+                <div className="text-sm text-muted-foreground">This will reset the approval status to "Pending" and clear any previous approval or rejection details.</div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={closeApprovalDialog}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleApprovalAction}
+                disabled={approvalLoading || (approvalAction === "reject" && !rejectionReason.trim())}
+                variant={approvalAction === "reject" ? "destructive" : "default"}
+              >
+                {approvalLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {approvalAction === "approve" && <CheckCircle className="mr-2 h-4 w-4" />}
+                    {approvalAction === "reject" && <XCircle className="mr-2 h-4 w-4" />}
+                    {approvalAction === "reset" && <RotateCcw className="mr-2 h-4 w-4" />}
+                    {approvalAction === "approve" ? "Approve" : approvalAction === "reject" ? "Reject" : "Reset"}
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Status Change Dialog */}
+        <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Invoice Status</DialogTitle>
+              <DialogDescription>Select the new status for invoice {invoice.InvoiceNo}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="posting-date">Posting Date</Label>
-                <Input id="posting-date" type="date" value={postingForm.postingDate} onChange={(e) => setPostingForm((prev) => ({ ...prev, postingDate: e.target.value }))} />
+                <Label>New Status</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select new status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {invoiceStatusOptions
+                      .filter((status) => status !== invoice.InvoiceStatus)
+                      .map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStatusChangeDialogOpen(false)} disabled={actionLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handleStatusChange} disabled={actionLoading || !newStatus}>
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Changing...
+                  </>
+                ) : (
+                  "Change Status"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Payment Dialog */}
+        <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Record Payment</DialogTitle>
+              <DialogDescription>
+                Record a payment for invoice {invoice.InvoiceNo}
+                <br />
+                Outstanding balance: {formatCurrency(invoice.BalanceAmount, invoice.CurrencyCode)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="payment-amount">Payment Amount</Label>
+                <Input
+                  id="payment-amount"
+                  type="number"
+                  step="0.01"
+                  value={paymentForm.paymentAmount}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentAmount: parseFloat(e.target.value) || 0 }))}
+                  placeholder="Enter payment amount"
+                />
               </div>
               <div>
-                <Label htmlFor="exchange-rate">Exchange Rate</Label>
+                <Label htmlFor="payment-date">Payment Date</Label>
+                <Input id="payment-date" type="date" value={paymentForm.paymentDate} onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Payment Method</Label>
+                <Select value={paymentForm.paymentMethod} onValueChange={(value) => setPaymentForm((prev) => ({ ...prev, paymentMethod: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {method}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="payment-reference">Reference Number</Label>
                 <Input
-                  id="exchange-rate"
-                  type="number"
-                  step="0.0001"
-                  value={postingForm.exchangeRate}
-                  onChange={(e) => setPostingForm((prev) => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 1 }))}
-                  placeholder="1.0000"
+                  id="payment-reference"
+                  value={paymentForm.paymentReference}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentReference: e.target.value }))}
+                  placeholder="Check number, transaction ID, etc."
+                />
+              </div>
+              <div>
+                <Label htmlFor="payment-notes">Notes</Label>
+                <Textarea
+                  id="payment-notes"
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Additional notes"
+                  rows={3}
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Debit Account</Label>
-                <Select value={postingForm.debitAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, debitAccountId: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select debit account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts
-                      .filter((acc) => acc.AccountCode.startsWith("1"))
-                      .map((account) => (
-                        <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                          {account.AccountCode} - {account.AccountName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={actionLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handleRecordPayment} disabled={actionLoading || paymentForm.paymentAmount <= 0}>
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Recording...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Record Payment
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Posting Dialog */}
+        <Dialog open={postingDialogOpen} onOpenChange={setPostingDialogOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Post Invoice to General Ledger</DialogTitle>
+              <DialogDescription>
+                Configure posting details for invoice {invoice.InvoiceNo}
+                <br />
+                Amount: {formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="posting-date">Posting Date</Label>
+                  <Input id="posting-date" type="date" value={postingForm.postingDate} onChange={(e) => setPostingForm((prev) => ({ ...prev, postingDate: e.target.value }))} />
+                </div>
+                <div>
+                  <Label htmlFor="exchange-rate">Exchange Rate</Label>
+                  <Input
+                    id="exchange-rate"
+                    type="number"
+                    step="0.0001"
+                    value={postingForm.exchangeRate}
+                    onChange={(e) => setPostingForm((prev) => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 1 }))}
+                    placeholder="1.0000"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Debit Account</Label>
+                  <Select value={postingForm.debitAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, debitAccountId: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select debit account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts
+                        .filter((acc) => acc.AccountCode.startsWith("1"))
+                        .map((account) => (
+                          <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
+                            {account.AccountCode} - {account.AccountName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Credit Account</Label>
+                  <Select value={postingForm.creditAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, creditAccountId: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select credit account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts
+                        .filter((acc) => acc.AccountCode.startsWith("4"))
+                        .map((account) => (
+                          <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
+                            {account.AccountCode} - {account.AccountName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div>
-                <Label>Credit Account</Label>
-                <Select value={postingForm.creditAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, creditAccountId: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select credit account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts
-                      .filter((acc) => acc.AccountCode.startsWith("4"))
-                      .map((account) => (
-                        <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                          {account.AccountCode} - {account.AccountName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="posting-narration">Narration</Label>
+                <Textarea
+                  id="posting-narration"
+                  value={postingForm.narration}
+                  onChange={(e) => setPostingForm((prev) => ({ ...prev, narration: e.target.value }))}
+                  placeholder="Enter posting narration"
+                  rows={3}
+                />
               </div>
             </div>
-            <div>
-              <Label htmlFor="posting-narration">Narration</Label>
-              <Textarea
-                id="posting-narration"
-                value={postingForm.narration}
-                onChange={(e) => setPostingForm((prev) => ({ ...prev, narration: e.target.value }))}
-                placeholder="Enter posting narration"
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handlePostInvoice} disabled={actionLoading || !postingForm.debitAccountId || !postingForm.creditAccountId}>
-              {actionLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Posting...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Post Invoice
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handlePostInvoice} disabled={actionLoading || !postingForm.debitAccountId || !postingForm.creditAccountId}>
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Post Invoice
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Reversal Dialog */}
-      <Dialog open={reversalDialogOpen} onOpenChange={setReversalDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reverse Posting</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to reverse the posting for voucher {selectedPosting?.VoucherNo}? This will create offsetting journal entries.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="reversal-reason">Reversal Reason *</Label>
-              <Textarea id="reversal-reason" placeholder="Enter reason for reversal" value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} required />
+        {/* Reversal Dialog */}
+        <Dialog open={reversalDialogOpen} onOpenChange={setReversalDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reverse Posting</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to reverse the posting for voucher {selectedPosting?.VoucherNo}? This will create offsetting journal entries.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="reversal-reason">Reversal Reason *</Label>
+                <Textarea id="reversal-reason" placeholder="Enter reason for reversal" value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} required />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReversalDialogOpen(false)} disabled={actionLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleReversePosting} disabled={actionLoading || !reversalReason.trim()} variant="destructive">
-              {actionLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reverse Posting
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReversalDialogOpen(false)} disabled={actionLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handleReversePosting} disabled={actionLoading || !reversalReason.trim()} variant="destructive">
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reverse Posting
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={handleDelete}
-        title="Delete Invoice"
-        description={`Are you sure you want to delete invoice "${invoice.InvoiceNo}"? This action cannot be undone.`}
-        cancelText="Cancel"
-        confirmText="Delete"
-        type="danger"
-        loading={actionLoading}
-      />
-      {/* Invoice PDF Preview Modal */}
-      <PdfPreviewModal
-        isOpen={showInvoicePdfPreview}
-        onClose={() => setShowInvoicePdfPreview(false)}
-        pdfBlob={invoiceSlipPdf.data}
-        title={`Invoice Slip - ${invoice.InvoiceNo}`}
-        isLoading={invoiceSlipPdf.isLoading}
-        error={invoiceSlipPdf.error}
-        onDownload={() => invoiceSlipPdf.downloadCurrentPdf(`Invoice_Slip_${invoice.InvoiceNo}.pdf`)}
-        onRefresh={handlePreviewInvoiceSlip}
-      />
-    </div>
+        {/* Delete Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={handleDelete}
+          title="Delete Invoice"
+          description={`Are you sure you want to delete invoice "${invoice.InvoiceNo}"? This action cannot be undone.`}
+          cancelText="Cancel"
+          confirmText="Delete"
+          type="danger"
+          loading={actionLoading}
+        />
+
+        {/* Invoice PDF Preview Modal */}
+        <PdfPreviewModal
+          isOpen={showInvoicePdfPreview}
+          onClose={() => setShowInvoicePdfPreview(false)}
+          pdfBlob={invoiceSlipPdf.data}
+          title={`Invoice Slip - ${invoice.InvoiceNo}`}
+          isLoading={invoiceSlipPdf.isLoading}
+          error={invoiceSlipPdf.error}
+          onDownload={() => invoiceSlipPdf.downloadCurrentPdf(`Invoice_Slip_${invoice.InvoiceNo}.pdf`)}
+          onRefresh={handlePreviewInvoiceSlip}
+        />
+      </div>
+    </TooltipProvider>
   );
 };
 
