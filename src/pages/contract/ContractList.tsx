@@ -1,4 +1,4 @@
-// src/pages/contract/ContractList.tsx - Enhanced with Approval Features
+// src/pages/contract/ContractList.tsx - Enhanced with Approval Features and Edit Restrictions
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Loader2,
   MoreHorizontal,
@@ -39,6 +40,8 @@ import {
   Shield,
   UserCheck,
   RotateCcw,
+  Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,6 +90,7 @@ interface ContractListStats {
   approvalPending: number;
   approvalApproved: number;
   approvalRejected: number;
+  approvedProtected: number;
 }
 
 const ContractList: React.FC = () => {
@@ -332,12 +336,21 @@ const ContractList: React.FC = () => {
     }));
   };
 
+  // Check if contract can be edited
+  const canEditContract = (contract: Contract) => {
+    return contract.ApprovalStatus !== "Approved";
+  };
+
   // Navigation handlers
   const handleAddContract = () => {
     navigate("/contracts/new");
   };
 
   const handleEditContract = (contract: Contract) => {
+    if (!canEditContract(contract)) {
+      toast.error("Cannot edit approved contracts. Please reset approval status first if changes are needed.");
+      return;
+    }
     navigate(`/contracts/edit/${contract.ContractID}`);
   };
 
@@ -382,16 +395,32 @@ const ContractList: React.FC = () => {
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedContracts.size === 0) return;
 
+    // Filter out approved contracts
+    const editableContracts = Array.from(selectedContracts).filter((contractId) => {
+      const contract = contracts.find((c) => c.ContractID === contractId);
+      return contract && canEditContract(contract);
+    });
+
+    if (editableContracts.length === 0) {
+      toast.error("Selected contracts cannot be modified as they are approved. Please reset approval status first.");
+      return;
+    }
+
+    if (editableContracts.length < selectedContracts.size) {
+      const skippedCount = selectedContracts.size - editableContracts.length;
+      toast.warning(`${skippedCount} approved contracts were skipped from status change.`);
+    }
+
     try {
-      const promises = Array.from(selectedContracts).map((contractId) => contractService.changeContractStatus(contractId, newStatus));
+      const promises = editableContracts.map((contractId) => contractService.changeContractStatus(contractId, newStatus));
 
       await Promise.all(promises);
 
       // Update local state
-      setContracts((prev) => prev.map((contract) => (selectedContracts.has(contract.ContractID) ? { ...contract, ContractStatus: newStatus } : contract)));
+      setContracts((prev) => prev.map((contract) => (editableContracts.includes(contract.ContractID) ? { ...contract, ContractStatus: newStatus } : contract)));
 
       setSelectedContracts(new Set());
-      toast.success(`${selectedContracts.size} contracts updated to ${newStatus}`);
+      toast.success(`${editableContracts.length} contracts updated to ${newStatus}`);
     } catch (error) {
       toast.error("Failed to update contract statuses");
     }
@@ -441,6 +470,10 @@ const ContractList: React.FC = () => {
 
   // Delete contract handlers
   const openDeleteDialog = (contract: Contract) => {
+    if (!canEditContract(contract)) {
+      toast.error("Cannot delete approved contracts. Please reset approval status first if deletion is needed.");
+      return;
+    }
     setSelectedContract(contract);
     setIsDeleteDialogOpen(true);
   };
@@ -472,6 +505,11 @@ const ContractList: React.FC = () => {
 
   // Change contract status
   const handleChangeStatus = async (contract: Contract, newStatus: string) => {
+    if (!canEditContract(contract)) {
+      toast.error("Cannot change status of approved contracts. Please reset approval status first if changes are needed.");
+      return;
+    }
+
     try {
       const response = await contractService.changeContractStatus(contract.ContractID, newStatus);
 
@@ -671,6 +709,7 @@ const ContractList: React.FC = () => {
       approvalPending: filtered.filter((c) => c.ApprovalStatus === "Pending").length,
       approvalApproved: filtered.filter((c) => c.ApprovalStatus === "Approved").length,
       approvalRejected: filtered.filter((c) => c.ApprovalStatus === "Rejected").length,
+      approvedProtected: filtered.filter((c) => c.ApprovalStatus === "Approved").length,
     };
   }, [filteredContracts]);
 
@@ -693,650 +732,758 @@ const ContractList: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-semibold">Contract Management</h1>
-          <p className="text-muted-foreground">Manage rental and property contracts</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isManager && stats.approvalPending > 0 && (
-            <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
-              <Shield className="mr-2 h-4 w-4" />
-              {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
-            </Button>
-          )}
-          <Button variant="outline" onClick={handleViewAnalytics}>
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Analytics
-          </Button>
-          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Refresh
-          </Button>
-          <Button onClick={handleAddContract}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Contract
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-11 gap-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Total</span>
-            </div>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-xs text-muted-foreground">{hasActiveFilters ? `of ${contracts.length} total` : "contracts"}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-gray-600" />
-              <span className="text-sm text-muted-foreground">Draft</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-600" />
-              <span className="text-sm text-muted-foreground">Pending</span>
-            </div>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <span className="text-sm text-muted-foreground">Active</span>
-            </div>
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-muted-foreground">Completed</span>
-            </div>
-            <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-orange-600" />
-              <span className="text-sm text-muted-foreground">Expired</span>
-            </div>
-            <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
-          </CardContent>
-        </Card>
-
-        {isManager && (
-          <>
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                  <span className="text-sm text-muted-foreground">Approval Pending</span>
-                </div>
-                <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-muted-foreground">Approved</span>
-                </div>
-                <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm text-muted-foreground">Rejected</span>
-                </div>
-                <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-muted-foreground">Total Value</span>
-            </div>
-            <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-purple-600" />
-              <span className="text-sm text-muted-foreground">Average</span>
-            </div>
-            <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageValue)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Contracts</CardTitle>
-              <CardDescription>
-                {hasActiveFilters ? `Showing ${filteredContracts.length} of ${contracts.length} contracts` : `Showing all ${contracts.length} contracts`}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* PDF Generation */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={contractListPdf.isLoading}>
-                    {contractListPdf.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                    Export
-                    <ChevronDown className="ml-2 h-4 w-4" />
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-semibold">Contract Management</h1>
+            <p className="text-muted-foreground">Manage rental and property contracts</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isManager && stats.approvalPending > 0 && (
+              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+                <Shield className="mr-2 h-4 w-4" />
+                {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
+              </Button>
+            )}
+            {stats.approvedProtected > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                    <Lock className="mr-2 h-4 w-4" />
+                    {stats.approvedProtected} Protected
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handlePreviewContractList}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleGenerateContractList}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download PDF
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{stats.approvedProtected} approved contracts are protected from modifications</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Button variant="outline" onClick={handleViewAnalytics}>
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analytics
+            </Button>
+            <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Refresh
+            </Button>
+            <Button onClick={handleAddContract}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Contract
+            </Button>
+          </div>
+        </div>
 
-              {/* Bulk Operations */}
-              {selectedContracts.size > 0 && (
+        {/* Summary Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-4">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Total</span>
+              </div>
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground">{hasActiveFilters ? `of ${contracts.length} total` : "contracts"}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-gray-600" />
+                <span className="text-sm text-muted-foreground">Draft</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm text-muted-foreground">Pending</span>
+              </div>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-muted-foreground">Active</span>
+              </div>
+              <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">Completed</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <span className="text-sm text-muted-foreground">Expired</span>
+              </div>
+              <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
+            </CardContent>
+          </Card>
+
+          {isManager && (
+            <>
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <span className="text-sm text-muted-foreground">Approval Pending</span>
+                  </div>
+                  <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-muted-foreground">Approved</span>
+                  </div>
+                  <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-muted-foreground">Protected</span>
+                  </div>
+                  <div className="text-2xl font-bold text-green-600">{stats.approvedProtected}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    <span className="text-sm text-muted-foreground">Rejected</span>
+                  </div>
+                  <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">Total Value</span>
+              </div>
+              <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-purple-600" />
+                <span className="text-sm text-muted-foreground">Average</span>
+              </div>
+              <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageValue)}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Contracts</CardTitle>
+                <CardDescription>
+                  {hasActiveFilters ? `Showing ${filteredContracts.length} of ${contracts.length} contracts` : `Showing all ${contracts.length} contracts`}
+                  {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved contracts are protected from modifications</span>}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* PDF Generation */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
-                      Bulk Actions ({selectedContracts.size})
+                    <Button variant="outline" disabled={contractListPdf.isLoading}>
+                      {contractListPdf.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                      Export
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Change Status</DropdownMenuLabel>
-                    {contractStatusOptions.map((status) => (
-                      <DropdownMenuItem key={status} onClick={() => handleBulkStatusChange(status)}>
-                        Set as {status}
-                      </DropdownMenuItem>
-                    ))}
-
-                    {isManager && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
-                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                          Approve Selected
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
-                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                          Reject Selected
-                        </DropdownMenuItem>
-                      </>
-                    )}
+                    <DropdownMenuItem onClick={handlePreviewContractList}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      Preview PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleGenerateContractList}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download PDF
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
 
-              <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className={cn(showFilters && "bg-accent")}>
-                <Filter className="mr-2 h-4 w-4" />
-                Filters
-                {hasActiveFilters && (
-                  <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
-                    !
-                  </Badge>
+                {/* Bulk Operations */}
+                {selectedContracts.size > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline">
+                        Bulk Actions ({selectedContracts.size})
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Change Status</DropdownMenuLabel>
+                      {contractStatusOptions.map((status) => (
+                        <DropdownMenuItem key={status} onClick={() => handleBulkStatusChange(status)}>
+                          Set as {status}
+                        </DropdownMenuItem>
+                      ))}
+
+                      {isManager && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
+                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                            Approve Selected
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
+                            <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                            Reject Selected
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
-              </Button>
+
+                <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className={cn(showFilters && "bg-accent")}>
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filters
+                  {hasActiveFilters && (
+                    <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
+                      !
+                    </Badge>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardHeader>
+          </CardHeader>
 
-        <CardContent>
-          {/* Search and Filters */}
-          <div className="space-y-4 mb-6">
-            {/* Search Bar */}
-            <div className="relative max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input type="text" placeholder="Search contracts..." className="pl-9" defaultValue={filters.searchTerm} onChange={handleSearchChange} />
-            </div>
+          <CardContent>
+            {/* Search and Filters */}
+            <div className="space-y-4 mb-6">
+              {/* Search Bar */}
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input type="text" placeholder="Search contracts..." className="pl-9" defaultValue={filters.searchTerm} onChange={handleSearchChange} />
+              </div>
 
-            {/* Advanced Filters */}
-            {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
-                <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Customers</SelectItem>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
-                        {customer.CustomerFullName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={filters.selectedStatus || "all"} onValueChange={(value) => handleFilterChange("selectedStatus", value === "all" ? "" : value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {contractStatusOptions.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={filters.selectedApprovalStatus || "all"} onValueChange={(value) => handleFilterChange("selectedApprovalStatus", value === "all" ? "" : value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Approval Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Approval Status</SelectItem>
-                    {approvalStatusOptions.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {properties.length > 0 && (
-                  <Select value={filters.selectedPropertyId || "all"} onValueChange={(value) => handleFilterChange("selectedPropertyId", value === "all" ? "" : value)}>
+              {/* Advanced Filters */}
+              {showFilters && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+                  <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Property" />
+                      <SelectValue placeholder="Filter by customer" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Properties</SelectItem>
-                      {properties.map((property) => (
-                        <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
-                          {property.PropertyName}
+                      <SelectItem value="all">All Customers</SelectItem>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.CustomerID} value={customer.CustomerID.toString()}>
+                          {customer.CustomerFullName}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                )}
 
-                <DatePicker value={filters.dateFrom} onChange={(date) => handleFilterChange("dateFrom", date)} placeholder="From date" />
+                  <Select value={filters.selectedStatus || "all"} onValueChange={(value) => handleFilterChange("selectedStatus", value === "all" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {contractStatusOptions.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <DatePicker value={filters.dateTo} onChange={(date) => handleFilterChange("dateTo", date)} placeholder="To date" />
+                  <Select value={filters.selectedApprovalStatus || "all"} onValueChange={(value) => handleFilterChange("selectedApprovalStatus", value === "all" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Approval Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Approval Status</SelectItem>
+                      {approvalStatusOptions.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={clearFilters} size="sm">
-                    <X className="mr-2 h-4 w-4" />
-                    Clear
-                  </Button>
+                  {properties.length > 0 && (
+                    <Select value={filters.selectedPropertyId || "all"} onValueChange={(value) => handleFilterChange("selectedPropertyId", value === "all" ? "" : value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Property" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Properties</SelectItem>
+                        {properties.map((property) => (
+                          <SelectItem key={property.PropertyID} value={property.PropertyID.toString()}>
+                            {property.PropertyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  <DatePicker value={filters.dateFrom} onChange={(date) => handleFilterChange("dateFrom", date)} placeholder="From date" />
+
+                  <DatePicker value={filters.dateTo} onChange={(date) => handleFilterChange("dateTo", date)} placeholder="To date" />
+
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={clearFilters} size="sm">
+                      <X className="mr-2 h-4 w-4" />
+                      Clear
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Active Filters Display */}
-            {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-muted-foreground">Active filters:</span>
-                {filters.searchTerm && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("searchTerm", "")}>
-                    Search: {filters.searchTerm} <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                {filters.selectedCustomerId && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedCustomerId", "")}>
-                    Customer: {customers.find((c) => c.CustomerID.toString() === filters.selectedCustomerId)?.CustomerFullName}
-                    <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                {filters.selectedStatus && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedStatus", "")}>
-                    Status: {filters.selectedStatus} <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                {filters.selectedApprovalStatus && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedApprovalStatus", "")}>
-                    Approval: {filters.selectedApprovalStatus} <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                {filters.dateFrom && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateFrom", undefined)}>
-                    From: {formatDate(filters.dateFrom)} <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                {filters.dateTo && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateTo", undefined)}>
-                    To: {formatDate(filters.dateTo)} <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                )}
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  Clear all
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Contracts Table */}
-          {filteredContracts.length === 0 ? (
-            <div className="text-center py-10">
-              {hasActiveFilters ? (
-                <div>
-                  <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground mb-4">No contracts found matching your criteria.</p>
-                  <Button variant="outline" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                </div>
-              ) : (
-                <div>
-                  <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground mb-4">No contracts found. Create your first contract to get started.</p>
-                  <Button onClick={handleAddContract}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Contract
+              {/* Active Filters Display */}
+              {hasActiveFilters && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Active filters:</span>
+                  {filters.searchTerm && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("searchTerm", "")}>
+                      Search: {filters.searchTerm} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.selectedCustomerId && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedCustomerId", "")}>
+                      Customer: {customers.find((c) => c.CustomerID.toString() === filters.selectedCustomerId)?.CustomerFullName}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.selectedStatus && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedStatus", "")}>
+                      Status: {filters.selectedStatus} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.selectedApprovalStatus && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedApprovalStatus", "")}>
+                      Approval: {filters.selectedApprovalStatus} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.dateFrom && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateFrom", undefined)}>
+                      From: {formatDate(filters.dateFrom)} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.dateTo && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("dateTo", undefined)}>
+                      To: {formatDate(filters.dateTo)} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    Clear all
                   </Button>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={selectedContracts.size === filteredContracts.length && filteredContracts.length > 0}
-                        onCheckedChange={handleSelectAll}
-                        aria-label="Select all contracts"
-                      />
-                    </TableHead>
-                    <TableHead className="w-[180px] cursor-pointer" onClick={() => handleSort("ContractNo")}>
-                      <div className="flex items-center gap-1">
-                        Contract #
-                        {sortConfig.key === "ContractNo" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort("CustomerName")}>
-                      <div className="flex items-center gap-1">
-                        Customer
-                        {sortConfig.key === "CustomerName" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort("TransactionDate")}>
-                      <div className="flex items-center gap-1">
-                        Date
-                        {sortConfig.key === "TransactionDate" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort("GrandTotal")}>
-                      <div className="flex items-center gap-1">
-                        Total Amount
-                        {sortConfig.key === "GrandTotal" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort("ContractStatus")}>
-                      <div className="flex items-center gap-1">
-                        Status
-                        {sortConfig.key === "ContractStatus" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer" onClick={() => handleSort("ApprovalStatus")}>
-                      <div className="flex items-center gap-1">
-                        Approval
-                        {sortConfig.key === "ApprovalStatus" ? (
-                          sortConfig.direction === "asc" ? (
-                            <SortAsc className="h-4 w-4" />
-                          ) : (
-                            <SortDesc className="h-4 w-4" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead>Units</TableHead>
-                    <TableHead>Created By</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredContracts.map((contract) => (
-                    <TableRow key={contract.ContractID} className={cn("hover:bg-muted/50 transition-colors", selectedContracts.has(contract.ContractID) && "bg-accent/50")}>
-                      <TableCell>
+
+            {/* Contracts Table */}
+            {filteredContracts.length === 0 ? (
+              <div className="text-center py-10">
+                {hasActiveFilters ? (
+                  <div>
+                    <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground mb-4">No contracts found matching your criteria.</p>
+                    <Button variant="outline" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground mb-4">No contracts found. Create your first contract to get started.</p>
+                    <Button onClick={handleAddContract}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Contract
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">
                         <Checkbox
-                          checked={selectedContracts.has(contract.ContractID)}
-                          onCheckedChange={(checked) => handleSelectContract(contract.ContractID, checked as boolean)}
-                          aria-label={`Select contract ${contract.ContractNo}`}
+                          checked={selectedContracts.size === filteredContracts.length && filteredContracts.length > 0}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all contracts"
                         />
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{contract.ContractNo}</div>
-                        <div className="text-sm text-muted-foreground">ID: {contract.ContractID}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{contract.CustomerName}</div>
-                            {contract.JointCustomerName && <div className="text-sm text-muted-foreground">Joint: {contract.JointCustomerName}</div>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
+                      </TableHead>
+                      <TableHead className="w-[180px] cursor-pointer" onClick={() => handleSort("ContractNo")}>
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {formatDate(contract.TransactionDate)}
+                          Contract #
+                          {sortConfig.key === "ContractNo" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{formatCurrency(contract.GrandTotal)}</div>
-                        {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Base: {formatCurrency(contract.TotalAmount)}</div>}
-                        {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Additional: {formatCurrency(contract.AdditionalCharges)}</div>}
-                      </TableCell>
-                      <TableCell>{renderStatusBadge(contract.ContractStatus)}</TableCell>
-                      <TableCell>
-                        {contract.RequiresApproval ? (
-                          renderApprovalBadge(contract.ApprovalStatus)
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-50">
-                            No Approval Required
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("CustomerName")}>
                         <div className="flex items-center gap-1">
-                          <Building className="h-3 w-3 text-muted-foreground" />
-                          <Badge variant="outline" className="font-normal">
-                            {contract.UnitCount || 0} units
-                          </Badge>
+                          Customer
+                          {sortConfig.key === "CustomerName" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {contract.CreatedBy && <div>{contract.CreatedBy}</div>}
-                          {contract.CreatedOn && <div className="text-muted-foreground">{formatDate(contract.CreatedOn)}</div>}
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("TransactionDate")}>
+                        <div className="flex items-center gap-1">
+                          Date
+                          {sortConfig.key === "TransactionDate" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewContract(contract)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditContract(contract)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            {(contract.ContractStatus === "Active" || contract.ContractStatus === "Completed" || contract.ContractStatus === "Expired") && (
-                              <DropdownMenuItem onClick={() => handleRenewContract(contract)}>
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Renew
-                              </DropdownMenuItem>
-                            )}
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("GrandTotal")}>
+                        <div className="flex items-center gap-1">
+                          Total Amount
+                          {sortConfig.key === "GrandTotal" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("ContractStatus")}>
+                        <div className="flex items-center gap-1">
+                          Status
+                          {sortConfig.key === "ContractStatus" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("ApprovalStatus")}>
+                        <div className="flex items-center gap-1">
+                          Approval
+                          {sortConfig.key === "ApprovalStatus" ? (
+                            sortConfig.direction === "asc" ? (
+                              <SortAsc className="h-4 w-4" />
+                            ) : (
+                              <SortDesc className="h-4 w-4" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-50" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead>Units</TableHead>
+                      <TableHead>Created By</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredContracts.map((contract) => {
+                      const isApproved = contract.ApprovalStatus === "Approved";
+                      const canEdit = canEditContract(contract);
 
-                            {isManager && contract.RequiresApproval && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="font-medium text-muted-foreground">Approval Actions</DropdownMenuLabel>
+                      return (
+                        <TableRow
+                          key={contract.ContractID}
+                          className={cn("hover:bg-muted/50 transition-colors", selectedContracts.has(contract.ContractID) && "bg-accent/50", isApproved && "bg-green-50/30")}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedContracts.has(contract.ContractID)}
+                              onCheckedChange={(checked) => handleSelectContract(contract.ContractID, checked as boolean)}
+                              aria-label={`Select contract ${contract.ContractNo}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="font-medium">{contract.ContractNo}</div>
+                                <div className="text-sm text-muted-foreground">ID: {contract.ContractID}</div>
+                              </div>
+                              {isApproved && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Lock className="h-3 w-3 text-green-600" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Protected - Approved contracts cannot be modified</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">{contract.CustomerName}</div>
+                                {contract.JointCustomerName && <div className="text-sm text-muted-foreground">Joint: {contract.JointCustomerName}</div>}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              {formatDate(contract.TransactionDate)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{formatCurrency(contract.GrandTotal)}</div>
+                            {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Base: {formatCurrency(contract.TotalAmount)}</div>}
+                            {contract.AdditionalCharges > 0 && <div className="text-sm text-muted-foreground">Additional: {formatCurrency(contract.AdditionalCharges)}</div>}
+                          </TableCell>
+                          <TableCell>{renderStatusBadge(contract.ContractStatus)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {contract.RequiresApproval ? (
+                                renderApprovalBadge(contract.ApprovalStatus)
+                              ) : (
+                                <Badge variant="outline" className="bg-gray-50">
+                                  No Approval Required
+                                </Badge>
+                              )}
+                              {isApproved && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Shield className="h-3 w-3 text-green-600 ml-1" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Protected from modifications</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Building className="h-3 w-3 text-muted-foreground" />
+                              <Badge variant="outline" className="font-normal">
+                                {contract.UnitCount || 0} units
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {contract.CreatedBy && <div>{contract.CreatedBy}</div>}
+                              {contract.CreatedOn && <div className="text-muted-foreground">{formatDate(contract.CreatedOn)}</div>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewContract(contract)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View details
+                                </DropdownMenuItem>
 
-                                {contract.ApprovalStatus === "Pending" && (
+                                {canEdit ? (
+                                  <DropdownMenuItem onClick={() => handleEditContract(contract)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div>
+                                        <DropdownMenuItem disabled>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Edit (Protected)
+                                        </DropdownMenuItem>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Cannot edit approved contracts</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+
+                                {(contract.ContractStatus === "Active" || contract.ContractStatus === "Completed" || contract.ContractStatus === "Expired") && (
+                                  <DropdownMenuItem onClick={() => handleRenewContract(contract)}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                    Renew
+                                  </DropdownMenuItem>
+                                )}
+
+                                {isManager && contract.RequiresApproval && (
                                   <>
-                                    <DropdownMenuItem onClick={() => handleApproveContract(contract)}>
-                                      <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                                      Approve
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleRejectContract(contract)}>
-                                      <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                                      Reject
-                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="font-medium text-muted-foreground">Approval Actions</DropdownMenuLabel>
+
+                                    {contract.ApprovalStatus === "Pending" && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleApproveContract(contract)}>
+                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                          Approve
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleRejectContract(contract)}>
+                                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                          Reject
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+
+                                    {contract.ApprovalStatus !== "Pending" && (
+                                      <DropdownMenuItem onClick={() => navigate(`/contracts/${contract.ContractID}`)}>
+                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                                        Reset Approval
+                                      </DropdownMenuItem>
+                                    )}
                                   </>
                                 )}
 
-                                {contract.ApprovalStatus !== "Pending" && (
-                                  <DropdownMenuItem onClick={() => navigate(`/contracts/${contract.ContractID}`)}>
-                                    <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
-                                    Reset Approval
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuLabel className="font-medium text-muted-foreground">Change Status</DropdownMenuLabel>
+
+                                {contractStatusOptions
+                                  .filter((status) => status !== contract.ContractStatus)
+                                  .map((status) => (
+                                    <DropdownMenuItem key={status} onClick={() => handleChangeStatus(contract, status)} disabled={!canEdit}>
+                                      {canEdit ? (
+                                        <>Set as {status}</>
+                                      ) : (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="flex items-center w-full">
+                                              <Lock className="mr-2 h-4 w-4" />
+                                              Set as {status} (Protected)
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Cannot change status of approved contracts</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                    </DropdownMenuItem>
+                                  ))}
+
+                                <DropdownMenuSeparator />
+
+                                {canEdit ? (
+                                  <DropdownMenuItem
+                                    className="text-red-500"
+                                    onClick={() => openDeleteDialog(contract)}
+                                    disabled={contract.ContractStatus === "Active" || contract.ContractStatus === "Completed"}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
                                   </DropdownMenuItem>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div>
+                                        <DropdownMenuItem disabled>
+                                          <Lock className="mr-2 h-4 w-4" />
+                                          Delete (Protected)
+                                        </DropdownMenuItem>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Cannot delete approved contracts</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 )}
-                              </>
-                            )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-                            <DropdownMenuSeparator />
+        {/* PDF Preview Modal */}
+        <PdfPreviewModal
+          isOpen={showPdfPreview}
+          onClose={() => setShowPdfPreview(false)}
+          pdfBlob={contractListPdf.data}
+          title="Contract List Report"
+          isLoading={contractListPdf.isLoading}
+          error={contractListPdf.error}
+          onDownload={() => contractListPdf.downloadCurrentPdf("Contract_List_Report.pdf")}
+          onRefresh={handlePreviewContractList}
+        />
 
-                            <DropdownMenuLabel className="font-medium text-muted-foreground">Change Status</DropdownMenuLabel>
-
-                            {contractStatusOptions
-                              .filter((status) => status !== contract.ContractStatus)
-                              .map((status) => (
-                                <DropdownMenuItem key={status} onClick={() => handleChangeStatus(contract, status)}>
-                                  Set as {status}
-                                </DropdownMenuItem>
-                              ))}
-
-                            <DropdownMenuSeparator />
-
-                            <DropdownMenuItem
-                              className="text-red-500"
-                              onClick={() => openDeleteDialog(contract)}
-                              disabled={contract.ContractStatus === "Active" || contract.ContractStatus === "Completed"}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* PDF Preview Modal */}
-      <PdfPreviewModal
-        isOpen={showPdfPreview}
-        onClose={() => setShowPdfPreview(false)}
-        pdfBlob={contractListPdf.data}
-        title="Contract List Report"
-        isLoading={contractListPdf.isLoading}
-        error={contractListPdf.error}
-        onDownload={() => contractListPdf.downloadCurrentPdf("Contract_List_Report.pdf")}
-        onRefresh={handlePreviewContractList}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={closeDeleteDialog}
-        onConfirm={handleDeleteContract}
-        title="Delete Contract"
-        description={
-          selectedContract
-            ? `Are you sure you want to delete contract "${selectedContract.ContractNo}"? This action cannot be undone.`
-            : "Are you sure you want to delete this contract?"
-        }
-        cancelText="Cancel"
-        confirmText="Delete"
-        type="danger"
-      />
-    </div>
+        {/* Delete Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={closeDeleteDialog}
+          onConfirm={handleDeleteContract}
+          title="Delete Contract"
+          description={
+            selectedContract
+              ? `Are you sure you want to delete contract "${selectedContract.ContractNo}"? This action cannot be undone.`
+              : "Are you sure you want to delete this contract?"
+          }
+          cancelText="Cancel"
+          confirmText="Delete"
+          type="danger"
+        />
+      </div>
+    </TooltipProvider>
   );
 };
 

@@ -1,4 +1,4 @@
-// src/pages/contract/ContractForm.tsx
+// src/pages/contract/ContractForm.tsx - Updated with Contract Number Read-only in Edit Mode
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ArrowLeft,
   Loader2,
@@ -35,6 +36,8 @@ import {
   PlusCircle,
   Edit2,
   Download,
+  Lock,
+  Shield,
 } from "lucide-react";
 import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
@@ -207,6 +210,10 @@ const ContractForm: React.FC = () => {
   const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
   const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
+  // Check if editing is allowed
+  const canEditContract = !contract || contract.ApprovalStatus !== "Approved";
+  const isApproved = contract?.ApprovalStatus === "Approved";
+
   // Initialize form
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractSchema),
@@ -279,6 +286,13 @@ const ContractForm: React.FC = () => {
 
           if (contractData.contract) {
             setContract(contractData.contract);
+
+            // Check if contract is approved and prevent editing
+            if (contractData.contract.ApprovalStatus === "Approved") {
+              toast.error("This contract has been approved and cannot be edited. Please reset approval status first if changes are needed.");
+              navigate(`/contracts/${contractData.contract.ContractID}`);
+              return;
+            }
 
             const formattedContract = {
               ...contractData.contract,
@@ -622,6 +636,11 @@ const ContractForm: React.FC = () => {
 
   // Add new items
   const addUnit = () => {
+    if (!canEditContract) {
+      toast.error("Cannot modify approved contracts.");
+      return;
+    }
+
     const fromDate = new Date();
     const toDate = new Date(new Date().setFullYear(new Date().getFullYear() + 1));
     const totalDays = differenceInDays(toDate, fromDate);
@@ -642,6 +661,11 @@ const ContractForm: React.FC = () => {
   };
 
   const addCharge = () => {
+    if (!canEditContract) {
+      toast.error("Cannot modify approved contracts.");
+      return;
+    }
+
     chargesFieldArray.append({
       AdditionalChargesID: "",
       Amount: 0,
@@ -653,6 +677,11 @@ const ContractForm: React.FC = () => {
 
   // Attachment management functions
   const openAttachmentDialog = (attachment?: any) => {
+    if (!canEditContract) {
+      toast.error("Cannot modify approved contracts.");
+      return;
+    }
+
     if (attachment) {
       setEditingAttachment(attachment);
     } else {
@@ -681,6 +710,10 @@ const ContractForm: React.FC = () => {
   };
 
   const removeAttachment = (index: number) => {
+    if (!canEditContract) {
+      toast.error("Cannot modify approved contracts.");
+      return;
+    }
     attachmentsFieldArray.remove(index);
   };
 
@@ -702,6 +735,11 @@ const ContractForm: React.FC = () => {
   const onSubmit = async (data: ContractFormValues) => {
     if (!user) {
       toast.error("User information not available");
+      return;
+    }
+
+    if (!canEditContract) {
+      toast.error("Cannot save changes to approved contracts.");
       return;
     }
 
@@ -799,6 +837,11 @@ const ContractForm: React.FC = () => {
 
   // Reset form
   const handleReset = () => {
+    if (!canEditContract) {
+      toast.error("Cannot reset approved contracts.");
+      return;
+    }
+
     if (isEdit && contract) {
       form.reset();
     } else {
@@ -850,16 +893,36 @@ const ContractForm: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Contract" : "Create Contract"}</h1>
+        {isApproved && (
+          <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
+            <Lock className="h-3 w-3 mr-1" />
+            Approved - Protected from Editing
+          </Badge>
+        )}
       </div>
+
+      {/* Approval Warning Alert */}
+      {isApproved && (
+        <Alert className="border-l-4 border-l-red-500 bg-red-50">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            <div className="font-medium">Contract Editing Restricted</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              This contract has been approved and is protected from modifications. To make changes, a manager must first reset the approval status from the contract details page.
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Contract Information */}
-          <Card>
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Contract Information
+                {isApproved && <Lock className="h-4 w-4 text-red-500" />}
               </CardTitle>
               <CardDescription>Enter the basic contract details and customer information</CardDescription>
             </CardHeader>
@@ -869,8 +932,10 @@ const ContractForm: React.FC = () => {
                   form={form}
                   name="ContractNo"
                   label="Contract Number"
-                  placeholder="Auto-generated if left empty"
-                  description="Leave blank for auto-generated contract number"
+                  placeholder={isEdit ? "Contract number (cannot be changed)" : "Auto-generated if left empty"}
+                  description={isEdit ? "Contract number cannot be modified in edit mode" : "Leave blank for auto-generated contract number"}
+                  disabled={isEdit} // Always disabled in edit mode
+                  className={isEdit ? "bg-muted" : ""}
                 />
                 <FormField
                   form={form}
@@ -888,8 +953,9 @@ const ContractForm: React.FC = () => {
                   ]}
                   placeholder="Select status"
                   required
+                  disabled={!canEditContract}
                 />
-                <FormField form={form} name="TransactionDate" label="Transaction Date" type="date" required description="Date of contract creation" />
+                <FormField form={form} name="TransactionDate" label="Transaction Date" type="date" required description="Date of contract creation" disabled={!canEditContract} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -905,6 +971,7 @@ const ContractForm: React.FC = () => {
                   placeholder="Select primary customer"
                   required
                   description="Main customer for this contract"
+                  disabled={!canEditContract}
                 />
                 <FormField
                   form={form}
@@ -919,6 +986,7 @@ const ContractForm: React.FC = () => {
                     }))}
                   placeholder="Select joint customer (optional)"
                   description="Optional joint customer for shared contracts"
+                  disabled={!canEditContract}
                 />
               </div>
 
@@ -929,6 +997,7 @@ const ContractForm: React.FC = () => {
                 type="textarea"
                 placeholder="Enter contract remarks or additional notes"
                 description="Additional notes about this contract"
+                disabled={!canEditContract}
               />
             </CardContent>
           </Card>
@@ -980,19 +1049,20 @@ const ContractForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Contract Units - keeping existing implementation */}
-          <Card>
+          {/* Contract Units - keeping existing implementation with edit restrictions */}
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Building className="h-5 w-5 text-primary" />
                     Contract Units
+                    {isApproved && <Lock className="h-4 w-4 text-red-500" />}
                   </CardTitle>
                   <CardDescription>Add rental units to this contract with detailed terms</CardDescription>
                 </div>
-                <Button type="button" onClick={addUnit}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button type="button" onClick={addUnit} disabled={!canEditContract}>
+                  {canEditContract ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                   Add Unit
                 </Button>
               </div>
@@ -1002,8 +1072,8 @@ const ContractForm: React.FC = () => {
                 <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
                   <Building className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                   <p className="text-muted-foreground mb-4">No units have been added to this contract yet.</p>
-                  <Button type="button" variant="outline" onClick={addUnit}>
-                    <Plus className="mr-2 h-4 w-4" />
+                  <Button type="button" variant="outline" onClick={addUnit} disabled={!canEditContract}>
+                    {canEditContract ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                     Add Your First Unit
                   </Button>
                 </div>
@@ -1039,11 +1109,11 @@ const ContractForm: React.FC = () => {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-4 pb-4">
-                          {/* Unit form content - keeping existing implementation */}
+                          {/* Unit form content with disabled state for approved contracts */}
                           <div className="space-y-6">
                             <div className="flex justify-end">
-                              <Button type="button" variant="destructive" size="sm" onClick={() => unitsFieldArray.remove(index)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
+                              <Button type="button" variant="destructive" size="sm" onClick={() => unitsFieldArray.remove(index)} disabled={!canEditContract}>
+                                {canEditContract ? <Trash2 className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
                                 Remove Unit
                               </Button>
                             </div>
@@ -1059,19 +1129,57 @@ const ContractForm: React.FC = () => {
                               }))}
                               placeholder="Choose a unit"
                               required
+                              disabled={!canEditContract}
                             />
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <FormField form={form} name={`units.${index}.FromDate`} label="From Date" type="date" required description="Contract start date" />
-                              <FormField form={form} name={`units.${index}.ToDate`} label="To Date" type="date" required description="Contract end date" />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.FromDate`}
+                                label="From Date"
+                                type="date"
+                                required
+                                description="Contract start date"
+                                disabled={!canEditContract}
+                              />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.ToDate`}
+                                label="To Date"
+                                type="date"
+                                required
+                                description="Contract end date"
+                                disabled={!canEditContract}
+                              />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <FormField form={form} name={`units.${index}.FitoutFromDate`} label="Fitout From Date" type="date" description="Optional fitout start date" />
-                              <FormField form={form} name={`units.${index}.FitoutToDate`} label="Fitout To Date" type="date" description="Optional fitout end date" />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.FitoutFromDate`}
+                                label="Fitout From Date"
+                                type="date"
+                                description="Optional fitout start date"
+                                disabled={!canEditContract}
+                              />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.FitoutToDate`}
+                                label="Fitout To Date"
+                                type="date"
+                                description="Optional fitout end date"
+                                disabled={!canEditContract}
+                              />
                             </div>
 
-                            <FormField form={form} name={`units.${index}.CommencementDate`} label="Commencement Date" type="date" description="Date when occupancy begins" />
+                            <FormField
+                              form={form}
+                              name={`units.${index}.CommencementDate`}
+                              label="Commencement Date"
+                              type="date"
+                              description="Date when occupancy begins"
+                              disabled={!canEditContract}
+                            />
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                               <FormField form={form} name={`units.${index}.ContractDays`} label="Contract Days" type="number" disabled description="Auto-calculated" />
@@ -1080,7 +1188,16 @@ const ContractForm: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <FormField form={form} name={`units.${index}.RentPerMonth`} label="Monthly Rent" type="number" step="0.01" placeholder="0.00" required />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.RentPerMonth`}
+                                label="Monthly Rent"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                required
+                                disabled={!canEditContract}
+                              />
                               <FormField
                                 form={form}
                                 name={`units.${index}.RentPerYear`}
@@ -1090,6 +1207,7 @@ const ContractForm: React.FC = () => {
                                 placeholder="0.00"
                                 required
                                 description="Auto-calculated from monthly rent"
+                                disabled={!canEditContract}
                               />
                             </div>
 
@@ -1100,6 +1218,7 @@ const ContractForm: React.FC = () => {
                               type="number"
                               placeholder="12"
                               description="Payment frequency per year"
+                              disabled={!canEditContract}
                             />
 
                             <div className="space-y-4">
@@ -1108,10 +1227,18 @@ const ContractForm: React.FC = () => {
                                 <span className="font-medium">Rent-Free Period (Optional)</span>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <FormField form={form} name={`units.${index}.RentFreePeriodFrom`} label="Rent-Free From" type="date" />
-                                <FormField form={form} name={`units.${index}.RentFreePeriodTo`} label="Rent-Free To" type="date" />
+                                <FormField form={form} name={`units.${index}.RentFreePeriodFrom`} label="Rent-Free From" type="date" disabled={!canEditContract} />
+                                <FormField form={form} name={`units.${index}.RentFreePeriodTo`} label="Rent-Free To" type="date" disabled={!canEditContract} />
                               </div>
-                              <FormField form={form} name={`units.${index}.RentFreeAmount`} label="Rent-Free Amount" type="number" step="0.01" placeholder="0.00" />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.RentFreeAmount`}
+                                label="Rent-Free Amount"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                disabled={!canEditContract}
+                              />
                             </div>
 
                             <div className="space-y-4">
@@ -1132,6 +1259,7 @@ const ContractForm: React.FC = () => {
                                   })),
                                 ]}
                                 placeholder="Select applicable tax"
+                                disabled={!canEditContract}
                               />
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
@@ -1167,25 +1295,26 @@ const ContractForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Additional Charges - keeping existing implementation */}
-          <Card>
+          {/* Additional Charges with edit restrictions */}
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5 text-primary" />
                     Additional Charges
+                    {isApproved && <Lock className="h-4 w-4 text-red-500" />}
                   </CardTitle>
                   <CardDescription>Add extra charges like maintenance, parking, utilities, etc.</CardDescription>
                 </div>
-                <Button type="button" variant="outline" onClick={addCharge}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button type="button" variant="outline" onClick={addCharge} disabled={!canEditContract}>
+                  {canEditContract ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                   Add Charge
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {/* Additional charges content - keeping existing implementation */}
+              {/* Additional charges content with similar disabled state handling */}
               {chargesFieldArray.fields.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="mx-auto h-8 w-8 mb-4 text-muted-foreground/50" />
@@ -1216,8 +1345,8 @@ const ContractForm: React.FC = () => {
                         <AccordionContent className="px-4 pb-4">
                           <div className="space-y-6">
                             <div className="flex justify-end">
-                              <Button type="button" variant="destructive" size="sm" onClick={() => chargesFieldArray.remove(index)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
+                              <Button type="button" variant="destructive" size="sm" onClick={() => chargesFieldArray.remove(index)} disabled={!canEditContract}>
+                                {canEditContract ? <Trash2 className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
                                 Remove Charge
                               </Button>
                             </div>
@@ -1233,9 +1362,19 @@ const ContractForm: React.FC = () => {
                               }))}
                               placeholder="Choose a charge type"
                               required
+                              disabled={!canEditContract}
                             />
 
-                            <FormField form={form} name={`additionalCharges.${index}.Amount`} label="Charge Amount" type="number" step="0.01" placeholder="0.00" required />
+                            <FormField
+                              form={form}
+                              name={`additionalCharges.${index}.Amount`}
+                              label="Charge Amount"
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              required
+                              disabled={!canEditContract}
+                            />
 
                             <div className="space-y-4">
                               <div className="flex items-center gap-2">
@@ -1255,6 +1394,7 @@ const ContractForm: React.FC = () => {
                                   })),
                                 ]}
                                 placeholder="Select applicable tax"
+                                disabled={!canEditContract}
                               />
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
@@ -1298,19 +1438,20 @@ const ContractForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Attachments - New Implementation with Attachment Components */}
-          <Card>
+          {/* Attachments with edit restrictions */}
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="h-5 w-5 text-primary" />
                     Contract Documents
+                    {isApproved && <Lock className="h-4 w-4 text-red-500" />}
                   </CardTitle>
                   <CardDescription>Upload supporting documents and files for this contract</CardDescription>
                 </div>
-                <Button type="button" onClick={() => openAttachmentDialog()}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button type="button" onClick={() => openAttachmentDialog()} disabled={!canEditContract}>
+                  {canEditContract ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                   Add Document
                 </Button>
               </div>
@@ -1320,8 +1461,8 @@ const ContractForm: React.FC = () => {
                 <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
                   <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                   <p className="text-muted-foreground mb-4">No documents have been attached yet.</p>
-                  <Button type="button" variant="outline" onClick={() => openAttachmentDialog()}>
-                    <Plus className="mr-2 h-4 w-4" />
+                  <Button type="button" variant="outline" onClick={() => openAttachmentDialog()} disabled={!canEditContract}>
+                    {canEditContract ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                     Add Your First Document
                   </Button>
                 </div>
@@ -1351,11 +1492,11 @@ const ContractForm: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">{attachment.DocumentName}</span>
                                   <div className="flex items-center gap-2">
-                                    <Button type="button" variant="ghost" size="sm" onClick={() => openAttachmentDialog({ ...attachment, index })}>
-                                      <Edit2 className="h-4 w-4" />
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => openAttachmentDialog({ ...attachment, index })} disabled={!canEditContract}>
+                                      {canEditContract ? <Edit2 className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                                     </Button>
-                                    <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => removeAttachment(index)}>
-                                      <Trash2 className="h-4 w-4" />
+                                    <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => removeAttachment(index)} disabled={!canEditContract}>
+                                      {canEditContract ? <Trash2 className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                                     </Button>
                                   </div>
                                 </div>
@@ -1417,12 +1558,12 @@ const ContractForm: React.FC = () => {
                 <Button type="button" variant="outline" onClick={() => navigate("/contracts")} disabled={loading}>
                   Cancel
                 </Button>
-                <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
+                <Button type="button" variant="outline" onClick={handleReset} disabled={loading || !canEditContract}>
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading || unitsFieldArray.fields.length === 0}>
+              <Button type="submit" disabled={loading || unitsFieldArray.fields.length === 0 || !canEditContract}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
