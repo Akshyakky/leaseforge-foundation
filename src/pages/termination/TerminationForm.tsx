@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationForm.tsx
+// src/pages/termination/TerminationForm.tsx - Updated with Edit Mode Restrictions
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -7,7 +7,8 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent, PlusCircle, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent, PlusCircle, X, Lock, Shield, DollarSign } from "lucide-react";
 import { terminationService, ContractTermination } from "@/services/terminationService";
 import { contractService } from "@/services/contractService";
 import { docTypeService } from "@/services/docTypeService";
@@ -193,6 +194,10 @@ const TerminationForm: React.FC = () => {
   // Dialog states
   const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
+  // Check if editing is allowed
+  const canEditTermination = !termination || termination.ApprovalStatus !== "Approved";
+  const isApproved = termination?.ApprovalStatus === "Approved";
+
   // Initialize form
   const form = useForm<TerminationFormValues>({
     resolver: zodResolver(terminationSchema),
@@ -255,6 +260,13 @@ const TerminationForm: React.FC = () => {
 
           if (terminationData.termination) {
             setTermination(terminationData.termination);
+
+            // Check if termination is approved and prevent editing
+            if (terminationData.termination.ApprovalStatus === "Approved") {
+              toast.error("This termination has been approved and cannot be edited. Please reset approval status first if changes are needed.");
+              navigate(`/terminations/${terminationData.termination.TerminationID}`);
+              return;
+            }
 
             // Format data for form
             const formattedTermination = {
@@ -376,6 +388,11 @@ const TerminationForm: React.FC = () => {
 
   // Add a new deduction to the termination
   const addDeduction = () => {
+    if (!canEditTermination) {
+      toast.error("Cannot modify approved terminations.");
+      return;
+    }
+
     deductionsFieldArray.append({
       DeductionName: "",
       DeductionAmount: 0,
@@ -391,6 +408,11 @@ const TerminationForm: React.FC = () => {
 
   // Add a new attachment to the termination
   const addAttachment = () => {
+    if (!canEditTermination) {
+      toast.error("Cannot modify approved terminations.");
+      return;
+    }
+
     attachmentsFieldArray.append({
       DocTypeID: "",
       DocumentName: "",
@@ -458,6 +480,11 @@ const TerminationForm: React.FC = () => {
   const onSubmit = async (data: TerminationFormValues) => {
     if (!user) {
       toast.error("User information not available");
+      return;
+    }
+
+    if (!canEditTermination) {
+      toast.error("Cannot save changes to approved terminations.");
       return;
     }
 
@@ -548,6 +575,11 @@ const TerminationForm: React.FC = () => {
 
   // Reset form
   const handleReset = () => {
+    if (!canEditTermination) {
+      toast.error("Cannot reset approved terminations.");
+      return;
+    }
+
     if (isEdit && termination) {
       form.reset();
     } else {
@@ -700,7 +732,27 @@ const TerminationForm: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Termination" : "Create Termination"}</h1>
+        {isApproved && (
+          <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
+            <Lock className="h-3 w-3 mr-1" />
+            Approved - Protected from Editing
+          </Badge>
+        )}
       </div>
+
+      {/* Approval Warning Alert */}
+      {isApproved && (
+        <Alert className="border-l-4 border-l-red-500 bg-red-50">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            <div className="font-medium">Termination Editing Restricted</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              This termination has been approved and is protected from modifications. To make changes, a manager must first reset the approval status from the termination details
+              page.
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -713,9 +765,12 @@ const TerminationForm: React.FC = () => {
               </TabsList>
 
               <TabsContent value="details">
-                <Card>
+                <Card className={isApproved ? "opacity-60" : ""}>
                   <CardHeader>
-                    <CardTitle>{isEdit ? "Edit Termination" : "Create New Termination"}</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      {isEdit ? "Edit Termination" : "Create New Termination"}
+                      {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                    </CardTitle>
                     <CardDescription>{isEdit ? "Update termination information" : "Enter termination details"}</CardDescription>
                   </CardHeader>
 
@@ -728,9 +783,16 @@ const TerminationForm: React.FC = () => {
                           <FormItem>
                             <FormLabel>Termination No.</FormLabel>
                             <FormControl>
-                              <Input placeholder="Auto-generated if left empty" {...field} />
+                              <Input
+                                placeholder={isEdit ? "Termination number (cannot be changed)" : "Auto-generated if left empty"}
+                                {...field}
+                                disabled={isEdit || !canEditTermination}
+                                className={isEdit ? "bg-muted" : ""}
+                              />
                             </FormControl>
-                            <FormDescription>Optional. Leave blank for auto-generated termination number.</FormDescription>
+                            <FormDescription>
+                              {isEdit ? "Termination number cannot be modified in edit mode" : "Optional. Leave blank for auto-generated termination number."}
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -742,7 +804,7 @@ const TerminationForm: React.FC = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
+                            <Select value={field.value} onValueChange={field.onChange} disabled={!canEditTermination}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select status" />
@@ -774,7 +836,7 @@ const TerminationForm: React.FC = () => {
                               field.onChange(value);
                               fetchContractDetails(parseInt(value));
                             }}
-                            disabled={isNewFromContract}
+                            disabled={isNewFromContract || !canEditTermination}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -815,7 +877,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Termination Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -829,7 +891,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Notice Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -843,7 +905,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Effective Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -859,7 +921,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Vacating Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -873,7 +935,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Move Out Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -887,7 +949,7 @@ const TerminationForm: React.FC = () => {
                           <FormItem className="flex flex-col">
                             <FormLabel>Key Return Date</FormLabel>
                             <FormControl>
-                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -903,7 +965,13 @@ const TerminationForm: React.FC = () => {
                           <FormItem>
                             <FormLabel>Stay Period (Days)</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)} />
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                {...field}
+                                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                disabled={!canEditTermination}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -917,7 +985,13 @@ const TerminationForm: React.FC = () => {
                           <FormItem>
                             <FormLabel>Stay Period Amount</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                disabled={!canEditTermination}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -932,7 +1006,7 @@ const TerminationForm: React.FC = () => {
                         <FormItem>
                           <FormLabel>Termination Reason</FormLabel>
                           <FormControl>
-                            <Textarea placeholder="Enter reason for termination" className="min-h-[100px]" {...field} />
+                            <Textarea placeholder="Enter reason for termination" className="min-h-[100px]" {...field} disabled={!canEditTermination} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -947,7 +1021,13 @@ const TerminationForm: React.FC = () => {
                           <FormItem>
                             <FormLabel>Security Deposit Amount</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)} />
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)}
+                                disabled={!canEditTermination}
+                              />
                             </FormControl>
                             <FormDescription>The amount of security deposit to be refunded or deducted</FormDescription>
                             <FormMessage />
@@ -962,7 +1042,13 @@ const TerminationForm: React.FC = () => {
                           <FormItem>
                             <FormLabel>Adjustment Amount</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                {...field}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                disabled={!canEditTermination}
+                              />
                             </FormControl>
                             <FormDescription>Additional adjustments to apply</FormDescription>
                             <FormMessage />
@@ -978,7 +1064,7 @@ const TerminationForm: React.FC = () => {
                         <FormItem>
                           <FormLabel>Notes</FormLabel>
                           <FormControl>
-                            <Textarea placeholder="Enter additional notes" className="min-h-[100px]" {...field} />
+                            <Textarea placeholder="Enter additional notes" className="min-h-[100px]" {...field} disabled={!canEditTermination} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1025,6 +1111,7 @@ const TerminationForm: React.FC = () => {
                             // Recalculate to force form update
                             calculateFigures();
                           }}
+                          disabled={!canEditTermination}
                         >
                           <Calculator className="mr-2 h-4 w-4" />
                           Recalculate Figures
@@ -1036,14 +1123,17 @@ const TerminationForm: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="deductions">
-                <Card>
+                <Card className={isApproved ? "opacity-60" : ""}>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                      <CardTitle>Deductions</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        Deductions
+                        {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                      </CardTitle>
                       <CardDescription>Add deduction items to this termination</CardDescription>
                     </div>
-                    <Button type="button" onClick={addDeduction}>
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button type="button" onClick={addDeduction} disabled={!canEditTermination}>
+                      {canEditTermination ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                       Add Deduction
                     </Button>
                   </CardHeader>
@@ -1069,8 +1159,8 @@ const TerminationForm: React.FC = () => {
                             <AccordionContent className="px-4 pb-4">
                               <div className="space-y-4">
                                 <div className="flex justify-end">
-                                  <Button type="button" variant="destructive" size="sm" onClick={() => deductionsFieldArray.remove(index)}>
-                                    <Trash2 className="h-4 w-4 mr-1" />
+                                  <Button type="button" variant="destructive" size="sm" onClick={() => deductionsFieldArray.remove(index)} disabled={!canEditTermination}>
+                                    {canEditTermination ? <Trash2 className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
                                     Remove Deduction
                                   </Button>
                                 </div>
@@ -1078,7 +1168,7 @@ const TerminationForm: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
                                     <FormLabel>Choose from available deductions</FormLabel>
-                                    <Select onValueChange={(value) => handleDeductionSelect(parseInt(value), index)}>
+                                    <Select onValueChange={(value) => handleDeductionSelect(parseInt(value), index)} disabled={!canEditTermination}>
                                       <SelectTrigger>
                                         <SelectValue placeholder="Select a deduction" />
                                       </SelectTrigger>
@@ -1100,7 +1190,7 @@ const TerminationForm: React.FC = () => {
                                       <FormItem>
                                         <FormLabel>Deduction Name</FormLabel>
                                         <FormControl>
-                                          <Input placeholder="Enter deduction name" {...field} />
+                                          <Input placeholder="Enter deduction name" {...field} disabled={!canEditTermination} />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1115,7 +1205,7 @@ const TerminationForm: React.FC = () => {
                                     <FormItem>
                                       <FormLabel>Description</FormLabel>
                                       <FormControl>
-                                        <Textarea placeholder="Enter description" {...field} />
+                                        <Textarea placeholder="Enter description" {...field} disabled={!canEditTermination} />
                                       </FormControl>
                                       <FormMessage />
                                     </FormItem>
@@ -1129,7 +1219,13 @@ const TerminationForm: React.FC = () => {
                                     <FormItem>
                                       <FormLabel>Deduction Amount</FormLabel>
                                       <FormControl>
-                                        <Input type="number" placeholder="0.00" {...field} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)} />
+                                        <Input
+                                          type="number"
+                                          placeholder="0.00"
+                                          {...field}
+                                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)}
+                                          disabled={!canEditTermination}
+                                        />
                                       </FormControl>
                                       <FormMessage />
                                     </FormItem>
@@ -1142,6 +1238,7 @@ const TerminationForm: React.FC = () => {
                                   <Select
                                     value={form.watch(`deductions.${index}.TaxID`) ? form.watch(`deductions.${index}.TaxID`).toString() : "0"}
                                     onValueChange={(value) => handleTaxSelect(value, index)}
+                                    disabled={!canEditTermination}
                                   >
                                     <SelectTrigger className="w-full">
                                       <SelectValue placeholder="Select Tax" />
@@ -1182,7 +1279,7 @@ const TerminationForm: React.FC = () => {
                                             placeholder="0.00"
                                             {...field}
                                             onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                                            disabled={!!form.watch(`deductions.${index}.TaxID`)}
+                                            disabled={!!form.watch(`deductions.${index}.TaxID`) || !canEditTermination}
                                           />
                                         </FormControl>
                                         <FormMessage />
@@ -1234,14 +1331,17 @@ const TerminationForm: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="attachments">
-                <Card>
+                <Card className={isApproved ? "opacity-60" : ""}>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                      <CardTitle>Documents</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        Documents
+                        {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                      </CardTitle>
                       <CardDescription>Add document attachments to this termination</CardDescription>
                     </div>
-                    <Button type="button" onClick={addAttachment}>
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button type="button" onClick={addAttachment} disabled={!canEditTermination}>
+                      {canEditTermination ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                       Add Document
                     </Button>
                   </CardHeader>
@@ -1269,8 +1369,8 @@ const TerminationForm: React.FC = () => {
                             <AccordionContent className="px-4 pb-4">
                               <div className="space-y-4">
                                 <div className="flex justify-end">
-                                  <Button type="button" variant="destructive" size="sm" onClick={() => attachmentsFieldArray.remove(index)}>
-                                    <Trash2 className="h-4 w-4 mr-1" />
+                                  <Button type="button" variant="destructive" size="sm" onClick={() => attachmentsFieldArray.remove(index)} disabled={!canEditTermination}>
+                                    {canEditTermination ? <Trash2 className="h-4 w-4 mr-1" /> : <Lock className="h-4 w-4 mr-1" />}
                                     Remove Document
                                   </Button>
                                 </div>
@@ -1282,21 +1382,23 @@ const TerminationForm: React.FC = () => {
                                     <FormItem>
                                       <FormLabel className="flex items-center justify-between">
                                         <span>Document Type</span>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 text-xs"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            setIsDocTypeDialogOpen(true);
-                                          }}
-                                        >
-                                          <PlusCircle className="mr-1 h-3.5 w-3.5" />
-                                          Create New
-                                        </Button>
+                                        {canEditTermination && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 text-xs"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              setIsDocTypeDialogOpen(true);
+                                            }}
+                                          >
+                                            <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                                            Create New
+                                          </Button>
+                                        )}
                                       </FormLabel>
-                                      <Select value={field.value} onValueChange={field.onChange}>
+                                      <Select value={field.value} onValueChange={field.onChange} disabled={!canEditTermination}>
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Select document type" />
@@ -1322,29 +1424,31 @@ const TerminationForm: React.FC = () => {
                                     <FormItem>
                                       <FormLabel>Document Name</FormLabel>
                                       <FormControl>
-                                        <Input placeholder="Enter document name" {...field} />
+                                        <Input placeholder="Enter document name" {...field} disabled={!canEditTermination} />
                                       </FormControl>
                                       <FormMessage />
                                     </FormItem>
                                   )}
                                 />
 
-                                <CustomFormField
-                                  form={form}
-                                  name={`attachments.${index}.file`}
-                                  label="Upload File"
-                                  description="Upload a document file (PDF, Word, Excel, or images)"
-                                  type="file"
-                                  fileConfig={{
-                                    maxSize: 10 * 1024 * 1024, // 10MB
-                                    acceptedFileTypes: ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls",
-                                    onUpload: (file: File) => handleFileUpload(file, index),
-                                    onRemove: () => handleFileRemove(index),
-                                    isUploading,
-                                    uploadSuccess,
-                                    uploadError,
-                                  }}
-                                />
+                                {canEditTermination && (
+                                  <CustomFormField
+                                    form={form}
+                                    name={`attachments.${index}.file`}
+                                    label="Upload File"
+                                    description="Upload a document file (PDF, Word, Excel, or images)"
+                                    type="file"
+                                    fileConfig={{
+                                      maxSize: 10 * 1024 * 1024, // 10MB
+                                      acceptedFileTypes: ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls",
+                                      onUpload: (file: File) => handleFileUpload(file, index),
+                                      onRemove: () => handleFileRemove(index),
+                                      isUploading,
+                                      uploadSuccess,
+                                      uploadError,
+                                    }}
+                                  />
+                                )}
 
                                 {/* Show file preview if available */}
                                 {previewUrls[index] && (
@@ -1352,9 +1456,11 @@ const TerminationForm: React.FC = () => {
                                     <p className="text-xs text-muted-foreground mb-1">File preview:</p>
                                     <div className="flex items-center justify-between">
                                       <span className="text-sm">{form.watch(`attachments.${index}.file`)?.name}</span>
-                                      <Button type="button" variant="ghost" size="sm" onClick={() => handleFileRemove(index)}>
-                                        <X className="h-4 w-4" />
-                                      </Button>
+                                      {canEditTermination && (
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => handleFileRemove(index)}>
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1367,7 +1473,7 @@ const TerminationForm: React.FC = () => {
                                       <FormItem className="flex flex-col">
                                         <FormLabel>Issue Date</FormLabel>
                                         <FormControl>
-                                          <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} />
+                                          <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                                         </FormControl>
                                         <FormMessage />
                                       </FormItem>
@@ -1388,6 +1494,7 @@ const TerminationForm: React.FC = () => {
                                               const issueDate = form.watch(`attachments.${index}.DocIssueDate`);
                                               return issueDate ? date < issueDate : false;
                                             }}
+                                            readOnly={!canEditTermination}
                                           />
                                         </FormControl>
                                         <FormMessage />
@@ -1403,7 +1510,7 @@ const TerminationForm: React.FC = () => {
                                     <FormItem>
                                       <FormLabel>Remarks</FormLabel>
                                       <FormControl>
-                                        <Textarea placeholder="Enter remarks about this document" {...field} />
+                                        <Textarea placeholder="Enter remarks about this document" {...field} disabled={!canEditTermination} />
                                       </FormControl>
                                       <FormMessage />
                                     </FormItem>
@@ -1425,12 +1532,12 @@ const TerminationForm: React.FC = () => {
                 <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
                   Cancel
                 </Button>
-                <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
+                <Button type="button" variant="outline" onClick={handleReset} disabled={loading || !canEditTermination}>
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || !canEditTermination}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1453,8 +1560,5 @@ const TerminationForm: React.FC = () => {
     </div>
   );
 };
-
-// Import DollarSign icon
-import { DollarSign } from "lucide-react";
 
 export default TerminationForm;
