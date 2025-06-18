@@ -1,4 +1,4 @@
-// src/services/contractInvoiceService.ts
+// src/services/contractInvoiceService.ts - Updated with Approval Methods
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
 import {
   ContractInvoice,
@@ -9,6 +9,10 @@ import {
   BulkInvoicePostingRequest,
   PostingReversalRequest,
   InvoicePaymentRequest,
+  InvoiceApprovalRequest,
+  InvoiceRejectionRequest,
+  BulkInvoiceApprovalRequest,
+  BulkInvoiceRejectionRequest,
   UnpostedInvoice,
   InvoiceStatistics,
   PostingSummary,
@@ -22,6 +26,7 @@ import {
   InvoicePosting,
   CONTRACT_INVOICE_MODES,
   INVOICE_STATUS,
+  APPROVAL_STATUS,
   INVOICE_TYPE,
   SelectedInvoiceForPosting,
   InvoiceExportOptions,
@@ -46,11 +51,10 @@ export type {
 };
 
 /**
- * Service for contract invoice management operations
+ * Service for contract invoice management operations with approval workflow
  */
 class ContractInvoiceService extends BaseService {
   constructor() {
-    // Pass the endpoint to the base service
     super("/Master/ContractInvoiceManagement");
   }
 
@@ -58,11 +62,8 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Generate a single invoice from a contract
-   * @param data - The invoice generation request data
-   * @returns Response with status and newly created invoice details
    */
   async generateSingleInvoice(data: InvoiceGenerationRequest): Promise<InvoiceGenerationResponse> {
-    // Validate required parameters
     if (!data.CompanyID || !data.FiscalYearID) {
       return {
         Status: 0,
@@ -110,6 +111,9 @@ class ContractInvoiceService extends BaseService {
         DebitAccountID: data.DebitAccountID,
         CreditAccountID: data.CreditAccountID,
         PostingNarration: data.PostingNarration,
+        // Approval parameters
+        RequiresApproval: data.RequiresApproval,
+        ApprovalStatus: data.ApprovalStatus || APPROVAL_STATUS.PENDING,
       },
     };
 
@@ -133,11 +137,8 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Generate multiple invoices from contract units
-   * @param data - The batch generation request data
-   * @returns Response with generation status and counts
    */
   async generateBatchInvoices(data: InvoiceGenerationRequest): Promise<InvoiceGenerationResponse> {
-    // Validate required parameters
     if (!data.CompanyID || !data.FiscalYearID) {
       return {
         Status: 0,
@@ -152,7 +153,6 @@ class ContractInvoiceService extends BaseService {
       };
     }
 
-    // Prepare JSON data for contract units
     const contractUnitsJSON = JSON.stringify(data.ContractUnits);
 
     const request: BaseRequest = {
@@ -176,6 +176,9 @@ class ContractInvoiceService extends BaseService {
         AutoNumbering: data.AutoNumbering,
         BulkGeneration: data.BulkGeneration,
         ContractUnitsJSON: contractUnitsJSON,
+        // Approval parameters
+        RequiresApproval: data.RequiresApproval,
+        ApprovalStatus: data.ApprovalStatus || APPROVAL_STATUS.PENDING,
       },
     };
 
@@ -201,8 +204,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Update an existing invoice
-   * @param data - The invoice update request data
-   * @returns Response with status
    */
   async updateInvoice(data: InvoiceUpdateRequest): Promise<ApiResponse> {
     const request: BaseRequest = {
@@ -230,6 +231,10 @@ class ContractInvoiceService extends BaseService {
         NextInvoiceDate: data.NextInvoiceDate ? new Date(data.NextInvoiceDate).toISOString().split("T")[0] : undefined,
         Notes: data.Notes,
         InternalNotes: data.InternalNotes,
+        // Approval parameters
+        RequiresApproval: data.RequiresApproval,
+        ApprovalStatus: data.ApprovalStatus,
+        ApprovalComments: data.ApprovalComments,
       },
     };
 
@@ -251,7 +256,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Get all active invoices
-   * @returns Array of invoices
    */
   async getAllInvoices(): Promise<ContractInvoice[]> {
     const request: BaseRequest = {
@@ -265,8 +269,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Get an invoice by ID with related data
-   * @param invoiceId - The ID of the invoice to fetch
-   * @returns Invoice details with payments and postings
    */
   async getInvoiceById(invoiceId: number): Promise<{
     invoice: ContractInvoice | null;
@@ -295,8 +297,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Delete an invoice
-   * @param invoiceId - The ID of the invoice to delete
-   * @returns Response with status
    */
   async deleteInvoice(invoiceId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
@@ -322,12 +322,234 @@ class ContractInvoiceService extends BaseService {
     };
   }
 
+  // ========== Approval Methods ==========
+
+  /**
+   * Approve an invoice
+   */
+  async approveInvoice(data: InvoiceApprovalRequest): Promise<ApiResponse> {
+    if (!data.invoiceId) {
+      return {
+        Status: 0,
+        Message: "Invoice ID is required for approval.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_INVOICE_MODES.APPROVE_INVOICE,
+      parameters: {
+        LeaseInvoiceID: data.invoiceId,
+        ApprovalComments: data.approvalComments,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Invoice approved successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Invoice approved successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to approve invoice",
+    };
+  }
+
+  /**
+   * Reject an invoice
+   */
+  async rejectInvoice(data: InvoiceRejectionRequest): Promise<ApiResponse> {
+    if (!data.invoiceId) {
+      return {
+        Status: 0,
+        Message: "Invoice ID is required for rejection.",
+      };
+    }
+
+    if (!data.rejectionReason || data.rejectionReason.trim().length === 0) {
+      return {
+        Status: 0,
+        Message: "Rejection reason is required.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_INVOICE_MODES.REJECT_INVOICE,
+      parameters: {
+        LeaseInvoiceID: data.invoiceId,
+        RejectionReason: data.rejectionReason,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Invoice rejected successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Invoice rejected successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reject invoice",
+    };
+  }
+
+  /**
+   * Reset invoice approval status
+   */
+  async resetApprovalStatus(invoiceId: number): Promise<ApiResponse> {
+    if (!invoiceId) {
+      return {
+        Status: 0,
+        Message: "Invoice ID is required to reset approval status.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_INVOICE_MODES.RESET_INVOICE_APPROVAL,
+      parameters: {
+        LeaseInvoiceID: invoiceId,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Invoice approval status reset successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Invoice approval status reset successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reset invoice approval status",
+    };
+  }
+
+  /**
+   * Get invoices pending approval
+   */
+  async getInvoicesPendingApproval(companyId?: number, fiscalYearId?: number): Promise<ContractInvoice[]> {
+    const request: BaseRequest = {
+      mode: CONTRACT_INVOICE_MODES.GET_PENDING_APPROVAL_INVOICES,
+      parameters: {
+        CompanyID: companyId,
+        FiscalYearID: fiscalYearId,
+      },
+    };
+
+    const response = await this.execute<ContractInvoice[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Bulk approve invoices
+   */
+  async bulkApproveInvoices(data: BulkInvoiceApprovalRequest): Promise<ApiResponse> {
+    if (!data.invoiceIds || data.invoiceIds.length === 0) {
+      return {
+        Status: 0,
+        Message: "No invoices selected for approval.",
+      };
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    const promises = data.invoiceIds.map(async (invoiceId) => {
+      try {
+        const result = await this.approveInvoice({
+          invoiceId,
+          approvalComments: data.approvalComments,
+        });
+        if (result.Status === 1) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (error) {
+        failureCount++;
+      }
+    });
+
+    await Promise.all(promises);
+
+    if (successCount > 0) {
+      this.showSuccess(`${successCount} invoices approved successfully${failureCount > 0 ? `, ${failureCount} failed` : ""}`);
+    }
+
+    return {
+      Status: successCount > 0 ? 1 : 0,
+      Message: `${successCount} invoices approved successfully${failureCount > 0 ? `, ${failureCount} failed` : ""}`,
+      PostedCount: successCount,
+      FailedCount: failureCount,
+    };
+  }
+
+  /**
+   * Bulk reject invoices
+   */
+  async bulkRejectInvoices(data: BulkInvoiceRejectionRequest): Promise<ApiResponse> {
+    if (!data.invoiceIds || data.invoiceIds.length === 0) {
+      return {
+        Status: 0,
+        Message: "No invoices selected for rejection.",
+      };
+    }
+
+    if (!data.rejectionReason || data.rejectionReason.trim().length === 0) {
+      return {
+        Status: 0,
+        Message: "Rejection reason is required for bulk rejection.",
+      };
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    const promises = data.invoiceIds.map(async (invoiceId) => {
+      try {
+        const result = await this.rejectInvoice({
+          invoiceId,
+          rejectionReason: data.rejectionReason,
+        });
+        if (result.Status === 1) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (error) {
+        failureCount++;
+      }
+    });
+
+    await Promise.all(promises);
+
+    if (successCount > 0) {
+      this.showSuccess(`${successCount} invoices rejected successfully${failureCount > 0 ? `, ${failureCount} failed` : ""}`);
+    }
+
+    return {
+      Status: successCount > 0 ? 1 : 0,
+      Message: `${successCount} invoices rejected successfully${failureCount > 0 ? `, ${failureCount} failed` : ""}`,
+      PostedCount: successCount,
+      FailedCount: failureCount,
+    };
+  }
+
   // ========== Search and Filter Methods ==========
 
   /**
    * Search for invoices with filters
-   * @param params - Search parameters
-   * @returns Array of matching invoices
    */
   async searchInvoices(params: InvoiceSearchParams = {}): Promise<ContractInvoice[]> {
     const request: BaseRequest = {
@@ -336,6 +558,7 @@ class ContractInvoiceService extends BaseService {
         SearchText: params.searchText,
         FilterInvoiceStatus: params.FilterInvoiceStatus,
         FilterInvoiceType: params.FilterInvoiceType,
+        FilterApprovalStatus: params.FilterApprovalStatus,
         FilterPropertyID: params.FilterPropertyID,
         FilterUnitID: params.FilterUnitID,
         FilterCustomerID: params.FilterCustomerID,
@@ -347,6 +570,7 @@ class ContractInvoiceService extends BaseService {
         FilterPostedOnly: params.FilterPostedOnly,
         FilterUnpostedOnly: params.FilterUnpostedOnly,
         FilterOverdueOnly: params.FilterOverdueOnly,
+        FilterPendingApprovalOnly: params.FilterPendingApprovalOnly,
         CompanyID: params.CompanyID,
         FiscalYearID: params.FiscalYearID,
       },
@@ -358,9 +582,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Change invoice status
-   * @param invoiceId - The ID of the invoice
-   * @param status - The new status
-   * @returns Response with status
    */
   async changeInvoiceStatus(invoiceId: number, status: string): Promise<ApiResponse> {
     const request: BaseRequest = {
@@ -391,9 +612,6 @@ class ContractInvoiceService extends BaseService {
 
   /**
    * Get invoice statistics and dashboard data
-   * @param companyId - Optional company filter
-   * @param fiscalYearId - Optional fiscal year filter
-   * @returns Invoice statistics
    */
   async getInvoiceStatistics(companyId?: number, fiscalYearId?: number): Promise<InvoiceStatistics> {
     const request: BaseRequest = {
@@ -409,15 +627,17 @@ class ContractInvoiceService extends BaseService {
     if (response.success) {
       return {
         statusCounts: response.table1 || [],
-        overdueInvoices: Array.isArray(response.table2)
-          ? response.table2[0] || { OverdueCount: 0, OverdueAmount: 0, AvgDaysOverdue: 0 }
-          : response.table2 || { OverdueCount: 0, OverdueAmount: 0, AvgDaysOverdue: 0 },
-        monthlyTrends: response.table3 || [],
+        approvalStatusCounts: response.table2 || [],
+        overdueInvoices: Array.isArray(response.table3)
+          ? response.table3[0] || { OverdueCount: 0, OverdueAmount: 0, AvgDaysOverdue: 0 }
+          : response.table3 || { OverdueCount: 0, OverdueAmount: 0, AvgDaysOverdue: 0 },
+        monthlyTrends: response.table4 || [],
       };
     }
 
     return {
       statusCounts: [],
+      approvalStatusCounts: [],
       overdueInvoices: { OverdueCount: 0, OverdueAmount: 0, AvgDaysOverdue: 0 },
       monthlyTrends: [],
     };
@@ -494,13 +714,35 @@ class ContractInvoiceService extends BaseService {
     return response.success ? response.data || [] : [];
   }
 
+  // ========== Utility Methods ==========
+
   /**
-   * Post a single invoice
-   * @param postingData - The posting request data
-   * @returns Response with posting status
+   * Check if invoice can be edited based on approval status
    */
+  canEditInvoice(invoice: ContractInvoice): boolean {
+    return invoice.ApprovalStatus !== APPROVAL_STATUS.APPROVED;
+  }
+
+  /**
+   * Check if invoice can be deleted based on approval status and posting status
+   */
+  canDeleteInvoice(invoice: ContractInvoice): boolean {
+    return invoice.ApprovalStatus !== APPROVAL_STATUS.APPROVED && !invoice.IsPosted;
+  }
+
+  /**
+   * Check if invoice can be posted based on approval status
+   */
+  canPostInvoice(invoice: ContractInvoice): boolean {
+    return invoice.ApprovalStatus === APPROVAL_STATUS.APPROVED && !invoice.IsPosted;
+  }
+
+  // ========== Existing Methods (Keep unchanged) ==========
+  // Note: Include all the existing methods from the original service
+  // such as posting methods, payment methods, validation methods, etc.
+  // They remain the same but should use the updated types
+
   async postSingleInvoice(postingData: InvoicePostingRequest): Promise<PostingResponse> {
-    // Validate required parameters
     if (!postingData.LeaseInvoiceID || !postingData.PostingDate || !postingData.DebitAccountID || !postingData.CreditAccountID) {
       return {
         Status: 0,
@@ -635,13 +877,6 @@ class ContractInvoiceService extends BaseService {
     };
   }
 
-  // ========== Payment Methods ==========
-
-  /**
-   * Record payment against an invoice
-   * @param paymentData - The payment request data
-   * @returns Response with payment status
-   */
   async recordPayment(paymentData: InvoicePaymentRequest): Promise<ApiResponse> {
     if (!paymentData.LeaseInvoiceID || !paymentData.PaymentAmount || paymentData.PaymentAmount <= 0) {
       return {
@@ -678,7 +913,6 @@ class ContractInvoiceService extends BaseService {
       Message: response.message || "Failed to record payment",
     };
   }
-
   // ========== Validation Methods ==========
 
   /**

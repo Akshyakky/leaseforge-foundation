@@ -1,4 +1,4 @@
-// src/types/contractInvoiceTypes.ts
+// src/types/contractInvoiceTypes.ts - Updated with Approval Features
 
 export interface BaseEntity {
   CreatedBy?: string;
@@ -45,6 +45,18 @@ export interface ContractInvoice extends BaseEntity {
   NextInvoiceDate?: string | Date;
   Notes?: string;
   InternalNotes?: string;
+
+  // Approval Fields
+  ApprovalStatus: string; // 'Pending', 'Approved', 'Rejected'
+  RequiresApproval: boolean;
+  ApprovedID?: number;
+  ApprovedBy?: string;
+  ApprovedOn?: string | Date;
+  ApprovalComments?: string;
+  RejectedID?: number;
+  RejectedBy?: string;
+  RejectedOn?: string | Date;
+  RejectionReason?: string;
 
   // Joined fields for display
   CustomerName?: string;
@@ -98,6 +110,28 @@ export interface InvoicePosting extends BaseEntity {
   ReversalReason?: string;
 }
 
+// ========== Approval Types ==========
+
+export interface InvoiceApprovalRequest {
+  invoiceId: number;
+  approvalComments?: string;
+}
+
+export interface InvoiceRejectionRequest {
+  invoiceId: number;
+  rejectionReason: string;
+}
+
+export interface BulkInvoiceApprovalRequest {
+  invoiceIds: number[];
+  approvalComments?: string;
+}
+
+export interface BulkInvoiceRejectionRequest {
+  invoiceIds: number[];
+  rejectionReason: string;
+}
+
 // ========== Generation and Request Types ==========
 
 export interface ContractUnitForInvoice {
@@ -127,6 +161,10 @@ export interface InvoiceGenerationRequest {
   InvoiceStatus?: string;
   AutoNumbering?: boolean;
   BulkGeneration?: boolean;
+
+  // Approval settings
+  RequiresApproval?: boolean;
+  ApprovalStatus?: string;
 
   // For single generation
   ContractID?: number;
@@ -187,6 +225,11 @@ export interface InvoiceUpdateRequest {
   NextInvoiceDate?: string | Date;
   Notes?: string;
   InternalNotes?: string;
+
+  // Approval fields
+  RequiresApproval?: boolean;
+  ApprovalStatus?: string;
+  ApprovalComments?: string;
 }
 
 // ========== Posting Types ==========
@@ -244,6 +287,7 @@ export interface InvoiceSearchParams {
   searchText?: string;
   FilterInvoiceStatus?: string;
   FilterInvoiceType?: string;
+  FilterApprovalStatus?: string;
   FilterPropertyID?: number;
   FilterUnitID?: number;
   FilterCustomerID?: number;
@@ -255,6 +299,7 @@ export interface InvoiceSearchParams {
   FilterPostedOnly?: boolean;
   FilterUnpostedOnly?: boolean;
   FilterOverdueOnly?: boolean;
+  FilterPendingApprovalOnly?: boolean;
   CompanyID?: number;
   FiscalYearID?: number;
 }
@@ -264,6 +309,13 @@ export interface InvoiceSearchParams {
 export interface InvoiceStatistics {
   statusCounts: {
     InvoiceStatus: string;
+    InvoiceCount: number;
+    TotalAmount: number;
+    PaidAmount: number;
+    BalanceAmount: number;
+  }[];
+  approvalStatusCounts: {
+    ApprovalStatus: string;
     InvoiceCount: number;
     TotalAmount: number;
     PaidAmount: number;
@@ -479,6 +531,12 @@ export const INVOICE_STATUS = {
   VOIDED: "Voided",
 } as const;
 
+export const APPROVAL_STATUS = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+} as const;
+
 export const INVOICE_TYPE = {
   RENT: "Rent",
   SECURITY_DEPOSIT: "Security Deposit",
@@ -517,9 +575,14 @@ export const CONTRACT_INVOICE_MODES = {
   POST_MULTIPLE_INVOICES: 11,
   REVERSE_INVOICE_POSTING: 12,
   RECORD_PAYMENT: 13,
+  APPROVE_INVOICE: 14,
+  REJECT_INVOICE: 15,
+  RESET_INVOICE_APPROVAL: 16,
+  GET_PENDING_APPROVAL_INVOICES: 17,
 } as const;
 
 export type InvoiceStatus = (typeof INVOICE_STATUS)[keyof typeof INVOICE_STATUS];
+export type ApprovalStatus = (typeof APPROVAL_STATUS)[keyof typeof APPROVAL_STATUS];
 export type InvoiceType = (typeof INVOICE_TYPE)[keyof typeof INVOICE_TYPE];
 export type GenerationMode = (typeof GENERATION_MODE)[keyof typeof GENERATION_MODE];
 export type PaymentMethod = (typeof PAYMENT_METHOD)[keyof typeof PAYMENT_METHOD];
