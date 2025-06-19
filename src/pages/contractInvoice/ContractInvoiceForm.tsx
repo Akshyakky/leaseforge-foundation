@@ -1,4 +1,4 @@
-// src/pages/contractInvoice/ContractInvoiceForm.tsx
+// src/pages/contractInvoice/ContractInvoiceForm.tsx - Updated with Approval Protection
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ArrowLeft,
   Loader2,
@@ -32,6 +33,8 @@ import {
   PlusCircle,
   Send,
   Copy,
+  Lock,
+  Shield,
 } from "lucide-react";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
 import { contractService } from "@/services/contractService";
@@ -54,6 +57,7 @@ import {
   INVOICE_STATUS,
   INVOICE_TYPE,
   GENERATION_MODE,
+  APPROVAL_STATUS,
 } from "@/types/contractInvoiceTypes";
 
 // Enhanced schema for invoice generation form
@@ -129,6 +133,10 @@ const ContractInvoiceForm: React.FC = () => {
 
   // UI state
   const [showAutoPostOptions, setShowAutoPostOptions] = useState(false);
+
+  // Check if editing is allowed based on approval status
+  const canEditInvoice = !invoice || invoice.ApprovalStatus !== APPROVAL_STATUS.APPROVED;
+  const isApproved = invoice?.ApprovalStatus === APPROVAL_STATUS.APPROVED;
 
   // Initialize form
   const form = useForm<InvoiceFormValues>({
@@ -239,6 +247,14 @@ const ContractInvoiceForm: React.FC = () => {
 
           if (invoiceData.invoice) {
             setInvoice(invoiceData.invoice);
+
+            // Check if invoice is approved and prevent editing
+            if (invoiceData.invoice.ApprovalStatus === APPROVAL_STATUS.APPROVED) {
+              toast.error("This invoice has been approved and cannot be edited. Please reset approval status first if changes are needed.");
+              navigate(`/invoices/${invoiceData.invoice.LeaseInvoiceID}`);
+              return;
+            }
+
             populateFormWithInvoiceData(invoiceData.invoice);
           } else {
             toast.error("Invoice not found");
@@ -587,6 +603,11 @@ const ContractInvoiceForm: React.FC = () => {
 
   // Add new contract unit
   const addContractUnit = () => {
+    if (!canEditInvoice) {
+      toast.error("Cannot modify approved invoices.");
+      return;
+    }
+
     const fromDate = new Date();
     const toDate = addDays(fromDate, 29); // Default to 30 days
 
@@ -612,6 +633,11 @@ const ContractInvoiceForm: React.FC = () => {
       return;
     }
 
+    if (!canEditInvoice) {
+      toast.error("Cannot save changes to approved invoices.");
+      return;
+    }
+
     // Validate form before submission
     const validationErrors = validateFormBeforeSubmit(data);
     if (validationErrors.length > 0) {
@@ -626,7 +652,6 @@ const ContractInvoiceForm: React.FC = () => {
 
       // Prepare contract units data
       const contractUnitsData: ContractUnitForInvoice[] = data.contractUnits.map((unit) => ({
-        //ContractUnitID: unit.ContractUnitID || 0,
         ContractUnitID: parseInt(unit.UnitID) || 0,
         PeriodFromDate: unit.PeriodFromDate,
         PeriodToDate: unit.PeriodToDate,
@@ -748,6 +773,11 @@ const ContractInvoiceForm: React.FC = () => {
 
   // Reset form
   const handleReset = () => {
+    if (!canEditInvoice) {
+      toast.error("Cannot reset approved invoices.");
+      return;
+    }
+
     if (isEdit && invoice) {
       form.reset();
     } else {
@@ -814,16 +844,36 @@ const ContractInvoiceForm: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-semibold">{isEdit ? "Edit Invoice" : "Generate Invoice"}</h1>
+        {isApproved && (
+          <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
+            <Lock className="h-3 w-3 mr-1" />
+            Approved - Protected from Editing
+          </Badge>
+        )}
       </div>
+
+      {/* Approval Warning Alert */}
+      {isApproved && (
+        <Alert className="border-l-4 border-l-red-500 bg-red-50">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            <div className="font-medium">Invoice Editing Restricted</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              This invoice has been approved and is protected from modifications. To make changes, a manager must first reset the approval status from the invoice details page.
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Invoice Information */}
-          <Card>
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Invoice Information
+                {isApproved && <Lock className="h-4 w-4 text-red-500" />}
               </CardTitle>
               <CardDescription>Enter the basic invoice details and configuration</CardDescription>
             </CardHeader>
@@ -833,11 +883,13 @@ const ContractInvoiceForm: React.FC = () => {
                   form={form}
                   name="InvoiceNo"
                   label="Invoice Number"
-                  placeholder="Auto-generated if left empty"
-                  description="Leave blank for auto-generated invoice number"
+                  placeholder={isEdit ? "Invoice number (cannot be changed)" : "Auto-generated if left empty"}
+                  description={isEdit ? "Invoice number cannot be modified in edit mode" : "Leave blank for auto-generated invoice number"}
+                  disabled={isEdit || !canEditInvoice}
+                  className={isEdit ? "bg-muted" : ""}
                 />
-                <FormField form={form} name="InvoiceDate" label="Invoice Date" type="date" required description="Date of invoice generation" />
-                <FormField form={form} name="DueDate" label="Due Date" type="date" description="Payment due date (auto-calculated from payment terms)" />
+                <FormField form={form} name="InvoiceDate" label="Invoice Date" type="date" required description="Date of invoice generation" disabled={!canEditInvoice} />
+                <FormField form={form} name="DueDate" label="Due Date" type="date" description="Payment due date (auto-calculated from payment terms)" disabled={!canEditInvoice} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -852,6 +904,7 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select invoice type"
                   required
+                  disabled={!canEditInvoice}
                 />
                 <FormField
                   form={form}
@@ -864,6 +917,7 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select status"
                   required
+                  disabled={!canEditInvoice}
                 />
                 <FormField
                   form={form}
@@ -877,6 +931,7 @@ const ContractInvoiceForm: React.FC = () => {
                   placeholder="Select generation mode"
                   required
                   description="Single for one unit, Multiple for batch generation"
+                  disabled={!canEditInvoice}
                 />
               </div>
 
@@ -893,6 +948,7 @@ const ContractInvoiceForm: React.FC = () => {
                   placeholder="Select company"
                   required
                   description="Company for the invoice"
+                  disabled={!canEditInvoice}
                 />
                 <FormField
                   form={form}
@@ -906,6 +962,7 @@ const ContractInvoiceForm: React.FC = () => {
                   placeholder="Select fiscal year"
                   required
                   description="Fiscal year for the invoice"
+                  disabled={!canEditInvoice}
                 />
               </div>
 
@@ -921,6 +978,7 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select customer (optional for batch)"
                   description="Customer for the invoice"
+                  disabled={!canEditInvoice}
                 />
                 <FormField
                   form={form}
@@ -933,11 +991,21 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select currency"
                   description="Invoice currency"
+                  disabled={!canEditInvoice}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField form={form} name="ExchangeRate" label="Exchange Rate" type="number" step="0.0001" placeholder="1.0000" description="Exchange rate to base currency" />
+                <FormField
+                  form={form}
+                  name="ExchangeRate"
+                  label="Exchange Rate"
+                  type="number"
+                  step="0.0001"
+                  placeholder="1.0000"
+                  description="Exchange rate to base currency"
+                  disabled={!canEditInvoice}
+                />
                 <FormField
                   form={form}
                   name="PaymentTermID"
@@ -949,6 +1017,7 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select payment terms"
                   description="Payment terms for due date calculation"
+                  disabled={!canEditInvoice}
                 />
                 <FormField
                   form={form}
@@ -961,6 +1030,7 @@ const ContractInvoiceForm: React.FC = () => {
                   }))}
                   placeholder="Select default tax"
                   description="Default tax rate for units"
+                  disabled={!canEditInvoice}
                 />
               </div>
 
@@ -968,7 +1038,12 @@ const ContractInvoiceForm: React.FC = () => {
 
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="auto-numbering" checked={form.watch("AutoNumbering")} onCheckedChange={(checked) => form.setValue("AutoNumbering", checked as boolean)} />
+                  <Checkbox
+                    id="auto-numbering"
+                    checked={form.watch("AutoNumbering")}
+                    onCheckedChange={(checked) => form.setValue("AutoNumbering", checked as boolean)}
+                    disabled={!canEditInvoice}
+                  />
                   <Label htmlFor="auto-numbering">Auto-generate invoice number</Label>
                 </div>
 
@@ -980,12 +1055,18 @@ const ContractInvoiceForm: React.FC = () => {
                       form.setValue("AutoPost", checked as boolean);
                       setShowAutoPostOptions(checked as boolean);
                     }}
+                    disabled={!canEditInvoice}
                   />
                   <Label htmlFor="auto-post">Auto-post to general ledger</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="is-recurring" checked={form.watch("IsRecurring")} onCheckedChange={(checked) => form.setValue("IsRecurring", checked as boolean)} />
+                  <Checkbox
+                    id="is-recurring"
+                    checked={form.watch("IsRecurring")}
+                    onCheckedChange={(checked) => form.setValue("IsRecurring", checked as boolean)}
+                    disabled={!canEditInvoice}
+                  />
                   <Label htmlFor="is-recurring">Recurring invoice</Label>
                 </div>
               </div>
@@ -995,7 +1076,7 @@ const ContractInvoiceForm: React.FC = () => {
                 <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
                   <h4 className="font-medium">Auto-Posting Configuration</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField form={form} name="PostingDate" label="Posting Date" type="date" description="Date for posting entries" />
+                    <FormField form={form} name="PostingDate" label="Posting Date" type="date" description="Date for posting entries" disabled={!canEditInvoice} />
                     <FormField
                       form={form}
                       name="DebitAccountID"
@@ -1009,6 +1090,7 @@ const ContractInvoiceForm: React.FC = () => {
                         }))}
                       placeholder="Select debit account"
                       description="Account to debit (typically Accounts Receivable)"
+                      disabled={!canEditInvoice}
                     />
                     <FormField
                       form={form}
@@ -1023,6 +1105,7 @@ const ContractInvoiceForm: React.FC = () => {
                         }))}
                       placeholder="Select credit account"
                       description="Account to credit (typically Revenue account)"
+                      disabled={!canEditInvoice}
                     />
                   </div>
                   <FormField
@@ -1032,6 +1115,7 @@ const ContractInvoiceForm: React.FC = () => {
                     type="textarea"
                     placeholder="Enter posting narration"
                     description="Description for the posting entries"
+                    disabled={!canEditInvoice}
                   />
                 </div>
               )}
@@ -1054,14 +1138,30 @@ const ContractInvoiceForm: React.FC = () => {
                       ]}
                       placeholder="Select pattern"
                       description="How often to generate invoice"
+                      disabled={!canEditInvoice}
                     />
-                    <FormField form={form} name="NextInvoiceDate" label="Next Invoice Date" type="date" description="Date for next automatic generation" />
+                    <FormField
+                      form={form}
+                      name="NextInvoiceDate"
+                      label="Next Invoice Date"
+                      type="date"
+                      description="Date for next automatic generation"
+                      disabled={!canEditInvoice}
+                    />
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField form={form} name="Notes" label="Notes" type="textarea" placeholder="Enter invoice notes" description="Notes visible to customer" />
+                <FormField
+                  form={form}
+                  name="Notes"
+                  label="Notes"
+                  type="textarea"
+                  placeholder="Enter invoice notes"
+                  description="Notes visible to customer"
+                  disabled={!canEditInvoice}
+                />
                 <FormField
                   form={form}
                   name="InternalNotes"
@@ -1069,6 +1169,7 @@ const ContractInvoiceForm: React.FC = () => {
                   type="textarea"
                   placeholder="Enter internal notes"
                   description="Internal notes (not visible to customer)"
+                  disabled={!canEditInvoice}
                 />
               </div>
             </CardContent>
@@ -1122,18 +1223,19 @@ const ContractInvoiceForm: React.FC = () => {
           </Card>
 
           {/* Contract Units */}
-          <Card>
+          <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Building className="h-5 w-5 text-primary" />
                     Contract Units
+                    {isApproved && <Lock className="h-4 w-4 text-red-500" />}
                   </CardTitle>
                   <CardDescription>Add units to be invoiced with detailed period and amount information</CardDescription>
                 </div>
-                <Button type="button" onClick={addContractUnit}>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button type="button" onClick={addContractUnit} disabled={!canEditInvoice}>
+                  {canEditInvoice ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                   Add Unit
                 </Button>
               </div>
@@ -1143,8 +1245,8 @@ const ContractInvoiceForm: React.FC = () => {
                 <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
                   <Building className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                   <p className="text-muted-foreground mb-4">No units have been added to this invoice yet.</p>
-                  <Button type="button" variant="outline" onClick={addContractUnit}>
-                    <Plus className="mr-2 h-4 w-4" />
+                  <Button type="button" variant="outline" onClick={addContractUnit} disabled={!canEditInvoice}>
+                    {canEditInvoice ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                     Add Your First Unit
                   </Button>
                 </div>
@@ -1186,8 +1288,8 @@ const ContractInvoiceForm: React.FC = () => {
                         <AccordionContent className="px-4 pb-4">
                           <div className="space-y-6">
                             <div className="flex justify-end">
-                              <Button type="button" variant="destructive" size="sm" onClick={() => contractUnitsFieldArray.remove(index)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
+                              <Button type="button" variant="destructive" size="sm" onClick={() => contractUnitsFieldArray.remove(index)} disabled={!canEditInvoice}>
+                                {canEditInvoice ? <Trash2 className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
                                 Remove Unit
                               </Button>
                             </div>
@@ -1204,6 +1306,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 }))}
                                 placeholder="Choose a unit"
                                 required
+                                disabled={!canEditInvoice}
                               />
                               <FormField
                                 form={form}
@@ -1216,6 +1319,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 }))}
                                 placeholder="Select contract"
                                 description="Auto-filled when unit is selected"
+                                disabled={!canEditInvoice}
                               />
                             </div>
 
@@ -1227,6 +1331,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 type="date"
                                 required
                                 description="Invoice period start date"
+                                disabled={!canEditInvoice}
                               />
                               <FormField
                                 form={form}
@@ -1235,6 +1340,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 type="date"
                                 required
                                 description="Invoice period end date"
+                                disabled={!canEditInvoice}
                               />
                             </div>
 
@@ -1248,6 +1354,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 placeholder="0.00"
                                 required
                                 description="Base invoice amount (auto-calculated)"
+                                disabled={!canEditInvoice}
                               />
                               <FormField
                                 form={form}
@@ -1257,6 +1364,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 description="Tax percentage"
+                                disabled={!canEditInvoice}
                               />
                               <FormField
                                 form={form}
@@ -1279,6 +1387,7 @@ const ContractInvoiceForm: React.FC = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 description="Discount amount (if any)"
+                                disabled={!canEditInvoice}
                               />
                               <FormField
                                 form={form}
@@ -1329,12 +1438,12 @@ const ContractInvoiceForm: React.FC = () => {
                 <Button type="button" variant="outline" onClick={() => navigate("/invoices")} disabled={loading}>
                   Cancel
                 </Button>
-                <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
+                <Button type="button" variant="outline" onClick={handleReset} disabled={loading || !canEditInvoice}>
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading || contractUnitsFieldArray.fields.length === 0}>
+              <Button type="submit" disabled={loading || contractUnitsFieldArray.fields.length === 0 || !canEditInvoice}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
