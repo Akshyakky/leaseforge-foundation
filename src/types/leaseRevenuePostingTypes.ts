@@ -1,13 +1,15 @@
 // src/types/leaseRevenuePostingTypes.ts
 
 export interface BaseLeaseRevenue {
+  CreatedID?: number;
   CreatedBy?: string;
   CreatedOn?: string;
+  UpdatedID?: number;
   UpdatedBy?: string;
   UpdatedOn?: string;
   DeletedBy?: string;
   DeletedOn?: string;
-  RecordStatus?: boolean;
+  RecordStatus?: number;
 }
 
 /**
@@ -67,9 +69,22 @@ export interface PostedLeaseRevenueTransaction extends BaseLeaseRevenue {
   CreditAccountName: string;
   IsReversed: boolean;
   ReversalReason?: string;
+
+  // Approval workflow fields
+  ApprovalStatus?: ApprovalStatus;
+  RequiresApproval?: boolean;
+  ApprovalComments?: string;
+  ApprovedBy?: number;
+  ApprovedOn?: string | Date;
+  RejectedBy?: number;
+  RejectedOn?: string | Date;
+  RejectionReason?: string;
+  ApprovedByName?: string;
+  RejectedByName?: string;
+
   CompanyID: number;
   FiscalYearID: number;
-  PostingStatus: string;
+  PostingStatus: PostingStatus;
 }
 
 /**
@@ -130,6 +145,7 @@ export interface PostingSummary {
   TotalCreditAmount: number;
   InvoiceCount: number;
   ReceiptCount: number;
+  ApprovalStatus: ApprovalStatus;
   CompanyID: number;
   FiscalYearID: number;
 }
@@ -151,6 +167,7 @@ export interface LeaseRevenueFilters {
   IncludePMUnits?: boolean;
   ShowUnpostedOnly?: boolean;
   ShowPostedOnly?: boolean;
+  FilterApprovalStatus?: ApprovalStatus;
 }
 
 /**
@@ -166,7 +183,12 @@ export interface PostingRequest {
   ExchangeRate?: number;
   CompanyID: number;
   FiscalYearID: number;
+  ApprovalStatus?: ApprovalStatus;
+  RequiresApproval?: boolean;
+  ApprovalComments?: string;
   SelectedTransactions: SelectedTransaction[];
+  CurrentUserID?: number;
+  CurrentUserName?: string;
 }
 
 /**
@@ -175,6 +197,20 @@ export interface PostingRequest {
 export interface ReversalRequest {
   PostingID: number;
   ReversalReason: string;
+  CurrentUserID?: number;
+  CurrentUserName?: string;
+}
+
+/**
+ * Interface for approval request parameters
+ */
+export interface ApprovalRequest {
+  PostingID: number;
+  ApprovalAction: ApprovalAction;
+  ApprovalComments?: string;
+  RejectionReason?: string;
+  CurrentUserID?: number;
+  CurrentUserName?: string;
 }
 
 /**
@@ -186,6 +222,14 @@ export interface PostingResponse {
   PostedCount?: number;
   FailedCount?: number;
   TotalAmount?: number;
+}
+
+/**
+ * Interface for approval response
+ */
+export interface ApprovalResponse {
+  success: boolean;
+  message: string;
 }
 
 /**
@@ -281,6 +325,8 @@ export interface LeaseRevenueStatistics {
   TotalUnpostedAmount: number;
   TotalPostedTransactions: number;
   TotalPostedAmount: number;
+  PendingApprovalTransactions: number;
+  PendingApprovalAmount: number;
   TransactionsByType: {
     TransactionType: string;
     Count: number;
@@ -288,6 +334,11 @@ export interface LeaseRevenueStatistics {
   }[];
   PostingsByDate: {
     PostingDate: string;
+    Count: number;
+    Amount: number;
+  }[];
+  ApprovalsByStatus: {
+    ApprovalStatus: string;
     Count: number;
     Amount: number;
   }[];
@@ -315,21 +366,6 @@ export interface ValidationResponse {
 }
 
 /**
- * Type for posting status
- */
-export type PostingStatus = "Draft" | "Posted" | "Reversed" | "Error";
-
-/**
- * Type for transaction status
- */
-export type TransactionStatus = "Active" | "Approved" | "Cancelled" | "Expired";
-
-/**
- * Type for payment status
- */
-export type PaymentStatus = "Pending" | "Cleared" | "Deposited" | "Cancelled";
-
-/**
  * Interface for detailed error information
  */
 export interface PostingError {
@@ -353,6 +389,63 @@ export interface AuditTrail {
 }
 
 /**
+ * Interface for pending approval items
+ */
+export interface PendingApprovalItem {
+  VoucherNo: string;
+  PostingDate: string | Date;
+  TransactionDate: string | Date;
+  TransactionType: "LeaseInvoice" | "LeaseReceipt";
+  TransactionID: number;
+  TransactionNo: string;
+  CustomerID: number;
+  CustomerName: string;
+  Property: string;
+  UnitNo: string;
+  TotalDebitAmount: number;
+  TotalCreditAmount: number;
+  ApprovalStatus: ApprovalStatus;
+  RequiresApproval: boolean;
+  CompanyID: number;
+  FiscalYearID: number;
+  CreatedBy: string;
+  CreatedOn: string | Date;
+}
+
+// Enums and supporting types
+export enum PostingStatus {
+  DRAFT = "Draft",
+  POSTED = "Posted",
+  REVERSED = "Reversed",
+  ERROR = "Error",
+}
+
+export enum ApprovalStatus {
+  PENDING = "Pending",
+  APPROVED = "Approved",
+  REJECTED = "Rejected",
+}
+
+export enum ApprovalAction {
+  APPROVE = "Approve",
+  REJECT = "Reject",
+}
+
+export enum TransactionStatus {
+  ACTIVE = "Active",
+  APPROVED = "Approved",
+  CANCELLED = "Cancelled",
+  EXPIRED = "Expired",
+}
+
+export enum PaymentStatus {
+  PENDING = "Pending",
+  CLEARED = "Cleared",
+  DEPOSITED = "Deposited",
+  CANCELLED = "Cancelled",
+}
+
+/**
  * Type definitions for mode parameters
  */
 export const LEASE_REVENUE_MODES = {
@@ -362,6 +455,52 @@ export const LEASE_REVENUE_MODES = {
   REVERSE_TRANSACTION: 4,
   GET_TRANSACTION_DETAILS: 5,
   GET_POSTING_SUMMARY: 6,
+  APPROVE_REJECT_POSTING: 7,
+  GET_PENDING_APPROVALS: 8,
+  RESET_APPROVAL_STATUS: 9,
 } as const;
 
 export type LeaseRevenueMode = (typeof LEASE_REVENUE_MODES)[keyof typeof LEASE_REVENUE_MODES];
+
+// Form validation schemas
+export interface LeaseRevenuePostingFormData {
+  postingDate: Date;
+  debitAccountId?: number;
+  creditAccountId?: number;
+  narration?: string;
+  referenceNo?: string;
+  currencyId?: number;
+  exchangeRate?: number;
+  companyId: number;
+  fiscalYearId: number;
+  selectedTransactions: {
+    transactionType: "Invoice" | "Receipt";
+    transactionId: number;
+    postingAmount: number;
+    debitAccountId: number;
+    creditAccountId: number;
+    narration: string;
+  }[];
+}
+
+// Error types
+export interface LeaseRevenuePostingError {
+  field?: string;
+  message: string;
+  code?: string;
+}
+
+export interface LeaseValidationResult {
+  isValid: boolean;
+  errors: LeaseRevenuePostingError[];
+}
+
+// Utility types
+export type LeaseRevenueTransactionInput = Omit<LeaseRevenueTransaction, keyof BaseLeaseRevenue>;
+export type PostedLeaseRevenueTransactionInput = Omit<PostedLeaseRevenueTransaction, keyof BaseLeaseRevenue>;
+export type LeaseTransactionDetailsInput = Omit<LeaseTransactionDetails, keyof BaseLeaseRevenue>;
+
+// Export default types for common usage
+export type LeaseRevenuePostingCreate = PostingRequest;
+export type LeaseRevenuePostingApproval = ApprovalRequest;
+export type LeaseRevenuePostingReversal = ReversalRequest;

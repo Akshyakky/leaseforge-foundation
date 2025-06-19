@@ -15,8 +15,11 @@ import {
   ReversalResponse,
   AttachmentResponse,
   NextVoucherNumberResponse,
+  VoucherExistsResponse,
   VoucherStatus,
   ApprovalAction,
+  ApprovalStatus,
+  TransactionType,
 } from "../types/pettyCashTypes";
 
 /**
@@ -110,12 +113,24 @@ class PettyCashService extends BaseService {
           errors.push(`Line ${index + 1}: Transaction type is required`);
         }
 
-        if ((line.DebitAmount || 0) === 0 && (line.CreditAmount || 0) === 0) {
+        const hasDebit = (line.DebitAmount || 0) > 0;
+        const hasCredit = (line.CreditAmount || 0) > 0;
+
+        if (!hasDebit && !hasCredit) {
           errors.push(`Line ${index + 1}: Amount must be greater than zero`);
         }
 
-        if ((line.DebitAmount || 0) > 0 && (line.CreditAmount || 0) > 0) {
+        if (hasDebit && hasCredit) {
           errors.push(`Line ${index + 1}: Cannot have both debit and credit amounts`);
+        }
+
+        // Validate transaction type matches amount
+        if (line.TransactionType === TransactionType.DEBIT && !hasDebit) {
+          errors.push(`Line ${index + 1}: Debit transaction type requires debit amount`);
+        }
+
+        if (line.TransactionType === TransactionType.CREDIT && !hasCredit) {
+          errors.push(`Line ${index + 1}: Credit transaction type requires credit amount`);
         }
       });
     }
@@ -239,6 +254,7 @@ class PettyCashService extends BaseService {
         FilterCompanyID: filters?.companyId,
         FilterFiscalYearID: filters?.fiscalYearId,
         FilterStatus: filters?.status,
+        FilterApprovalStatus: filters?.approvalStatus,
         FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
         FilterDateTo: filters?.dateTo?.toISOString().split("T")[0],
       },
@@ -332,6 +348,7 @@ class PettyCashService extends BaseService {
         FilterCompanyID: filters.companyId,
         FilterFiscalYearID: filters.fiscalYearId,
         FilterStatus: filters.status,
+        FilterApprovalStatus: filters.approvalStatus,
         FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
         FilterDateTo: filters.dateTo?.toISOString().split("T")[0],
         FilterAccountID: filters.accountId,
@@ -349,7 +366,7 @@ class PettyCashService extends BaseService {
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @param action - Approve or Reject
-   * @param comments - Optional approval comments
+   * @param comments - Optional approval comments or rejection reason
    * @returns Response with status
    */
   async approveOrRejectVoucher(voucherNo: string, companyId: number, action: ApprovalAction, comments?: string): Promise<ApprovalResponse> {
@@ -359,7 +376,8 @@ class PettyCashService extends BaseService {
         VoucherNo: voucherNo,
         CompanyID: companyId,
         ApprovalAction: action,
-        ApprovalComments: comments,
+        ApprovalComments: action === ApprovalAction.APPROVE ? comments : undefined,
+        RejectionReason: action === ApprovalAction.REJECT ? comments : undefined,
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -411,6 +429,57 @@ class PettyCashService extends BaseService {
     return {
       success: false,
       message: response.message || "Failed to submit voucher for approval",
+    };
+  }
+
+  /**
+   * Get vouchers pending approval
+   * @param filters - Optional filtering criteria
+   * @returns Array of vouchers pending approval
+   */
+  async getVouchersPendingApproval(filters?: { companyId?: number; fiscalYearId?: number }): Promise<PettyCashVoucher[]> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Get Vouchers Pending Approval
+      parameters: {
+        FilterCompanyID: filters?.companyId,
+        FilterFiscalYearID: filters?.fiscalYearId,
+      },
+    };
+
+    const response = await this.execute<PettyCashVoucher[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Reset voucher approval status
+   * @param voucherNo - The voucher number
+   * @param companyId - The company ID
+   * @returns Response with status
+   */
+  async resetApprovalStatus(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Reset Approval Status
+      parameters: {
+        VoucherNo: voucherNo,
+        CompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Voucher approval status reset successfully");
+      return {
+        success: true,
+        message: response.message || "Voucher approval status reset successfully",
+      };
+    }
+
+    return {
+      success: false,
+      message: response.message || "Failed to reset voucher approval status",
     };
   }
 
@@ -611,7 +680,7 @@ class PettyCashService extends BaseService {
    * @param postingId - Optional posting ID to exclude from check
    * @returns Whether voucher number exists
    */
-  async checkVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<boolean> {
+  async checkVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<VoucherExistsResponse> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Check if Voucher Number exists
       parameters: {
@@ -622,7 +691,11 @@ class PettyCashService extends BaseService {
     };
 
     const response = await this.execute(request, false);
-    return response.Status === 0; // Status 0 means it exists
+
+    return {
+      exists: response.Status === 0, // Status 0 means it exists
+      message: response.Message || "",
+    };
   }
 
   /**
@@ -632,18 +705,23 @@ class PettyCashService extends BaseService {
    * @param transactionDate - The transaction date
    * @returns Next voucher number
    */
-  async getNextVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<string> {
+  async getNextVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<NextVoucherNumberResponse> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get Next Voucher Number
       parameters: {
         CompanyID: companyId,
         FiscalYearID: fiscalYearId,
-        TransactionDate: transactionDate?.toISOString(),
+        TransactionDate: transactionDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
-    return response.success && response.NextVoucherNo ? response.NextVoucherNo : "";
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      nextVoucherNo: response.NextVoucherNo || "",
+    };
   }
 
   /**
@@ -657,13 +735,13 @@ class PettyCashService extends BaseService {
       mode: 13, // Mode 13: Get Account Balance
       parameters: {
         AccountID: accountId,
-        BalanceDate: balanceDate?.toISOString(),
+        BalanceDate: balanceDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
 
-    if (response.success) {
+    if (response.success || response.Status === 1) {
       return {
         AccountID: accountId,
         Balance: response.AccountBalance || 0,

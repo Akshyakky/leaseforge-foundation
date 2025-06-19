@@ -16,24 +16,16 @@ import {
   ReversalResponse,
   AttachmentResponse,
   NextVoucherNumberResponse,
+  VoucherExistsResponse,
   AccountBalanceResponse,
   TrialBalanceResponse,
+  JournalTypeResponse,
   JournalStatus,
   JournalType,
   ApprovalAction,
+  ApprovalStatus,
   TransactionType,
-  Account,
-  Company,
-  FiscalYear,
-  Currency,
-  CostCenter,
-  Customer,
-  Supplier,
-  DocType,
-  Tax,
   JournalEntryTemplate,
-  JournalRegisterReport,
-  AccountLedgerReport,
 } from "../types/journalVoucherTypes";
 
 /**
@@ -134,6 +126,16 @@ class JournalVoucherService extends BaseService {
           errors.push(`Line ${index + 1}: Cannot have both debit and credit amounts on the same line`);
         }
 
+        // Auto-set transaction type based on amounts if not provided
+        if (!line.TransactionType) {
+          if (hasDebit) {
+            line.TransactionType = TransactionType.DEBIT;
+          } else if (hasCredit) {
+            line.TransactionType = TransactionType.CREDIT;
+          }
+        }
+
+        // Validate transaction type matches amounts
         if (hasDebit && line.TransactionType !== TransactionType.DEBIT) {
           errors.push(`Line ${index + 1}: Transaction type must be 'Debit' when debit amount is specified`);
         }
@@ -263,6 +265,7 @@ class JournalVoucherService extends BaseService {
         FilterCompanyID: filters?.companyId,
         FilterFiscalYearID: filters?.fiscalYearId,
         FilterStatus: filters?.status,
+        FilterApprovalStatus: filters?.approvalStatus,
         FilterSupplierID: filters?.supplierId,
         FilterAccountID: filters?.accountId,
         FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
@@ -359,6 +362,7 @@ class JournalVoucherService extends BaseService {
         FilterCompanyID: filters.companyId,
         FilterFiscalYearID: filters.fiscalYearId,
         FilterStatus: filters.status,
+        FilterApprovalStatus: filters.approvalStatus,
         FilterSupplierID: filters.supplierId,
         FilterAccountID: filters.accountId,
         FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
@@ -378,7 +382,7 @@ class JournalVoucherService extends BaseService {
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @param action - Approve or Reject
-   * @param comments - Optional approval comments
+   * @param comments - Optional approval comments or rejection reason
    * @returns Response with status
    */
   async approveOrRejectJournalVoucher(voucherNo: string, companyId: number, action: ApprovalAction, comments?: string): Promise<ApprovalResponse> {
@@ -388,7 +392,8 @@ class JournalVoucherService extends BaseService {
         VoucherNo: voucherNo,
         CompanyID: companyId,
         ApprovalAction: action,
-        ApprovalComments: comments,
+        ApprovalComments: action === ApprovalAction.APPROVE ? comments : undefined,
+        RejectionReason: action === ApprovalAction.REJECT ? comments : undefined,
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -443,6 +448,57 @@ class JournalVoucherService extends BaseService {
     };
   }
 
+  /**
+   * Get journal vouchers pending approval
+   * @param filters - Optional filtering criteria
+   * @returns Array of journal vouchers pending approval
+   */
+  async getJournalVouchersPendingApproval(filters?: { companyId?: number; fiscalYearId?: number }): Promise<JournalVoucher[]> {
+    const request: BaseRequest = {
+      mode: 21, // Mode 21: Get Vouchers Pending Approval
+      parameters: {
+        FilterCompanyID: filters?.companyId,
+        FilterFiscalYearID: filters?.fiscalYearId,
+      },
+    };
+
+    const response = await this.execute<JournalVoucher[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Reset journal voucher approval status
+   * @param voucherNo - The voucher number
+   * @param companyId - The company ID
+   * @returns Response with status
+   */
+  async resetJournalVoucherApprovalStatus(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
+    const request: BaseRequest = {
+      mode: 22, // Mode 22: Reset Approval Status
+      parameters: {
+        VoucherNo: voucherNo,
+        CompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Journal voucher approval status reset successfully");
+      return {
+        success: true,
+        message: response.message || "Journal voucher approval status reset successfully",
+      };
+    }
+
+    return {
+      success: false,
+      message: response.message || "Failed to reset journal voucher approval status",
+    };
+  }
+
   // REVERSAL OPERATIONS
 
   /**
@@ -458,7 +514,7 @@ class JournalVoucherService extends BaseService {
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
-        ReversalReason: reason,
+        ReferenceNo: reason, // Note: stored procedure uses ReferenceNo for reversal reason
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -638,7 +694,7 @@ class JournalVoucherService extends BaseService {
    * @param filters - Date and company filters
    * @returns Array of unbalanced vouchers
    */
-  async validateTrialBalance(filters: { dateFrom?: Date; dateTo?: Date; companyId?: number }): Promise<TrialBalanceValidation[]> {
+  async validateTrialBalance(filters: { dateFrom?: Date; dateTo?: Date; companyId?: number }): Promise<TrialBalanceResponse> {
     const request: BaseRequest = {
       mode: 19, // Mode 19: Trial Balance Validation
       parameters: {
@@ -649,7 +705,31 @@ class JournalVoucherService extends BaseService {
     };
 
     const response = await this.execute<TrialBalanceValidation[]>(request);
-    return response.success ? response.data || [] : [];
+
+    return {
+      success: response.success,
+      message: response.message || "Trial balance validation completed",
+      unbalancedVouchers: response.success ? response.data || [] : [],
+    };
+  }
+
+  /**
+   * Get journal types for dropdown
+   * @returns Array of journal types
+   */
+  async getJournalTypes(): Promise<JournalTypeResponse> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Get Journal Types for Dropdown
+      parameters: {},
+    };
+
+    const response = await this.execute(request, false);
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      journalTypes: response.success ? response.data || [] : [],
+    };
   }
 
   /**
@@ -659,7 +739,7 @@ class JournalVoucherService extends BaseService {
    * @param postingId - Optional posting ID to exclude from check
    * @returns Whether voucher number exists
    */
-  async checkJournalVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<boolean> {
+  async checkJournalVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<VoucherExistsResponse> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Check if Voucher Number exists
       parameters: {
@@ -670,7 +750,11 @@ class JournalVoucherService extends BaseService {
     };
 
     const response = await this.execute(request, false);
-    return response.Status === 0; // Status 0 means it exists
+
+    return {
+      exists: response.Status === 0, // Status 0 means it exists
+      message: response.Message || "",
+    };
   }
 
   /**
@@ -680,18 +764,23 @@ class JournalVoucherService extends BaseService {
    * @param transactionDate - The transaction date
    * @returns Next voucher number
    */
-  async getNextJournalVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<string> {
+  async getNextJournalVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<NextVoucherNumberResponse> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get Next Voucher Number
       parameters: {
         CompanyID: companyId,
         FiscalYearID: fiscalYearId,
-        TransactionDate: transactionDate?.toISOString(),
+        TransactionDate: transactionDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
-    return response.success && response.NextVoucherNo ? response.NextVoucherNo : "";
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      nextVoucherNo: response.NextVoucherNo || "",
+    };
   }
 
   /**
@@ -700,17 +789,22 @@ class JournalVoucherService extends BaseService {
    * @param balanceDate - The date to calculate balance as of
    * @returns Account balance
    */
-  async getAccountBalance(accountId: number, balanceDate?: Date): Promise<number> {
+  async getAccountBalance(accountId: number, balanceDate?: Date): Promise<AccountBalanceResponse> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Get Account Balance
       parameters: {
         AccountID: accountId,
-        BalanceDate: balanceDate?.toISOString(),
+        BalanceDate: balanceDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
-    return response.success ? response.AccountBalance || 0 : 0;
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      accountBalance: response.AccountBalance || 0,
+    };
   }
 
   /**
@@ -747,20 +841,6 @@ class JournalVoucherService extends BaseService {
     }
 
     return { voucher: null, lines: [], attachments: [] };
-  }
-
-  /**
-   * Get journal types for dropdown
-   * @returns Array of journal types
-   */
-  async getJournalTypes(): Promise<{ JournalType: string; Description: string }[]> {
-    const request: BaseRequest = {
-      mode: 20, // Mode 20: Get Journal Types for Dropdown
-      parameters: {},
-    };
-
-    const response = await this.execute(request, false);
-    return response.success ? response.data || [] : [];
   }
 
   // HELPER METHODS FOR DROPDOWNS AND MASTER DATA
@@ -964,6 +1044,67 @@ class JournalVoucherService extends BaseService {
       },
       lines,
     };
+  }
+
+  /**
+   * Get journal type description
+   * @param journalType - The journal type
+   * @returns Human readable description
+   */
+  getJournalTypeDescription(journalType: JournalType): string {
+    const descriptions = {
+      [JournalType.GENERAL]: "General journal entries for routine business transactions",
+      [JournalType.ADJUSTING]: "Period-end adjusting entries for accruals, deferrals, and corrections",
+      [JournalType.CLOSING]: "Year-end closing entries to transfer temporary account balances",
+      [JournalType.REVERSING]: "Reversing entries that undo previous adjusting entries at period start",
+    };
+    return descriptions[journalType] || "Unknown journal type";
+  }
+
+  /**
+   * Check if journal type allows manual entry
+   * @param journalType - The journal type
+   * @returns Whether manual entry is allowed
+   */
+  allowsManualEntry(journalType: JournalType): boolean {
+    // All journal types allow manual entry in this implementation
+    return true;
+  }
+
+  /**
+   * Get transaction type label
+   * @param transactionType - The transaction type
+   * @returns Human readable label
+   */
+  getTransactionTypeLabel(transactionType: TransactionType): string {
+    return transactionType === TransactionType.DEBIT ? "Dr" : "Cr";
+  }
+
+  /**
+   * Check if voucher can be edited
+   * @param voucher - The voucher to check
+   * @returns Whether voucher can be edited
+   */
+  canEditVoucher(voucher: JournalVoucher): boolean {
+    return voucher.PostingStatus === JournalStatus.DRAFT || (voucher.PostingStatus === JournalStatus.PENDING && voucher.ApprovalStatus === ApprovalStatus.REJECTED);
+  }
+
+  /**
+   * Check if voucher can be approved
+   * @param voucher - The voucher to check
+   * @returns Whether voucher can be approved
+   */
+  canApproveVoucher(voucher: JournalVoucher): boolean {
+    return voucher.PostingStatus === JournalStatus.PENDING && voucher.ApprovalStatus === ApprovalStatus.PENDING && voucher.RequiresApproval === true;
+  }
+
+  /**
+   * Check if voucher can be reversed
+   * @param voucher - The voucher to check
+   * @returns Whether voucher can be reversed
+   */
+  canReverseVoucher(voucher: JournalVoucher): boolean {
+    return voucher.PostingStatus === JournalStatus.POSTED && voucher.ApprovalStatus === ApprovalStatus.APPROVED && voucher.IsReversed !== true;
   }
 }
 

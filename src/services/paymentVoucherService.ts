@@ -16,21 +16,14 @@ import {
   ReversalResponse,
   AttachmentResponse,
   NextVoucherNumberResponse,
+  VoucherExistsResponse,
   AccountBalanceResponse,
   SupplierBalanceResponse,
   PaymentStatus,
   PaymentType,
   ApprovalAction,
-  Account,
-  Company,
-  FiscalYear,
-  Currency,
-  Bank,
-  CostCenter,
-  Customer,
-  Supplier,
-  DocType,
-  Tax,
+  ApprovalStatus,
+  TransactionType,
 } from "../types/paymentVoucherTypes";
 
 /**
@@ -132,7 +125,12 @@ class PaymentVoucherService extends BaseService {
         }
 
         if (!line.DebitAmount || line.DebitAmount <= 0) {
-          errors.push(`Line ${index + 1}: Amount must be greater than zero`);
+          errors.push(`Line ${index + 1}: Debit amount must be greater than zero`);
+        }
+
+        // Ensure transaction type is Debit for payment voucher lines
+        if (line.TransactionType && line.TransactionType !== TransactionType.DEBIT) {
+          errors.push(`Line ${index + 1}: Payment voucher lines must be debit transactions`);
         }
       });
     }
@@ -273,6 +271,7 @@ class PaymentVoucherService extends BaseService {
         FilterCompanyID: filters?.companyId,
         FilterFiscalYearID: filters?.fiscalYearId,
         FilterStatus: filters?.status,
+        FilterApprovalStatus: filters?.approvalStatus,
         FilterSupplierID: filters?.supplierId,
         FilterPaymentType: filters?.paymentType,
         FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
@@ -368,6 +367,7 @@ class PaymentVoucherService extends BaseService {
         FilterCompanyID: filters.companyId,
         FilterFiscalYearID: filters.fiscalYearId,
         FilterStatus: filters.status,
+        FilterApprovalStatus: filters.approvalStatus,
         FilterSupplierID: filters.supplierId,
         FilterPaymentType: filters.paymentType,
         FilterDateFrom: filters.dateFrom?.toISOString().split("T")[0],
@@ -387,7 +387,7 @@ class PaymentVoucherService extends BaseService {
    * @param voucherNo - The voucher number
    * @param companyId - The company ID
    * @param action - Approve or Reject
-   * @param comments - Optional approval comments
+   * @param comments - Optional approval comments or rejection reason
    * @returns Response with status
    */
   async approveOrRejectPaymentVoucher(voucherNo: string, companyId: number, action: ApprovalAction, comments?: string): Promise<ApprovalResponse> {
@@ -397,7 +397,8 @@ class PaymentVoucherService extends BaseService {
         VoucherNo: voucherNo,
         CompanyID: companyId,
         ApprovalAction: action,
-        ApprovalComments: comments,
+        ApprovalComments: action === ApprovalAction.APPROVE ? comments : undefined,
+        RejectionReason: action === ApprovalAction.REJECT ? comments : undefined,
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -452,6 +453,57 @@ class PaymentVoucherService extends BaseService {
     };
   }
 
+  /**
+   * Get payment vouchers pending approval
+   * @param filters - Optional filtering criteria
+   * @returns Array of payment vouchers pending approval
+   */
+  async getPaymentVouchersPendingApproval(filters?: { companyId?: number; fiscalYearId?: number }): Promise<PaymentVoucher[]> {
+    const request: BaseRequest = {
+      mode: 21, // Mode 21: Get Vouchers Pending Approval
+      parameters: {
+        FilterCompanyID: filters?.companyId,
+        FilterFiscalYearID: filters?.fiscalYearId,
+      },
+    };
+
+    const response = await this.execute<PaymentVoucher[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Reset payment voucher approval status
+   * @param voucherNo - The voucher number
+   * @param companyId - The company ID
+   * @returns Response with status
+   */
+  async resetPaymentVoucherApprovalStatus(voucherNo: string, companyId: number): Promise<ApprovalResponse> {
+    const request: BaseRequest = {
+      mode: 22, // Mode 22: Reset Approval Status
+      parameters: {
+        VoucherNo: voucherNo,
+        CompanyID: companyId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Payment voucher approval status reset successfully");
+      return {
+        success: true,
+        message: response.message || "Payment voucher approval status reset successfully",
+      };
+    }
+
+    return {
+      success: false,
+      message: response.message || "Failed to reset payment voucher approval status",
+    };
+  }
+
   // REVERSAL OPERATIONS
 
   /**
@@ -467,7 +519,7 @@ class PaymentVoucherService extends BaseService {
       parameters: {
         VoucherNo: voucherNo,
         CompanyID: companyId,
-        ReversalReason: reason,
+        ReferenceNo: reason, // Note: stored procedure uses ReferenceNo for reversal reason
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
       },
@@ -488,6 +540,56 @@ class PaymentVoucherService extends BaseService {
       success: false,
       message: response.message || "Failed to reverse payment voucher",
     };
+  }
+
+  // SUPPLIER MANAGEMENT
+
+  /**
+   * Get supplier outstanding balance
+   * @param supplierId - The supplier ID
+   * @param balanceDate - Optional date to calculate balance as of
+   * @returns Supplier balance information
+   */
+  async getSupplierOutstandingBalance(supplierId: number, balanceDate?: Date): Promise<SupplierBalance | null> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Get Supplier Outstanding Balance
+      parameters: {
+        SupplierID: supplierId,
+        BalanceDate: balanceDate?.toISOString().split("T")[0],
+      },
+    };
+
+    const response = await this.execute(request, false);
+
+    if (response.success || response.Status === 1) {
+      return {
+        SupplierID: response.SupplierID || supplierId,
+        OutstandingBalance: response.SupplierBalance || 0,
+        BalanceDate: balanceDate || new Date(),
+      } as SupplierBalance;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get payment history for a supplier
+   * @param supplierId - The supplier ID
+   * @param filters - Optional date filters
+   * @returns Array of payment history records
+   */
+  async getSupplierPaymentHistory(supplierId: number, filters?: { dateFrom?: Date; dateTo?: Date }): Promise<SupplierPaymentHistory[]> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Get Payment Vouchers by Supplier
+      parameters: {
+        SupplierID: supplierId,
+        FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
+        FilterDateTo: filters?.dateTo?.toISOString().split("T")[0],
+      },
+    };
+
+    const response = await this.execute<SupplierPaymentHistory[]>(request);
+    return response.success ? response.data || [] : [];
   }
 
   // ATTACHMENT MANAGEMENT
@@ -620,56 +722,6 @@ class PaymentVoucherService extends BaseService {
     return [];
   }
 
-  // SUPPLIER MANAGEMENT
-
-  /**
-   * Get supplier outstanding balance
-   * @param supplierId - The supplier ID
-   * @param balanceDate - Optional date to calculate balance as of
-   * @returns Supplier balance information
-   */
-  async getSupplierOutstandingBalance(supplierId: number, balanceDate?: Date): Promise<SupplierBalance | null> {
-    const request: BaseRequest = {
-      mode: 19, // Mode 19: Get Supplier Outstanding Balance
-      parameters: {
-        SupplierID: supplierId,
-        BalanceDate: balanceDate?.toISOString(),
-      },
-    };
-
-    const response = await this.execute(request, false);
-
-    if (response.success) {
-      return {
-        SupplierID: response.SupplierID || supplierId,
-        OutstandingBalance: response.SupplierBalance || 0,
-        BalanceDate: balanceDate || new Date(),
-      } as SupplierBalance;
-    }
-
-    return null;
-  }
-
-  /**
-   * Get payment history for a supplier
-   * @param supplierId - The supplier ID
-   * @param filters - Optional date filters
-   * @returns Array of payment history records
-   */
-  async getSupplierPaymentHistory(supplierId: number, filters?: { dateFrom?: Date; dateTo?: Date }): Promise<SupplierPaymentHistory[]> {
-    const request: BaseRequest = {
-      mode: 20, // Mode 20: Get Payment Vouchers by Supplier
-      parameters: {
-        SupplierID: supplierId,
-        FilterDateFrom: filters?.dateFrom?.toISOString().split("T")[0],
-        FilterDateTo: filters?.dateTo?.toISOString().split("T")[0],
-      },
-    };
-
-    const response = await this.execute<SupplierPaymentHistory[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
   // REPORTS AND UTILITIES
 
   /**
@@ -699,7 +751,7 @@ class PaymentVoucherService extends BaseService {
    * @param postingId - Optional posting ID to exclude from check
    * @returns Whether voucher number exists
    */
-  async checkPaymentVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<boolean> {
+  async checkPaymentVoucherNumberExists(voucherNo: string, companyId: number, postingId?: number): Promise<VoucherExistsResponse> {
     const request: BaseRequest = {
       mode: 11, // Mode 11: Check if Voucher Number exists
       parameters: {
@@ -710,7 +762,11 @@ class PaymentVoucherService extends BaseService {
     };
 
     const response = await this.execute(request, false);
-    return response.Status === 0; // Status 0 means it exists
+
+    return {
+      exists: response.Status === 0, // Status 0 means it exists
+      message: response.Message || "",
+    };
   }
 
   /**
@@ -720,18 +776,23 @@ class PaymentVoucherService extends BaseService {
    * @param transactionDate - The transaction date
    * @returns Next voucher number
    */
-  async getNextPaymentVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<string> {
+  async getNextPaymentVoucherNumber(companyId: number, fiscalYearId: number, transactionDate?: Date): Promise<NextVoucherNumberResponse> {
     const request: BaseRequest = {
       mode: 12, // Mode 12: Get Next Voucher Number
       parameters: {
         CompanyID: companyId,
         FiscalYearID: fiscalYearId,
-        TransactionDate: transactionDate?.toISOString(),
+        TransactionDate: transactionDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
-    return response.success && response.NextVoucherNo ? response.NextVoucherNo : "";
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      nextVoucherNo: response.NextVoucherNo || "",
+    };
   }
 
   /**
@@ -740,17 +801,22 @@ class PaymentVoucherService extends BaseService {
    * @param balanceDate - The date to calculate balance as of
    * @returns Account balance
    */
-  async getAccountBalance(accountId: number, balanceDate?: Date): Promise<number> {
+  async getAccountBalance(accountId: number, balanceDate?: Date): Promise<AccountBalanceResponse> {
     const request: BaseRequest = {
       mode: 13, // Mode 13: Get Account Balance
       parameters: {
         AccountID: accountId,
-        BalanceDate: balanceDate?.toISOString(),
+        BalanceDate: balanceDate?.toISOString().split("T")[0],
       },
     };
 
     const response = await this.execute(request, false);
-    return response.success ? response.AccountBalance || 0 : 0;
+
+    return {
+      success: response.success || response.Status === 1,
+      message: response.Message || "",
+      accountBalance: response.AccountBalance || 0,
+    };
   }
 
   /**
@@ -789,6 +855,8 @@ class PaymentVoucherService extends BaseService {
     return { voucher: null, lines: [], attachments: [] };
   }
 
+  // UTILITY METHODS
+
   /**
    * Get payment types for dropdown
    * @returns Array of payment types
@@ -819,8 +887,6 @@ class PaymentVoucherService extends BaseService {
       { value: PaymentStatus.REVERSED, label: "Reversed" },
     ];
   }
-
-  // UTILITY METHODS
 
   /**
    * Format amount for display
@@ -880,6 +946,42 @@ class PaymentVoucherService extends BaseService {
       isValid: errors.length === 0,
       errors,
     };
+  }
+
+  /**
+   * Get payment method description
+   * @param paymentType - The payment type
+   * @returns Human readable description
+   */
+  getPaymentMethodDescription(paymentType: PaymentType): string {
+    const descriptions = {
+      [PaymentType.CASH]: "Cash payment",
+      [PaymentType.CHEQUE]: "Payment by cheque",
+      [PaymentType.BANK_TRANSFER]: "Bank transfer",
+      [PaymentType.ONLINE]: "Online payment",
+      [PaymentType.WIRE_TRANSFER]: "Wire transfer",
+      [PaymentType.CREDIT_CARD]: "Credit card payment",
+      [PaymentType.DEBIT_CARD]: "Debit card payment",
+    };
+    return descriptions[paymentType] || "Unknown payment method";
+  }
+
+  /**
+   * Check if payment type requires bank details
+   * @param paymentType - The payment type
+   * @returns Whether bank details are required
+   */
+  requiresBankDetails(paymentType: PaymentType): boolean {
+    return [PaymentType.CHEQUE, PaymentType.BANK_TRANSFER, PaymentType.WIRE_TRANSFER].includes(paymentType);
+  }
+
+  /**
+   * Check if payment type requires cheque details
+   * @param paymentType - The payment type
+   * @returns Whether cheque details are required
+   */
+  requiresChequeDetails(paymentType: PaymentType): boolean {
+    return paymentType === PaymentType.CHEQUE;
   }
 }
 

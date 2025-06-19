@@ -1,4 +1,4 @@
-// src/pages/contractReceipt/ContractReceiptForm.tsx
+// src/pages/contractReceipt/ContractReceiptForm.tsx - Enhanced with Comprehensive Approval Protection
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -12,6 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
   Loader2,
@@ -32,6 +34,10 @@ import {
   Send,
   CreditCard,
   Banknote,
+  Lock,
+  Shield,
+  AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { leaseReceiptService } from "@/services/contractReceiptService";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
@@ -45,7 +51,16 @@ import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { useAppSelector } from "@/lib/hooks";
 import { format, addDays } from "date-fns";
-import { ContractReceipt, ReceiptCreateRequest, ReceiptUpdateRequest, InvoiceAllocation, PAYMENT_TYPE, PAYMENT_STATUS, ALLOCATION_MODE } from "@/types/contractReceiptTypes";
+import {
+  ContractReceipt,
+  ReceiptCreateRequest,
+  ReceiptUpdateRequest,
+  InvoiceAllocation,
+  PAYMENT_TYPE,
+  PAYMENT_STATUS,
+  ALLOCATION_MODE,
+  APPROVAL_STATUS,
+} from "@/types/contractReceiptTypes";
 
 // Enhanced schema for receipt form validation
 const invoiceAllocationSchema = z.object({
@@ -80,6 +95,8 @@ const receiptSchema = z.object({
   ReceivedByUserID: z.string().optional(),
   AccountID: z.string().optional(),
   Notes: z.string().optional(),
+  RequiresApproval: z.boolean().default(false),
+  ApprovalThreshold: z.coerce.number().min(0).optional(),
 
   // Allocation settings
   AllocationMode: z.string().default(ALLOCATION_MODE.SINGLE),
@@ -126,6 +143,13 @@ const ContractReceiptForm: React.FC = () => {
   const [showBankFields, setShowBankFields] = useState(false);
   const [showDepositFields, setShowDepositFields] = useState(false);
 
+  // Check if editing is allowed based on approval status
+  const canEditReceipt = !receipt || receipt.ApprovalStatus !== APPROVAL_STATUS.APPROVED;
+  const isApproved = receipt?.ApprovalStatus === APPROVAL_STATUS.APPROVED;
+
+  // Check if user is manager for approval settings
+  const isManager = user?.role === "admin" || user?.role === "manager";
+
   // Initialize form
   const form = useForm<ReceiptFormValues>({
     resolver: zodResolver(receiptSchema),
@@ -146,6 +170,7 @@ const ContractReceiptForm: React.FC = () => {
       DiscountAmount: 0,
       AllocationMode: ALLOCATION_MODE.SINGLE,
       AutoPost: false,
+      RequiresApproval: false,
       invoiceAllocations: [],
     },
   });
@@ -164,24 +189,86 @@ const ContractReceiptForm: React.FC = () => {
     const penaltyAmount = formValues.PenaltyAmount || 0;
     const discountAmount = formValues.DiscountAmount || 0;
 
-    const netAmount = receivedAmount + securityDepositAmount + penaltyAmount - discountAmount;
+    const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+    const netAmount = roundToTwo(receivedAmount + securityDepositAmount + penaltyAmount - discountAmount);
 
     let totalAllocated = 0;
     if (formValues.invoiceAllocations && formValues.invoiceAllocations.length > 0) {
-      totalAllocated = formValues.invoiceAllocations.reduce((sum, allocation) => sum + (allocation.AllocationAmount || 0), 0);
+      totalAllocated = roundToTwo(formValues.invoiceAllocations.reduce((sum, allocation) => sum + (allocation.AllocationAmount || 0), 0));
     }
 
-    const unallocatedAmount = Math.max(0, netAmount - totalAllocated);
+    const unallocatedAmount = roundToTwo(Math.max(0, netAmount - totalAllocated));
 
     return {
-      receivedAmount,
-      securityDepositAmount,
-      penaltyAmount,
-      discountAmount,
+      receivedAmount: roundToTwo(receivedAmount),
+      securityDepositAmount: roundToTwo(securityDepositAmount),
+      penaltyAmount: roundToTwo(penaltyAmount),
+      discountAmount: roundToTwo(discountAmount),
       netAmount,
       totalAllocated,
       unallocatedAmount,
     };
+  };
+
+  // Validate form before submission
+  const validateFormBeforeSubmit = (data: ReceiptFormValues): string[] => {
+    const errors: string[] = [];
+
+    if (!data.CustomerID) {
+      errors.push("Customer is required");
+    }
+
+    if (!data.CompanyID) {
+      errors.push("Company is required");
+    }
+
+    if (!data.FiscalYearID) {
+      errors.push("Fiscal Year is required");
+    }
+
+    if (!data.ReceivedAmount || data.ReceivedAmount <= 0) {
+      errors.push("Received amount must be greater than zero");
+    }
+
+    if (!data.PaymentType) {
+      errors.push("Payment type is required");
+    }
+
+    // Validate payment type specific fields
+    if (data.PaymentType === PAYMENT_TYPE.CHEQUE) {
+      if (!data.ChequeNo) {
+        errors.push("Cheque number is required for cheque payments");
+      }
+      if (!data.ChequeDate) {
+        errors.push("Cheque date is required for cheque payments");
+      }
+    }
+
+    if (data.PaymentType === PAYMENT_TYPE.BANK_TRANSFER && !data.TransactionReference) {
+      errors.push("Transaction reference is required for bank transfers");
+    }
+
+    // Validate allocations
+    const totals = calculateTotals();
+    if (data.AllocationMode === ALLOCATION_MODE.MULTIPLE && totals.totalAllocated > totals.netAmount) {
+      errors.push("Total allocation cannot exceed net received amount");
+    }
+
+    // Validate auto-posting requirements
+    if (data.AutoPost) {
+      if (!data.DebitAccountID) {
+        errors.push("Debit account is required for auto-posting");
+      }
+      if (!data.CreditAccountID) {
+        errors.push("Credit account is required for auto-posting");
+      }
+      if (!data.PostingDate) {
+        errors.push("Posting date is required for auto-posting");
+      }
+    }
+
+    return errors;
   };
 
   // Initialize and fetch reference data
@@ -195,6 +282,14 @@ const ContractReceiptForm: React.FC = () => {
 
           if (receiptData.receipt) {
             setReceipt(receiptData.receipt);
+
+            // Check if receipt is approved and prevent editing
+            if (receiptData.receipt.ApprovalStatus === APPROVAL_STATUS.APPROVED) {
+              toast.error("This receipt has been approved and cannot be edited. Please reset approval status first if changes are needed.");
+              navigate(`/receipts/${receiptData.receipt.LeaseReceiptID}`);
+              return;
+            }
+
             populateFormWithReceiptData(receiptData.receipt);
           } else {
             toast.error("Receipt not found");
@@ -222,7 +317,6 @@ const ContractReceiptForm: React.FC = () => {
         currencyService.getAllCurrencies(),
         accountService.getAllAccounts(),
         bankService.getAllBanks(),
-        // userService.getAllUsers(), // Assuming this exists
         Promise.resolve([]), // Placeholder for users
       ]);
 
@@ -352,8 +446,8 @@ const ContractReceiptForm: React.FC = () => {
         if (invoiceId > 0) {
           const invoice = availableInvoices.find((inv) => inv.LeaseInvoiceID === invoiceId);
           if (invoice) {
-            const receivedAmount = form.getValues("ReceivedAmount") || 0;
-            const allocationAmount = Math.min(receivedAmount, invoice.BalanceAmount);
+            const totals = calculateTotals();
+            const allocationAmount = Math.min(totals.netAmount, invoice.BalanceAmount);
 
             // Clear existing allocations and add single allocation
             form.setValue("invoiceAllocations", [
@@ -366,13 +460,28 @@ const ContractReceiptForm: React.FC = () => {
           }
         }
       }
+
+      // Auto-set approval requirement based on amount threshold
+      if (name === "ReceivedAmount" && isManager) {
+        const amount = value.ReceivedAmount || 0;
+        const threshold = form.getValues("ApprovalThreshold") || 10000; // Default threshold
+
+        if (amount >= threshold) {
+          form.setValue("RequiresApproval", true);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, [form, availableInvoices]);
+  }, [form, availableInvoices, isManager]);
 
   // Add new invoice allocation
   const addInvoiceAllocation = () => {
+    if (!canEditReceipt) {
+      toast.error("Cannot modify approved receipts.");
+      return;
+    }
+
     const totals = calculateTotals();
     const suggestedAmount = Math.min(totals.unallocatedAmount, 0);
 
@@ -390,10 +499,15 @@ const ContractReceiptForm: React.FC = () => {
       return;
     }
 
-    // Validate totals
-    const totals = calculateTotals();
-    if (data.AllocationMode === ALLOCATION_MODE.MULTIPLE && totals.totalAllocated > totals.netAmount) {
-      toast.error("Total allocation cannot exceed net received amount");
+    if (!canEditReceipt) {
+      toast.error("Cannot save changes to approved receipts.");
+      return;
+    }
+
+    // Validate form before submission
+    const validationErrors = validateFormBeforeSubmit(data);
+    if (validationErrors.length > 0) {
+      validationErrors.forEach((error) => toast.error(error));
       return;
     }
 
@@ -404,6 +518,7 @@ const ContractReceiptForm: React.FC = () => {
       let invoiceAllocations: InvoiceAllocation[] = [];
 
       if (data.AllocationMode === ALLOCATION_MODE.SINGLE && data.LeaseInvoiceID) {
+        const totals = calculateTotals();
         invoiceAllocations = [
           {
             LeaseInvoiceID: parseInt(data.LeaseInvoiceID),
@@ -447,6 +562,8 @@ const ContractReceiptForm: React.FC = () => {
           ReceivedByUserID: data.ReceivedByUserID ? parseInt(data.ReceivedByUserID) : undefined,
           AccountID: data.AccountID ? parseInt(data.AccountID) : undefined,
           Notes: data.Notes,
+          RequiresApproval: data.RequiresApproval,
+          ApprovalThreshold: data.ApprovalThreshold,
         };
 
         const response = await leaseReceiptService.updateReceipt(updateRequest);
@@ -485,6 +602,8 @@ const ContractReceiptForm: React.FC = () => {
           ReceivedByUserID: data.ReceivedByUserID ? parseInt(data.ReceivedByUserID) : undefined,
           AccountID: data.AccountID ? parseInt(data.AccountID) : undefined,
           Notes: data.Notes,
+          RequiresApproval: data.RequiresApproval,
+          ApprovalThreshold: data.ApprovalThreshold,
           AllocationMode: data.AllocationMode as any,
           InvoiceAllocations: invoiceAllocations,
           AutoPost: data.AutoPost,
@@ -514,6 +633,11 @@ const ContractReceiptForm: React.FC = () => {
 
   // Reset form
   const handleReset = () => {
+    if (!canEditReceipt) {
+      toast.error("Cannot reset approved receipts.");
+      return;
+    }
+
     if (isEdit && receipt) {
       form.reset();
     } else {
@@ -534,6 +658,7 @@ const ContractReceiptForm: React.FC = () => {
         DiscountAmount: 0,
         AllocationMode: ALLOCATION_MODE.SINGLE,
         AutoPost: false,
+        RequiresApproval: false,
         invoiceAllocations: [],
       });
     }
@@ -561,495 +686,654 @@ const ContractReceiptForm: React.FC = () => {
   const totals = calculateTotals();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-2">
-        <Button variant="outline" size="icon" onClick={() => navigate("/receipts")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-semibold">{isEdit ? "Edit Receipt" : "Create Receipt"}</h1>
-      </div>
+    <TooltipProvider>
+      <div className="space-y-6">
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="icon" onClick={() => navigate("/receipts")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-semibold">{isEdit ? "Edit Receipt" : "Create Receipt"}</h1>
+          {isApproved && (
+            <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
+              <Lock className="h-3 w-3 mr-1" />
+              Approved - Protected from Editing
+            </Badge>
+          )}
+        </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Receipt Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-primary" />
-                Receipt Information
-              </CardTitle>
-              <CardDescription>Enter the basic receipt details and customer information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField
-                  form={form}
-                  name="ReceiptNo"
-                  label="Receipt Number"
-                  placeholder="Auto-generated if left empty"
-                  description="Leave blank for auto-generated receipt number"
-                />
-                <FormField form={form} name="ReceiptDate" label="Receipt Date" type="date" required description="Date when payment was received" />
-                <FormField
-                  form={form}
-                  name="PaymentStatus"
-                  label="Payment Status"
-                  type="select"
-                  options={Object.values(PAYMENT_STATUS).map((status) => ({
-                    label: status,
-                    value: status,
-                  }))}
-                  placeholder="Select status"
-                  required
-                />
+        {/* Approval Warning Alert */}
+        {isApproved && (
+          <Alert className="border-l-4 border-l-red-500 bg-red-50">
+            <Shield className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Receipt Editing Restricted</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                This receipt has been approved and is protected from modifications. To make changes, a manager must first reset the approval status from the receipt details page.
               </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  form={form}
-                  name="CompanyID"
-                  label="Company"
-                  type="select"
-                  options={companies.map((company) => ({
-                    label: company.CompanyName,
-                    value: company.CompanyID.toString(),
-                  }))}
-                  placeholder="Select company"
-                  required
-                  description="Company receiving the payment"
-                />
-                <FormField
-                  form={form}
-                  name="FiscalYearID"
-                  label="Fiscal Year"
-                  type="select"
-                  options={fiscalYears.map((fy) => ({
-                    label: fy.FYDescription,
-                    value: fy.FiscalYearID.toString(),
-                  }))}
-                  placeholder="Select fiscal year"
-                  required
-                  description="Fiscal year for the receipt"
-                />
-              </div>
-
-              <FormField
-                form={form}
-                name="CustomerID"
-                label="Customer"
-                type="select"
-                options={customers.map((customer) => ({
-                  label: customer.CustomerFullName,
-                  value: customer.CustomerID.toString(),
-                }))}
-                placeholder="Select customer"
-                required
-                description="Customer making the payment"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Payment Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" />
-                Payment Details
-              </CardTitle>
-              <CardDescription>Configure payment method and amounts</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField form={form} name="ReceivedAmount" label="Received Amount" type="number" step="0.01" placeholder="0.00" required description="Primary amount received" />
-                <FormField
-                  form={form}
-                  name="PaymentType"
-                  label="Payment Type"
-                  type="select"
-                  options={Object.values(PAYMENT_TYPE).map((type) => ({
-                    label: type,
-                    value: type,
-                  }))}
-                  placeholder="Select payment type"
-                  required
-                />
-                <FormField
-                  form={form}
-                  name="CurrencyID"
-                  label="Currency"
-                  type="select"
-                  options={currencies.map((currency) => ({
-                    label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
-                    value: currency.CurrencyID.toString(),
-                  }))}
-                  placeholder="Select currency"
-                  description="Payment currency"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField form={form} name="SecurityDepositAmount" label="Security Deposit" type="number" step="0.01" placeholder="0.00" description="Security deposit amount" />
-                <FormField form={form} name="PenaltyAmount" label="Penalty Amount" type="number" step="0.01" placeholder="0.00" description="Penalty charges included" />
-                <FormField form={form} name="DiscountAmount" label="Discount Amount" type="number" step="0.01" placeholder="0.00" description="Discount given" />
-              </div>
-
-              {/* Cheque Details */}
-              {showChequeFields && (
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium">Cheque Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField form={form} name="ChequeNo" label="Cheque Number" placeholder="Enter cheque number" required={showChequeFields} />
-                    <FormField form={form} name="ChequeDate" label="Cheque Date" type="date" required={showChequeFields} />
-                    <FormField
-                      form={form}
-                      name="BankID"
-                      label="Cheque Bank"
-                      type="select"
-                      options={banks.map((bank) => ({
-                        label: bank.BankName,
-                        value: bank.BankID.toString(),
-                      }))}
-                      placeholder="Select bank"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Bank Transfer Details */}
-              {showBankFields && (
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium">Bank Transfer Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField form={form} name="TransactionReference" label="Transaction Reference" placeholder="Enter reference number" />
-                    <FormField
-                      form={form}
-                      name="BankID"
-                      label="Source Bank"
-                      type="select"
-                      options={banks.map((bank) => ({
-                        label: bank.BankName,
-                        value: bank.BankID.toString(),
-                      }))}
-                      placeholder="Select source bank"
-                    />
-                  </div>
-                  <FormField form={form} name="BankAccountNo" label="Account Number" placeholder="Enter account number" />
-                </div>
-              )}
-
-              {/* Deposit Information */}
-              {showDepositFields && (
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium">Deposit Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      form={form}
-                      name="DepositedBankID"
-                      label="Deposit Bank"
-                      type="select"
-                      options={banks.map((bank) => ({
-                        label: bank.BankName,
-                        value: bank.BankID.toString(),
-                      }))}
-                      placeholder="Select deposit bank"
-                      description="Bank where payment will be deposited"
-                    />
-                    <FormField form={form} name="DepositDate" label="Deposit Date" type="date" description="Date when payment was deposited" />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="is-advance" checked={form.watch("IsAdvancePayment")} onCheckedChange={(checked) => form.setValue("IsAdvancePayment", checked as boolean)} />
-                  <Label htmlFor="is-advance">Advance Payment</Label>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Receipt Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-primary" />
-                Receipt Summary
-              </CardTitle>
-              <CardDescription>Live calculation of receipt totals</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Received Amount</span>
-                  </div>
-                  <div className="text-2xl font-bold">{formatCurrency(totals.receivedAmount)}</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Additional Amounts</span>
-                  </div>
-                  <div className="text-2xl font-bold">{formatCurrency(totals.securityDepositAmount + totals.penaltyAmount - totals.discountAmount)}</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium text-muted-foreground">Net Amount</span>
-                  </div>
-                  <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.netAmount)}</div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Receipt className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Unallocated</span>
-                  </div>
-                  <div className="text-2xl font-bold text-blue-600">{formatCurrency(totals.unallocatedAmount)}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Invoice Allocation */}
-          {!form.watch("IsAdvancePayment") && (
-            <Card>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Receipt Information */}
+            <Card className={isApproved ? "opacity-60" : ""}>
               <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Building className="h-5 w-5 text-primary" />
-                      Invoice Allocation
-                    </CardTitle>
-                    <CardDescription>Allocate payment to outstanding invoices</CardDescription>
-                  </div>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-primary" />
+                  Receipt Information
+                  {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                </CardTitle>
+                <CardDescription>Enter the basic receipt details and customer information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <FormField
-                  form={form}
-                  name="AllocationMode"
-                  label="Allocation Mode"
-                  type="select"
-                  options={[
-                    { label: "Single Invoice", value: ALLOCATION_MODE.SINGLE },
-                    { label: "Multiple Invoices", value: ALLOCATION_MODE.MULTIPLE },
-                  ]}
-                  placeholder="Select allocation mode"
-                />
-
-                {form.watch("AllocationMode") === ALLOCATION_MODE.SINGLE && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <FormField
                     form={form}
-                    name="LeaseInvoiceID"
-                    label="Select Invoice"
-                    type="select"
-                    options={availableInvoices.map((invoice) => ({
-                      label: `${invoice.InvoiceNo} - ${formatCurrency(invoice.BalanceAmount)} outstanding`,
-                      value: invoice.LeaseInvoiceID.toString(),
-                    }))}
-                    placeholder="Select invoice to allocate payment"
-                    description="Choose the invoice to allocate this payment against"
+                    name="ReceiptNo"
+                    label="Receipt Number"
+                    placeholder={isEdit ? "Receipt number (cannot be changed)" : "Auto-generated if left empty"}
+                    description={isEdit ? "Receipt number cannot be modified in edit mode" : "Leave blank for auto-generated receipt number"}
+                    disabled={isEdit || !canEditReceipt}
+                    className={isEdit ? "bg-muted" : ""}
                   />
-                )}
+                  <FormField form={form} name="ReceiptDate" label="Receipt Date" type="date" required description="Date when payment was received" disabled={!canEditReceipt} />
+                  <FormField
+                    form={form}
+                    name="PaymentStatus"
+                    label="Payment Status"
+                    type="select"
+                    options={Object.values(PAYMENT_STATUS).map((status) => ({
+                      label: status,
+                      value: status,
+                    }))}
+                    placeholder="Select status"
+                    required
+                    disabled={!canEditReceipt}
+                  />
+                </div>
 
-                {form.watch("AllocationMode") === ALLOCATION_MODE.MULTIPLE && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium">Invoice Allocations</h4>
-                      <Button type="button" onClick={addInvoiceAllocation} disabled={totals.unallocatedAmount <= 0}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Allocation
-                      </Button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    form={form}
+                    name="CompanyID"
+                    label="Company"
+                    type="select"
+                    options={companies.map((company) => ({
+                      label: company.CompanyName,
+                      value: company.CompanyID.toString(),
+                    }))}
+                    placeholder="Select company"
+                    required
+                    description="Company receiving the payment"
+                    disabled={!canEditReceipt}
+                  />
+                  <FormField
+                    form={form}
+                    name="FiscalYearID"
+                    label="Fiscal Year"
+                    type="select"
+                    options={fiscalYears.map((fy) => ({
+                      label: fy.FYDescription,
+                      value: fy.FiscalYearID.toString(),
+                    }))}
+                    placeholder="Select fiscal year"
+                    required
+                    description="Fiscal year for the receipt"
+                    disabled={!canEditReceipt}
+                  />
+                </div>
+
+                <FormField
+                  form={form}
+                  name="CustomerID"
+                  label="Customer"
+                  type="select"
+                  options={customers.map((customer) => ({
+                    label: customer.CustomerFullName,
+                    value: customer.CustomerID.toString(),
+                  }))}
+                  placeholder="Select customer"
+                  required
+                  description="Customer making the payment"
+                  disabled={!canEditReceipt}
+                />
+
+                {/* Approval Configuration for Managers */}
+                {isManager && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h4 className="font-medium">Approval Configuration</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="requires-approval"
+                          checked={form.watch("RequiresApproval")}
+                          onCheckedChange={(checked) => form.setValue("RequiresApproval", checked as boolean)}
+                          disabled={!canEditReceipt}
+                        />
+                        <Label htmlFor="requires-approval">Requires Manager Approval</Label>
+                      </div>
+                      <FormField
+                        form={form}
+                        name="ApprovalThreshold"
+                        label="Approval Threshold"
+                        type="number"
+                        step="0.01"
+                        placeholder="10000.00"
+                        description="Amount threshold for requiring approval"
+                        disabled={!canEditReceipt}
+                      />
                     </div>
-
-                    {invoiceAllocationsFieldArray.fields.length === 0 ? (
-                      <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                        <Receipt className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                        <p className="text-muted-foreground mb-4">No allocations have been added yet.</p>
-                        <Button type="button" variant="outline" onClick={addInvoiceAllocation}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Your First Allocation
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="border rounded-md">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Invoice</TableHead>
-                              <TableHead>Outstanding</TableHead>
-                              <TableHead>Allocation</TableHead>
-                              <TableHead>Notes</TableHead>
-                              <TableHead className="w-[100px]">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {invoiceAllocationsFieldArray.fields.map((field, index) => {
-                              const invoiceId = form.watch(`invoiceAllocations.${index}.LeaseInvoiceID`);
-                              const invoiceDetails = getInvoiceDetails(invoiceId);
-
-                              return (
-                                <TableRow key={field.id}>
-                                  <TableCell>
-                                    <FormField
-                                      form={form}
-                                      name={`invoiceAllocations.${index}.LeaseInvoiceID`}
-                                      label=""
-                                      type="select"
-                                      options={availableInvoices.map((invoice) => ({
-                                        label: invoice.InvoiceNo,
-                                        value: invoice.LeaseInvoiceID,
-                                      }))}
-                                      placeholder="Select invoice"
-                                    />
-                                  </TableCell>
-                                  <TableCell>{invoiceDetails ? formatCurrency(invoiceDetails.BalanceAmount) : "—"}</TableCell>
-                                  <TableCell>
-                                    <FormField form={form} name={`invoiceAllocations.${index}.AllocationAmount`} label="" type="number" step="0.01" placeholder="0.00" />
-                                  </TableCell>
-                                  <TableCell>
-                                    <FormField form={form} name={`invoiceAllocations.${index}.Notes`} label="" placeholder="Optional notes" />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button type="button" variant="ghost" size="sm" onClick={() => invoiceAllocationsFieldArray.remove(index)}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    {totals.totalAllocated > 0 && (
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">Total Allocated:</span>
-                          <span className="text-lg font-bold">{formatCurrency(totals.totalAllocated)}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">Remaining to Allocate:</span>
-                          <span className={`text-lg font-bold ${totals.unallocatedAmount >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {formatCurrency(totals.unallocatedAmount)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
-          )}
 
-          {/* Auto-posting Configuration */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Send className="h-5 w-5 text-primary" />
-                Posting Configuration
-              </CardTitle>
-              <CardDescription>Configure automatic posting to general ledger</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="auto-post"
-                    checked={form.watch("AutoPost")}
-                    onCheckedChange={(checked) => {
-                      form.setValue("AutoPost", checked as boolean);
-                      setShowAutoPostOptions(checked as boolean);
-                    }}
-                  />
-                  <Label htmlFor="auto-post">Auto-post to general ledger</Label>
-                </div>
-              </div>
-
-              {showAutoPostOptions && (
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium">Auto-Posting Configuration</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField form={form} name="PostingDate" label="Posting Date" type="date" description="Date for posting entries" />
-                    <FormField form={form} name="PostingReference" label="Posting Reference" placeholder="Enter reference" description="Reference for posting entries" />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      form={form}
-                      name="DebitAccountID"
-                      label="Debit Account"
-                      type="select"
-                      options={accounts
-                        .filter((acc) => acc.AccountCode.startsWith("1"))
-                        .map((account) => ({
-                          label: `${account.AccountCode} - ${account.AccountName}`,
-                          value: account.AccountID.toString(),
-                        }))}
-                      placeholder="Select debit account"
-                      description="Account to debit (typically Cash/Bank account)"
-                    />
-                    <FormField
-                      form={form}
-                      name="CreditAccountID"
-                      label="Credit Account"
-                      type="select"
-                      options={accounts
-                        .filter((acc) => acc.AccountCode.startsWith("1"))
-                        .map((account) => ({
-                          label: `${account.AccountCode} - ${account.AccountName}`,
-                          value: account.AccountID.toString(),
-                        }))}
-                      placeholder="Select credit account"
-                      description="Account to credit (typically Accounts Receivable)"
-                    />
-                  </div>
+            {/* Payment Details */}
+            <Card className={isApproved ? "opacity-60" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Payment Details
+                  {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                </CardTitle>
+                <CardDescription>Configure payment method and amounts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <FormField
                     form={form}
-                    name="PostingNarration"
-                    label="Posting Narration"
-                    type="textarea"
-                    placeholder="Enter posting narration"
-                    description="Description for the posting entries"
+                    name="ReceivedAmount"
+                    label="Received Amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    required
+                    description="Primary amount received"
+                    disabled={!canEditReceipt}
+                  />
+                  <FormField
+                    form={form}
+                    name="PaymentType"
+                    label="Payment Type"
+                    type="select"
+                    options={Object.values(PAYMENT_TYPE).map((type) => ({
+                      label: type,
+                      value: type,
+                    }))}
+                    placeholder="Select payment type"
+                    required
+                    disabled={!canEditReceipt}
+                  />
+                  <FormField
+                    form={form}
+                    name="CurrencyID"
+                    label="Currency"
+                    type="select"
+                    options={currencies.map((currency) => ({
+                      label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
+                      value: currency.CurrencyID.toString(),
+                    }))}
+                    placeholder="Select currency"
+                    description="Payment currency"
+                    disabled={!canEditReceipt}
                   />
                 </div>
-              )}
 
-              <FormField form={form} name="Notes" label="Receipt Notes" type="textarea" placeholder="Enter receipt notes" description="Additional notes about this receipt" />
-            </CardContent>
-          </Card>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <FormField
+                    form={form}
+                    name="SecurityDepositAmount"
+                    label="Security Deposit"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    description="Security deposit amount"
+                    disabled={!canEditReceipt}
+                  />
+                  <FormField
+                    form={form}
+                    name="PenaltyAmount"
+                    label="Penalty Amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    description="Penalty charges included"
+                    disabled={!canEditReceipt}
+                  />
+                  <FormField
+                    form={form}
+                    name="DiscountAmount"
+                    label="Discount Amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    description="Discount given"
+                    disabled={!canEditReceipt}
+                  />
+                </div>
 
-          {/* Form Actions */}
-          <Card>
-            <CardFooter className="flex justify-between pt-6">
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => navigate("/receipts")} disabled={loading}>
-                  Cancel
-                </Button>
-                <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reset
-                </Button>
-              </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isEdit ? "Updating..." : "Creating..."}
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isEdit ? "Update Receipt" : "Create Receipt"}
-                  </>
+                {/* Cheque Details */}
+                {showChequeFields && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h4 className="font-medium">Cheque Details</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField form={form} name="ChequeNo" label="Cheque Number" placeholder="Enter cheque number" required={showChequeFields} disabled={!canEditReceipt} />
+                      <FormField form={form} name="ChequeDate" label="Cheque Date" type="date" required={showChequeFields} disabled={!canEditReceipt} />
+                      <FormField
+                        form={form}
+                        name="BankID"
+                        label="Cheque Bank"
+                        type="select"
+                        options={banks.map((bank) => ({
+                          label: bank.BankName,
+                          value: bank.BankID.toString(),
+                        }))}
+                        placeholder="Select bank"
+                        disabled={!canEditReceipt}
+                      />
+                    </div>
+                  </div>
                 )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </form>
-      </Form>
-    </div>
+
+                {/* Bank Transfer Details */}
+                {showBankFields && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h4 className="font-medium">Bank Transfer Details</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField form={form} name="TransactionReference" label="Transaction Reference" placeholder="Enter reference number" disabled={!canEditReceipt} />
+                      <FormField
+                        form={form}
+                        name="BankID"
+                        label="Source Bank"
+                        type="select"
+                        options={banks.map((bank) => ({
+                          label: bank.BankName,
+                          value: bank.BankID.toString(),
+                        }))}
+                        placeholder="Select source bank"
+                        disabled={!canEditReceipt}
+                      />
+                    </div>
+                    <FormField form={form} name="BankAccountNo" label="Account Number" placeholder="Enter account number" disabled={!canEditReceipt} />
+                  </div>
+                )}
+
+                {/* Deposit Information */}
+                {showDepositFields && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h4 className="font-medium">Deposit Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        form={form}
+                        name="DepositedBankID"
+                        label="Deposit Bank"
+                        type="select"
+                        options={banks.map((bank) => ({
+                          label: bank.BankName,
+                          value: bank.BankID.toString(),
+                        }))}
+                        placeholder="Select deposit bank"
+                        description="Bank where payment will be deposited"
+                        disabled={!canEditReceipt}
+                      />
+                      <FormField form={form} name="DepositDate" label="Deposit Date" type="date" description="Date when payment was deposited" disabled={!canEditReceipt} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-advance"
+                      checked={form.watch("IsAdvancePayment")}
+                      onCheckedChange={(checked) => form.setValue("IsAdvancePayment", checked as boolean)}
+                      disabled={!canEditReceipt}
+                    />
+                    <Label htmlFor="is-advance">Advance Payment</Label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Receipt Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-primary" />
+                  Receipt Summary
+                </CardTitle>
+                <CardDescription>Live calculation of receipt totals</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Received Amount</span>
+                    </div>
+                    <div className="text-2xl font-bold">{formatCurrency(totals.receivedAmount)}</div>
+                    <div className="text-xs text-muted-foreground">Primary payment</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Additional Amounts</span>
+                    </div>
+                    <div className="text-2xl font-bold">{formatCurrency(totals.securityDepositAmount + totals.penaltyAmount - totals.discountAmount)}</div>
+                    <div className="text-xs text-muted-foreground">Security + Penalty - Discount</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium text-muted-foreground">Net Amount</span>
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.netAmount)}</div>
+                    <div className="text-xs text-muted-foreground">Total available</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Unallocated</span>
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(totals.unallocatedAmount)}</div>
+                    <div className="text-xs text-muted-foreground">Remaining to allocate</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Invoice Allocation */}
+            {!form.watch("IsAdvancePayment") && (
+              <Card className={isApproved ? "opacity-60" : ""}>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building className="h-5 w-5 text-primary" />
+                        Invoice Allocation
+                        {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                      </CardTitle>
+                      <CardDescription>Allocate payment to outstanding invoices</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <FormField
+                    form={form}
+                    name="AllocationMode"
+                    label="Allocation Mode"
+                    type="select"
+                    options={[
+                      { label: "Single Invoice", value: ALLOCATION_MODE.SINGLE },
+                      { label: "Multiple Invoices", value: ALLOCATION_MODE.MULTIPLE },
+                    ]}
+                    placeholder="Select allocation mode"
+                    disabled={!canEditReceipt}
+                  />
+
+                  {form.watch("AllocationMode") === ALLOCATION_MODE.SINGLE && (
+                    <FormField
+                      form={form}
+                      name="LeaseInvoiceID"
+                      label="Select Invoice"
+                      type="select"
+                      options={availableInvoices.map((invoice) => ({
+                        label: `${invoice.InvoiceNo} - ${formatCurrency(invoice.BalanceAmount)} outstanding`,
+                        value: invoice.LeaseInvoiceID.toString(),
+                      }))}
+                      placeholder="Select invoice to allocate payment"
+                      description="Choose the invoice to allocate this payment against"
+                      disabled={!canEditReceipt}
+                    />
+                  )}
+
+                  {form.watch("AllocationMode") === ALLOCATION_MODE.MULTIPLE && (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium">Invoice Allocations</h4>
+                        <Button type="button" onClick={addInvoiceAllocation} disabled={totals.unallocatedAmount <= 0 || !canEditReceipt}>
+                          {canEditReceipt ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                          Add Allocation
+                        </Button>
+                      </div>
+
+                      {invoiceAllocationsFieldArray.fields.length === 0 ? (
+                        <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                          <Receipt className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                          <p className="text-muted-foreground mb-4">No allocations have been added yet.</p>
+                          <Button type="button" variant="outline" onClick={addInvoiceAllocation} disabled={!canEditReceipt}>
+                            {canEditReceipt ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                            Add Your First Allocation
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="border rounded-md">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Invoice</TableHead>
+                                <TableHead>Outstanding</TableHead>
+                                <TableHead>Allocation</TableHead>
+                                <TableHead>Notes</TableHead>
+                                <TableHead className="w-[100px]">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {invoiceAllocationsFieldArray.fields.map((field, index) => {
+                                const invoiceId = form.watch(`invoiceAllocations.${index}.LeaseInvoiceID`);
+                                const invoiceDetails = getInvoiceDetails(invoiceId);
+
+                                return (
+                                  <TableRow key={field.id}>
+                                    <TableCell>
+                                      <FormField
+                                        form={form}
+                                        name={`invoiceAllocations.${index}.LeaseInvoiceID`}
+                                        label=""
+                                        type="select"
+                                        options={availableInvoices.map((invoice) => ({
+                                          label: invoice.InvoiceNo,
+                                          value: invoice.LeaseInvoiceID,
+                                        }))}
+                                        placeholder="Select invoice"
+                                        disabled={!canEditReceipt}
+                                      />
+                                    </TableCell>
+                                    <TableCell>{invoiceDetails ? formatCurrency(invoiceDetails.BalanceAmount) : "—"}</TableCell>
+                                    <TableCell>
+                                      <FormField
+                                        form={form}
+                                        name={`invoiceAllocations.${index}.AllocationAmount`}
+                                        label=""
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        disabled={!canEditReceipt}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <FormField form={form} name={`invoiceAllocations.${index}.Notes`} label="" placeholder="Optional notes" disabled={!canEditReceipt} />
+                                    </TableCell>
+                                    <TableCell>
+                                      {canEditReceipt ? (
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => invoiceAllocationsFieldArray.remove(index)}>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      ) : (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button type="button" variant="ghost" size="sm" disabled>
+                                              <Lock className="h-4 w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Cannot modify approved receipts</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      {totals.totalAllocated > 0 && (
+                        <div className="p-4 bg-muted/50 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Total Allocated:</span>
+                            <span className="text-lg font-bold">{formatCurrency(totals.totalAllocated)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Remaining to Allocate:</span>
+                            <span className={`text-lg font-bold ${totals.unallocatedAmount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              {formatCurrency(totals.unallocatedAmount)}
+                            </span>
+                          </div>
+                          {totals.unallocatedAmount < 0 && (
+                            <Alert variant="destructive" className="mt-2">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription>Total allocation exceeds net amount. Please adjust allocation amounts.</AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Auto-posting Configuration */}
+            <Card className={isApproved ? "opacity-60" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Send className="h-5 w-5 text-primary" />
+                  Posting Configuration
+                  {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                </CardTitle>
+                <CardDescription>Configure automatic posting to general ledger</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="auto-post"
+                      checked={form.watch("AutoPost")}
+                      onCheckedChange={(checked) => {
+                        form.setValue("AutoPost", checked as boolean);
+                        setShowAutoPostOptions(checked as boolean);
+                      }}
+                      disabled={!canEditReceipt}
+                    />
+                    <Label htmlFor="auto-post">Auto-post to general ledger</Label>
+                  </div>
+                </div>
+
+                {showAutoPostOptions && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <h4 className="font-medium">Auto-Posting Configuration</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField form={form} name="PostingDate" label="Posting Date" type="date" description="Date for posting entries" disabled={!canEditReceipt} />
+                      <FormField
+                        form={form}
+                        name="PostingReference"
+                        label="Posting Reference"
+                        placeholder="Enter reference"
+                        description="Reference for posting entries"
+                        disabled={!canEditReceipt}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        form={form}
+                        name="DebitAccountID"
+                        label="Debit Account"
+                        type="select"
+                        options={accounts
+                          .filter((acc) => acc.AccountCode.startsWith("1"))
+                          .map((account) => ({
+                            label: `${account.AccountCode} - ${account.AccountName}`,
+                            value: account.AccountID.toString(),
+                          }))}
+                        placeholder="Select debit account"
+                        description="Account to debit (typically Cash/Bank account)"
+                        disabled={!canEditReceipt}
+                      />
+                      <FormField
+                        form={form}
+                        name="CreditAccountID"
+                        label="Credit Account"
+                        type="select"
+                        options={accounts
+                          .filter((acc) => acc.AccountCode.startsWith("1"))
+                          .map((account) => ({
+                            label: `${account.AccountCode} - ${account.AccountName}`,
+                            value: account.AccountID.toString(),
+                          }))}
+                        placeholder="Select credit account"
+                        description="Account to credit (typically Accounts Receivable)"
+                        disabled={!canEditReceipt}
+                      />
+                    </div>
+                    <FormField
+                      form={form}
+                      name="PostingNarration"
+                      label="Posting Narration"
+                      type="textarea"
+                      placeholder="Enter posting narration"
+                      description="Description for the posting entries"
+                      disabled={!canEditReceipt}
+                    />
+                  </div>
+                )}
+
+                <FormField
+                  form={form}
+                  name="Notes"
+                  label="Receipt Notes"
+                  type="textarea"
+                  placeholder="Enter receipt notes"
+                  description="Additional notes about this receipt"
+                  disabled={!canEditReceipt}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Form Actions */}
+            <Card>
+              <CardFooter className="flex justify-between pt-6">
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => navigate("/receipts")} disabled={loading}>
+                    Cancel
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleReset} disabled={loading || !canEditReceipt}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+                <Button type="submit" disabled={loading || !canEditReceipt}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isEdit ? "Updating..." : "Creating..."}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {isEdit ? "Update Receipt" : "Create Receipt"}
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          </form>
+        </Form>
+      </div>
+    </TooltipProvider>
   );
 };
 
