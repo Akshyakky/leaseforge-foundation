@@ -29,9 +29,13 @@ import {
   ReceiptSummary,
   BankDepositSummary,
   OutstandingDepositItem,
+  ReceiptApprovalRequest,
+  ReceiptRejectionRequest,
+  BulkApprovalRequest,
   CONTRACT_RECEIPT_MODES,
   PAYMENT_TYPE,
   PAYMENT_STATUS,
+  APPROVAL_STATUS,
   ALLOCATION_MODE,
   BULK_OPERATION_TYPE,
   REPORT_TYPE,
@@ -49,6 +53,9 @@ export type {
   ReceiptStatistics,
   ReceiptDashboardData,
   SelectedReceiptForPosting,
+  ReceiptApprovalRequest,
+  ReceiptRejectionRequest,
+  BulkApprovalRequest,
 };
 
 /**
@@ -116,6 +123,10 @@ class ContractReceiptService extends BaseService {
         AccountID: data.AccountID,
         Notes: data.Notes,
 
+        // Approval parameters
+        RequiresApproval: data.RequiresApproval,
+        ApprovalThreshold: data.ApprovalThreshold,
+
         // Auto-posting parameters
         AutoPost: data.AutoPost || false,
         PostingDate: data.PostingDate ? new Date(data.PostingDate).toISOString().split("T")[0] : undefined,
@@ -181,6 +192,11 @@ class ContractReceiptService extends BaseService {
         ReceivedByUserID: data.ReceivedByUserID,
         AccountID: data.AccountID,
         Notes: data.Notes,
+
+        // Approval fields
+        ApprovalStatus: data.ApprovalStatus,
+        RequiresApproval: data.RequiresApproval,
+        ApprovalThreshold: data.ApprovalThreshold,
       },
     };
 
@@ -285,6 +301,7 @@ class ContractReceiptService extends BaseService {
         SearchText: params.searchText,
         FilterPaymentStatus: params.FilterPaymentStatus,
         FilterPaymentType: params.FilterPaymentType,
+        FilterApprovalStatus: params.FilterApprovalStatus,
         FilterPropertyID: params.FilterPropertyID,
         FilterUnitID: params.FilterUnitID,
         FilterCustomerID: params.FilterCustomerID,
@@ -296,6 +313,7 @@ class ContractReceiptService extends BaseService {
         FilterPostedOnly: params.FilterPostedOnly,
         FilterUnpostedOnly: params.FilterUnpostedOnly,
         FilterAdvanceOnly: params.FilterAdvanceOnly,
+        FilterPendingApprovalOnly: params.FilterPendingApprovalOnly,
         FilterBankID: params.FilterBankID,
         FilterReceivedByUserID: params.FilterReceivedByUserID,
         FilterAmountFrom: params.FilterAmountFrom,
@@ -342,6 +360,206 @@ class ContractReceiptService extends BaseService {
     };
   }
 
+  // ========== Approval Methods ==========
+
+  /**
+   * Approve a receipt
+   * @param data - Approval request data
+   * @returns Response with status
+   */
+  async approveReceipt(data: ReceiptApprovalRequest): Promise<ApiResponse> {
+    if (!data.LeaseReceiptID) {
+      return {
+        Status: 0,
+        Message: "Receipt ID is required.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_RECEIPT_MODES.APPROVE_RECEIPT,
+      parameters: {
+        LeaseReceiptID: data.LeaseReceiptID,
+        BulkApprovalComments: data.Comments,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Receipt approved successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Receipt approved successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to approve receipt",
+    };
+  }
+
+  /**
+   * Reject a receipt
+   * @param data - Rejection request data
+   * @returns Response with status
+   */
+  async rejectReceipt(data: ReceiptRejectionRequest): Promise<ApiResponse> {
+    if (!data.LeaseReceiptID) {
+      return {
+        Status: 0,
+        Message: "Receipt ID is required.",
+      };
+    }
+
+    if (!data.RejectionReason || data.RejectionReason.trim().length === 0) {
+      return {
+        Status: 0,
+        Message: "Rejection reason is required.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_RECEIPT_MODES.REJECT_RECEIPT,
+      parameters: {
+        LeaseReceiptID: data.LeaseReceiptID,
+        RejectionReason: data.RejectionReason,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Receipt rejected successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Receipt rejected successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reject receipt",
+    };
+  }
+
+  /**
+   * Reset receipt approval status to pending
+   * @param receiptId - The ID of the receipt
+   * @returns Response with status
+   */
+  async resetReceiptApprovalStatus(receiptId: number): Promise<ApiResponse> {
+    if (!receiptId) {
+      return {
+        Status: 0,
+        Message: "Receipt ID is required.",
+      };
+    }
+
+    const request: BaseRequest = {
+      mode: CONTRACT_RECEIPT_MODES.RESET_APPROVAL_STATUS,
+      parameters: {
+        LeaseReceiptID: receiptId,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Receipt approval status reset successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Receipt approval status reset successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to reset receipt approval status",
+    };
+  }
+
+  /**
+   * Get receipts pending approval
+   * @param companyId - Optional company filter
+   * @param fiscalYearId - Optional fiscal year filter
+   * @returns Array of receipts pending approval
+   */
+  async getReceiptsPendingApproval(companyId?: number, fiscalYearId?: number): Promise<ContractReceipt[]> {
+    const request: BaseRequest = {
+      mode: CONTRACT_RECEIPT_MODES.GET_RECEIPTS_PENDING_APPROVAL,
+      parameters: {
+        CompanyID: companyId,
+        FiscalYearID: fiscalYearId,
+      },
+    };
+
+    const response = await this.execute<ContractReceipt[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Perform bulk approval operations
+   * @param data - Bulk approval request data
+   * @returns Response with operation status
+   */
+  async performBulkApprovalOperation(data: BulkApprovalRequest): Promise<BulkOperationResponse> {
+    if (!data.SelectedReceiptIDs || data.SelectedReceiptIDs.length === 0) {
+      return {
+        Status: 0,
+        Message: "No receipts selected for bulk approval operation.",
+        UpdatedCount: 0,
+        FailedCount: 0,
+      };
+    }
+
+    if (data.BulkOperation === "Reject" && (!data.BulkRejectionReason || data.BulkRejectionReason.trim().length === 0)) {
+      return {
+        Status: 0,
+        Message: "Rejection reason is required for bulk rejection.",
+        UpdatedCount: 0,
+        FailedCount: 0,
+      };
+    }
+
+    // Convert receipt IDs to the expected format
+    const selectedReceipts = data.SelectedReceiptIDs.map((id) => ({
+      LeaseReceiptID: id,
+      Operation: data.BulkOperation,
+    }));
+
+    const selectedReceiptsJSON = JSON.stringify(selectedReceipts);
+
+    const request: BaseRequest = {
+      mode: CONTRACT_RECEIPT_MODES.BULK_UPDATE_RECEIPTS,
+      parameters: {
+        BulkOperation: data.BulkOperation,
+        SelectedReceiptsJSON: selectedReceiptsJSON,
+        BulkApprovalComments: data.BulkApprovalComments,
+        BulkRejectionReason: data.BulkRejectionReason,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess(`Bulk ${data.BulkOperation.toLowerCase()} completed. Updated: ${response.UpdatedCount}, Failed: ${response.FailedCount}`);
+      return {
+        Status: 1,
+        Message: response.message || `Bulk ${data.BulkOperation.toLowerCase()} completed`,
+        UpdatedCount: response.UpdatedCount || 0,
+        FailedCount: response.FailedCount || 0,
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || `Failed to perform bulk ${data.BulkOperation.toLowerCase()}`,
+      UpdatedCount: 0,
+      FailedCount: 0,
+    };
+  }
+
   // ========== Statistics and Reporting Methods ==========
 
   /**
@@ -364,16 +582,18 @@ class ContractReceiptService extends BaseService {
     if (response.success) {
       return {
         statusCounts: response.table1 || [],
-        paymentTypeCounts: response.table2 || [],
-        monthlyTrends: response.table3 || [],
-        pendingDeposits: Array.isArray(response.table4)
-          ? response.table4[0] || { PendingDepositCount: 0, PendingDepositAmount: 0, AvgDaysWaiting: 0 }
-          : response.table4 || { PendingDepositCount: 0, PendingDepositAmount: 0, AvgDaysWaiting: 0 },
+        approvalCounts: response.table2 || [],
+        paymentTypeCounts: response.table3 || [],
+        monthlyTrends: response.table4 || [],
+        pendingDeposits: Array.isArray(response.table5)
+          ? response.table5[0] || { PendingDepositCount: 0, PendingDepositAmount: 0, AvgDaysWaiting: 0 }
+          : response.table5 || { PendingDepositCount: 0, PendingDepositAmount: 0, AvgDaysWaiting: 0 },
       };
     }
 
     return {
       statusCounts: [],
+      approvalCounts: [],
       paymentTypeCounts: [],
       monthlyTrends: [],
       pendingDeposits: { PendingDepositCount: 0, PendingDepositAmount: 0, AvgDaysWaiting: 0 },
@@ -392,6 +612,7 @@ class ContractReceiptService extends BaseService {
       CompanyID: companyId,
       FiscalYearID: fiscalYearId,
     });
+    const pendingApprovalReceipts = await this.getReceiptsPendingApproval(companyId, fiscalYearId);
 
     // Calculate dashboard metrics
     const totalAmounts = statistics.statusCounts.reduce(
@@ -401,6 +622,14 @@ class ContractReceiptService extends BaseService {
         securityDeposit: acc.securityDeposit + curr.SecurityDepositTotal,
       }),
       { total: 0, advance: 0, securityDeposit: 0 }
+    );
+
+    const approvalAmounts = statistics.approvalCounts.reduce(
+      (acc, curr) => ({
+        pending: acc.pending + (curr.ApprovalStatus === APPROVAL_STATUS.PENDING ? curr.TotalAmount : 0),
+        rejected: acc.rejected + (curr.ApprovalStatus === APPROVAL_STATUS.REJECTED ? curr.TotalAmount : 0),
+      }),
+      { pending: 0, rejected: 0 }
     );
 
     const postedAmount = recentReceipts.filter((receipt) => receipt.IsPosted).reduce((sum, receipt) => sum + receipt.ReceivedAmount, 0);
@@ -421,12 +650,15 @@ class ContractReceiptService extends BaseService {
       totalAmount: totalAmounts.total,
       postedAmount: postedAmount,
       unpostedAmount: unpostedAmount,
+      pendingApprovalAmount: approvalAmounts.pending,
+      rejectedAmount: approvalAmounts.rejected,
       advancePayments: totalAmounts.advance,
       securityDeposits: totalAmounts.securityDeposit,
       pendingDeposits: pendingDeposits,
       overdueDeposits: overdueDeposits,
       currentMonthReceived: currentMonthData?.TotalAmount || 0,
       recentReceipts: recentReceipts.slice(0, 10),
+      pendingApprovalList: pendingApprovalReceipts.slice(0, 10),
       pendingDepositList: recentReceipts.filter((receipt) => receipt.RequiresDeposit && !receipt.DepositDate).slice(0, 10),
       receiptTrends: statistics.monthlyTrends.map((trend) => ({
         month: `${trend.ReceiptYear}-${String(trend.ReceiptMonth).padStart(2, "0")}`,
@@ -698,6 +930,8 @@ class ContractReceiptService extends BaseService {
         BulkPaymentStatus: operationData.BulkPaymentStatus,
         BulkDepositDate: operationData.BulkDepositDate ? new Date(operationData.BulkDepositDate).toISOString().split("T")[0] : undefined,
         BulkDepositBankID: operationData.BulkDepositBankID,
+        BulkApprovalComments: operationData.BulkApprovalComments,
+        BulkRejectionReason: operationData.BulkRejectionReason,
       },
     };
 
@@ -835,6 +1069,13 @@ class ContractReceiptService extends BaseService {
 
       if (depositDate < receiptDate) {
         errors.push("Deposit date cannot be before receipt date.");
+      }
+    }
+
+    // Approval validation
+    if (receiptData.ApprovalThreshold !== undefined && receiptData.ReceivedAmount !== undefined) {
+      if (receiptData.ReceivedAmount >= receiptData.ApprovalThreshold && receiptData.RequiresApproval !== true) {
+        warnings.push("Receipt amount exceeds approval threshold. Manual approval may be required.");
       }
     }
 
@@ -997,6 +1238,7 @@ class ContractReceiptService extends BaseService {
       "Invoice No",
       "Payment Type",
       "Payment Status",
+      "Approval Status",
       "Received Amount",
       "Security Deposit",
       "Penalty Amount",
@@ -1025,6 +1267,7 @@ class ContractReceiptService extends BaseService {
         `"${receipt.InvoiceNo || ""}"`,
         `"${receipt.PaymentType}"`,
         `"${receipt.PaymentStatus}"`,
+        `"${receipt.ApprovalStatus}"`,
         receipt.ReceivedAmount.toFixed(2),
         (receipt.SecurityDepositAmount || 0).toFixed(2),
         (receipt.PenaltyAmount || 0).toFixed(2),
@@ -1077,30 +1320,43 @@ class ContractReceiptService extends BaseService {
    * @returns Status display string with color indication
    */
   getReceiptStatusDisplay(receipt: ContractReceipt): { status: string; color: string; priority: number } {
+    // Check approval status first for high priority issues
+    if (receipt.ApprovalStatus === APPROVAL_STATUS.REJECTED) {
+      return { status: "Rejected", color: "red", priority: 1 };
+    }
+
+    if (receipt.ApprovalStatus === APPROVAL_STATUS.PENDING && receipt.RequiresApproval) {
+      return { status: "Pending Approval", color: "orange", priority: 2 };
+    }
+
     if (receipt.PaymentStatus === PAYMENT_STATUS.BOUNCED) {
-      return { status: "Bounced", color: "red", priority: 1 };
+      return { status: "Bounced", color: "red", priority: 3 };
     }
 
     if (receipt.PaymentStatus === PAYMENT_STATUS.CANCELLED) {
-      return { status: "Cancelled", color: "gray", priority: 2 };
+      return { status: "Cancelled", color: "gray", priority: 4 };
     }
 
     if (receipt.RequiresDeposit && !receipt.DepositDate) {
       const daysToDeposit = receipt.DaysToDeposit || 0;
       if (daysToDeposit > 7) {
-        return { status: "Overdue Deposit", color: "red", priority: 3 };
+        return { status: "Overdue Deposit", color: "red", priority: 5 };
       } else if (daysToDeposit > 3) {
-        return { status: "Due Soon", color: "orange", priority: 4 };
+        return { status: "Due Soon", color: "orange", priority: 6 };
       } else {
-        return { status: "Pending Deposit", color: "yellow", priority: 5 };
+        return { status: "Pending Deposit", color: "yellow", priority: 7 };
       }
     }
 
-    if (!receipt.IsPosted) {
-      return { status: "Unposted", color: "blue", priority: 6 };
+    if (!receipt.IsPosted && receipt.ApprovalStatus === APPROVAL_STATUS.APPROVED) {
+      return { status: "Approved - Unposted", color: "blue", priority: 8 };
     }
 
-    return { status: "Completed", color: "green", priority: 7 };
+    if (!receipt.IsPosted) {
+      return { status: "Unposted", color: "blue", priority: 9 };
+    }
+
+    return { status: "Completed", color: "green", priority: 10 };
   }
 }
 

@@ -46,9 +46,19 @@ export interface ContractReceipt extends BaseEntity {
   PostingID?: number;
   Notes?: string;
 
+  // Approval fields
+  ApprovalStatus: string; // 'Pending', 'Approved', 'Rejected', 'Not Required'
+  RequiresApproval: boolean;
+  ApprovalThreshold?: number;
+  RejectedID?: number;
+  RejectedBy?: string;
+  RejectedOn?: string | Date;
+  RejectionReason?: string;
+
   // Joined fields for display
   CustomerName?: string;
   CustomerNo?: string;
+  CustomerTaxNo?: string;
   InvoiceNo?: string;
   InvoiceDate?: string | Date;
   InvoiceAmount?: number;
@@ -62,6 +72,7 @@ export interface ContractReceipt extends BaseEntity {
   CurrencyCode?: string;
   CurrencyName?: string;
   BankName?: string;
+  SwiftCode?: string;
   DepositBankName?: string;
   ReceivedByUser?: string;
   CompanyName?: string;
@@ -124,6 +135,10 @@ export interface ReceiptCreateRequest {
   AccountID?: number;
   Notes?: string;
 
+  // Approval fields
+  RequiresApproval?: boolean;
+  ApprovalThreshold?: number;
+
   // Auto-posting options
   AutoPost?: boolean;
   PostingDate?: string | Date;
@@ -162,6 +177,11 @@ export interface ReceiptUpdateRequest {
   ReceivedByUserID?: number;
   AccountID?: number;
   Notes?: string;
+
+  // Approval fields
+  ApprovalStatus?: string;
+  RequiresApproval?: boolean;
+  ApprovalThreshold?: number;
 }
 
 export interface ReceiptAllocationRequest {
@@ -169,6 +189,25 @@ export interface ReceiptAllocationRequest {
   LeaseInvoiceID?: number;
   ReceivedAmount?: number;
   InvoiceAllocations?: InvoiceAllocation[];
+}
+
+// ========== Approval Types ==========
+
+export interface ReceiptApprovalRequest {
+  LeaseReceiptID: number;
+  Comments?: string;
+}
+
+export interface ReceiptRejectionRequest {
+  LeaseReceiptID: number;
+  RejectionReason: string;
+}
+
+export interface BulkApprovalRequest {
+  SelectedReceiptIDs: number[];
+  BulkOperation: "Approve" | "Reject";
+  BulkApprovalComments?: string;
+  BulkRejectionReason?: string;
 }
 
 // ========== Posting Types ==========
@@ -216,6 +255,7 @@ export interface ReceiptSearchParams {
   searchText?: string;
   FilterPaymentStatus?: string;
   FilterPaymentType?: string;
+  FilterApprovalStatus?: string;
   FilterPropertyID?: number;
   FilterUnitID?: number;
   FilterCustomerID?: number;
@@ -227,6 +267,7 @@ export interface ReceiptSearchParams {
   FilterPostedOnly?: boolean;
   FilterUnpostedOnly?: boolean;
   FilterAdvanceOnly?: boolean;
+  FilterPendingApprovalOnly?: boolean;
   FilterBankID?: number;
   FilterReceivedByUserID?: number;
   FilterAmountFrom?: number;
@@ -239,7 +280,7 @@ export interface ReceiptSearchParams {
 
 export interface BulkReceiptOperation {
   LeaseReceiptID: number;
-  Operation: "UpdateStatus" | "Deposit" | "Post";
+  Operation: "UpdateStatus" | "Deposit" | "Post" | "Approve" | "Reject";
   NewStatus?: string;
   DepositBankID?: number;
   DepositDate?: string | Date;
@@ -255,6 +296,8 @@ export interface BulkOperationRequest {
   BulkPaymentStatus?: string;
   BulkDepositDate?: string | Date;
   BulkDepositBankID?: number;
+  BulkApprovalComments?: string;
+  BulkRejectionReason?: string;
 }
 
 // ========== Statistics and Reporting Types ==========
@@ -267,6 +310,12 @@ export interface ReceiptStatistics {
     AdvanceAmount: number;
     SecurityDepositTotal: number;
     PenaltyTotal: number;
+  }[];
+  approvalCounts: {
+    ApprovalStatus: string;
+    ReceiptCount: number;
+    TotalAmount: number;
+    AverageAmount: number;
   }[];
   paymentTypeCounts: {
     PaymentType: string;
@@ -307,12 +356,15 @@ export interface ReceiptDashboardData {
   totalAmount: number;
   postedAmount: number;
   unpostedAmount: number;
+  pendingApprovalAmount: number;
+  rejectedAmount: number;
   advancePayments: number;
   securityDeposits: number;
   pendingDeposits: number;
   overdueDeposits: number;
   currentMonthReceived: number;
   recentReceipts: ContractReceipt[];
+  pendingApprovalList: ContractReceipt[];
   pendingDepositList: ContractReceipt[];
   receiptTrends: {
     month: string;
@@ -504,6 +556,13 @@ export const PAYMENT_STATUS = {
   PENDING: "Pending",
 } as const;
 
+export const APPROVAL_STATUS = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  NOT_REQUIRED: "Not Required",
+} as const;
+
 export const ALLOCATION_MODE = {
   SINGLE: "Single",
   MULTIPLE: "Multiple",
@@ -514,6 +573,8 @@ export const BULK_OPERATION_TYPE = {
   UPDATE_STATUS: "UpdateStatus",
   DEPOSIT: "Deposit",
   POST: "Post",
+  APPROVE: "Approve",
+  REJECT: "Reject",
 } as const;
 
 export const REPORT_TYPE = {
@@ -549,10 +610,15 @@ export const CONTRACT_RECEIPT_MODES = {
   GET_RECEIPTS_BY_INVOICE: 15,
   BULK_UPDATE_RECEIPTS: 16,
   GET_RECEIPT_REPORTS: 17,
+  APPROVE_RECEIPT: 18,
+  REJECT_RECEIPT: 19,
+  RESET_APPROVAL_STATUS: 20,
+  GET_RECEIPTS_PENDING_APPROVAL: 21,
 } as const;
 
 export type PaymentType = (typeof PAYMENT_TYPE)[keyof typeof PAYMENT_TYPE];
 export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];
+export type ApprovalStatus = (typeof APPROVAL_STATUS)[keyof typeof APPROVAL_STATUS];
 export type AllocationMode = (typeof ALLOCATION_MODE)[keyof typeof ALLOCATION_MODE];
 export type BulkOperationType = (typeof BULK_OPERATION_TYPE)[keyof typeof BULK_OPERATION_TYPE];
 export type ReportType = (typeof REPORT_TYPE)[keyof typeof REPORT_TYPE];
