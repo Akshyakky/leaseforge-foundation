@@ -1,3 +1,4 @@
+// src/pages/pettyCash/PettyCashDetails.tsx - Enhanced with improved UI and proper type integration
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { pettyCashService } from "@/services/pettyCashService";
@@ -10,6 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
   Edit,
@@ -34,19 +38,32 @@ import {
   User,
   DollarSign,
   ChevronDown,
+  Loader2,
+  Lock,
+  Shield,
+  AlertTriangle,
+  Plus,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, VoucherStatus, ApprovalAction } from "@/types/pettyCashTypes";
+import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, VoucherStatus, ApprovalStatus, ApprovalAction, TransactionType } from "@/types/pettyCashTypes";
 import { format } from "date-fns";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 
 // PDF Report Components
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+import { useAppSelector } from "@/lib/hooks";
 
-export const PettyCashDetails = () => {
+const PettyCashDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAppSelector((state) => state.auth);
 
   // State variables
   const [voucher, setVoucher] = useState<PettyCashVoucher | null>(null);
@@ -54,12 +71,14 @@ export const PettyCashDetails = () => {
   const [attachments, setAttachments] = useState<PettyCashAttachment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("details");
 
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [reversalDialogOpen, setReversalDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [resetApprovalDialogOpen, setResetApprovalDialogOpen] = useState(false);
 
   // PDF generation state
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -68,14 +87,32 @@ export const PettyCashDetails = () => {
   // Form states
   const [approvalAction, setApprovalAction] = useState<ApprovalAction>(ApprovalAction.APPROVE);
   const [approvalComments, setApprovalComments] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
   const [reversalReason, setReversalReason] = useState("");
 
   // Loading states for actions
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Attachment-related state
+  const [previewAttachment, setPreviewAttachment] = useState<PettyCashAttachment | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
+
+  // Check if user is manager
+  const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Check if voucher can be edited
+  const canEditVoucher = voucher && (voucher.PostingStatus === VoucherStatus.DRAFT || voucher.PostingStatus === VoucherStatus.PENDING);
+  const isApproved = voucher?.ApprovalStatus === ApprovalStatus.APPROVED;
+  const isPosted = voucher?.PostingStatus === VoucherStatus.POSTED;
+
   useEffect(() => {
     const fetchVoucherData = async () => {
-      if (!id) return;
+      if (!id) {
+        navigate("/petty-cash");
+        return;
+      }
 
       setLoading(true);
       try {
@@ -88,18 +125,20 @@ export const PettyCashDetails = () => {
         } else {
           setError("Voucher not found");
           toast.error("Voucher not found");
+          navigate("/petty-cash");
         }
       } catch (err) {
         console.error("Error fetching voucher:", err);
         setError("Failed to load voucher details");
         toast.error("Failed to load voucher details");
+        navigate("/petty-cash");
       } finally {
         setLoading(false);
       }
     };
 
     fetchVoucherData();
-  }, [id]);
+  }, [id, navigate]);
 
   // PDF Generation Handlers
   const handleGeneratePettyCashSlip = async () => {
@@ -140,18 +179,33 @@ export const PettyCashDetails = () => {
     }
   };
 
+  // Attachment handlers
+  const openAttachmentPreview = (attachment: PettyCashAttachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewOpen(true);
+  };
+
+  const openAttachmentGallery = (attachmentId?: number) => {
+    setInitialAttachmentId(attachmentId);
+    setGalleryOpen(true);
+  };
+
   // Format date for display
   const formatDate = (dateString?: string | Date) => {
     if (!dateString) return "N/A";
-    return format(new Date(dateString), "PPP");
+    try {
+      return format(new Date(dateString), "dd MMM yyyy");
+    } catch (error) {
+      return "Invalid date";
+    }
   };
 
   // Format currency
-  const formatCurrency = (amount: number | undefined, currencyCode?: string) => {
+  const formatCurrency = (amount?: number, currencyCode?: string) => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD", // ||currencyCode
+      currency: "USD", //currencyCode ||
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -159,14 +213,14 @@ export const PettyCashDetails = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Posted: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Reversed: { variant: "secondary" as const, icon: XCircle, className: "bg-purple-100 text-purple-800" },
+      [VoucherStatus.DRAFT]: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
+      [VoucherStatus.PENDING]: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+      [VoucherStatus.POSTED]: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
+      [VoucherStatus.REJECTED]: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      [VoucherStatus.REVERSED]: { variant: "secondary" as const, icon: XCircle, className: "bg-purple-100 text-purple-800" },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig[VoucherStatus.DRAFT];
     const Icon = config.icon;
 
     return (
@@ -177,11 +231,56 @@ export const PettyCashDetails = () => {
     );
   };
 
+  // Render approval status badge
+  const renderApprovalBadge = (status: string) => {
+    const approvalConfig = {
+      [ApprovalStatus.PENDING]: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+      [ApprovalStatus.APPROVED]: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
+      [ApprovalStatus.REJECTED]: { icon: XCircle, className: "bg-red-100 text-red-800" },
+    };
+
+    const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig[ApprovalStatus.PENDING];
+    const Icon = config.icon;
+
+    return (
+      <Badge className={config.className}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </Badge>
+    );
+  };
+
+  const getApprovalIcon = (status: string) => {
+    switch (status) {
+      case ApprovalStatus.APPROVED:
+        return CheckCircle;
+      case ApprovalStatus.REJECTED:
+        return XCircle;
+      case ApprovalStatus.PENDING:
+        return Clock;
+      default:
+        return AlertTriangle;
+    }
+  };
+
   // Action handlers
   const handleEdit = () => {
-    if (voucher) {
-      navigate(`/petty-cash/edit/${voucher.VoucherNo}`);
+    if (!voucher) return;
+
+    if (!canEditVoucher) {
+      toast.error("Cannot edit posted or reversed vouchers.");
+      return;
     }
+
+    navigate(`/petty-cash/edit/${voucher.VoucherNo}`);
+  };
+
+  const openDeleteDialog = () => {
+    if (!canEditVoucher) {
+      toast.error("Cannot delete posted or reversed vouchers.");
+      return;
+    }
+    setDeleteDialogOpen(true);
   };
 
   const handleDelete = async () => {
@@ -191,7 +290,7 @@ export const PettyCashDetails = () => {
     try {
       const result = await pettyCashService.deleteVoucher(voucher.VoucherNo, voucher.CompanyID);
       if (result.success) {
-        toast.success(result.message || "Voucher deleted successfully");
+        toast.success("Voucher deleted successfully");
         navigate("/petty-cash");
       } else {
         toast.error(result.message || "Failed to delete voucher");
@@ -212,32 +311,61 @@ export const PettyCashDetails = () => {
     try {
       const result = await pettyCashService.submitForApproval(voucher.VoucherNo, voucher.CompanyID);
       if (result.success) {
-        toast.success(result.message || "Voucher submitted for approval");
+        toast.success("Voucher submitted for approval successfully");
         // Refresh voucher data
-        window.location.reload();
+        const voucherData = await pettyCashService.getVoucherByNumber(voucher.VoucherNo);
+        if (voucherData.voucher) {
+          setVoucher(voucherData.voucher);
+        }
       } else {
-        toast.error(result.message || "Failed to submit voucher");
+        toast.error(result.message || "Failed to submit voucher for approval");
       }
     } catch (err) {
       console.error("Error submitting voucher:", err);
-      toast.error("Failed to submit voucher");
+      toast.error("Failed to submit voucher for approval");
     } finally {
       setActionLoading(false);
       setSubmitDialogOpen(false);
     }
   };
 
+  // Approval handlers
+  const openApprovalDialog = (action: "approve" | "reject") => {
+    setApprovalAction(action === "approve" ? ApprovalAction.APPROVE : ApprovalAction.REJECT);
+    setApprovalComments("");
+    setRejectionReason("");
+    setApprovalDialogOpen(true);
+  };
+
+  const closeApprovalDialog = () => {
+    setApprovalDialogOpen(false);
+    setApprovalComments("");
+    setRejectionReason("");
+  };
+
   const handleApprovalAction = async () => {
-    if (!voucher) return;
+    if (!voucher || !isManager) return;
+
+    if (approvalAction === ApprovalAction.REJECT && !rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
 
     setActionLoading(true);
+
     try {
-      const result = await pettyCashService.approveOrRejectVoucher(voucher.VoucherNo, voucher.CompanyID, approvalAction, approvalComments.trim() || undefined);
+      const comments = approvalAction === ApprovalAction.APPROVE ? approvalComments : rejectionReason;
+      const result = await pettyCashService.approveOrRejectVoucher(voucher.VoucherNo, voucher.CompanyID, approvalAction, comments.trim() || undefined);
 
       if (result.success) {
-        toast.success(result.message || `Voucher ${approvalAction.toLowerCase()}d successfully`);
         // Refresh voucher data
-        window.location.reload();
+        const voucherData = await pettyCashService.getVoucherByNumber(voucher.VoucherNo);
+        if (voucherData.voucher) {
+          setVoucher(voucherData.voucher);
+        }
+
+        const actionText = approvalAction === ApprovalAction.APPROVE ? "approved" : "rejected";
+        toast.success(`Voucher ${actionText} successfully`);
       } else {
         toast.error(result.message || `Failed to ${approvalAction.toLowerCase()} voucher`);
       }
@@ -246,8 +374,34 @@ export const PettyCashDetails = () => {
       toast.error(`Failed to ${approvalAction.toLowerCase()} voucher`);
     } finally {
       setActionLoading(false);
-      setApprovalDialogOpen(false);
-      setApprovalComments("");
+      closeApprovalDialog();
+    }
+  };
+
+  const handleResetApproval = async () => {
+    if (!voucher || !isManager) return;
+
+    setActionLoading(true);
+    try {
+      const result = await pettyCashService.resetApprovalStatus(voucher.VoucherNo, voucher.CompanyID);
+
+      if (result.success) {
+        // Refresh voucher data
+        const voucherData = await pettyCashService.getVoucherByNumber(voucher.VoucherNo);
+        if (voucherData.voucher) {
+          setVoucher(voucherData.voucher);
+        }
+
+        toast.success("Approval status reset successfully");
+      } else {
+        toast.error(result.message || "Failed to reset approval status");
+      }
+    } catch (err) {
+      console.error("Error resetting approval:", err);
+      toast.error("Failed to reset approval status");
+    } finally {
+      setActionLoading(false);
+      setResetApprovalDialogOpen(false);
     }
   };
 
@@ -262,12 +416,15 @@ export const PettyCashDetails = () => {
       const result = await pettyCashService.reverseVoucher(voucher.VoucherNo, voucher.CompanyID, reversalReason.trim());
 
       if (result.success) {
-        toast.success(result.message || "Voucher reversed successfully");
+        toast.success("Voucher reversed successfully");
         if (result.reversalVoucherNo) {
           toast.info(`Reversal voucher created: ${result.reversalVoucherNo}`);
         }
         // Refresh voucher data
-        window.location.reload();
+        const voucherData = await pettyCashService.getVoucherByNumber(voucher.VoucherNo);
+        if (voucherData.voucher) {
+          setVoucher(voucherData.voucher);
+        }
       } else {
         toast.error(result.message || "Failed to reverse voucher");
       }
@@ -278,27 +435,6 @@ export const PettyCashDetails = () => {
       setActionLoading(false);
       setReversalDialogOpen(false);
       setReversalReason("");
-    }
-  };
-
-  const handleDownloadAttachment = (attachment: PettyCashAttachment) => {
-    if (attachment.fileUrl) {
-      const link = document.createElement("a");
-      link.href = attachment.fileUrl;
-      link.download = attachment.DocumentName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      toast.error("File not available for download");
-    }
-  };
-
-  const handleViewAttachment = (attachment: PettyCashAttachment) => {
-    if (attachment.fileUrl) {
-      window.open(attachment.fileUrl, "_blank");
-    } else {
-      toast.error("File not available for viewing");
     }
   };
 
@@ -315,87 +451,78 @@ export const PettyCashDetails = () => {
 
   if (loading) {
     return (
-      <div className="container p-4">
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-pulse space-y-4">
-            <div className="h-12 bg-gray-200 rounded-md w-3/4 mx-auto"></div>
-            <div className="h-64 bg-gray-200 rounded-md w-full"></div>
-          </div>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (error || !voucher) {
     return (
-      <div className="container p-4">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center h-64">
-            <p className="text-xl text-red-500 mb-4">{error || "Voucher not found"}</p>
-            <Button onClick={() => navigate("/petty-cash")}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Vouchers
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="text-center py-10">
+        <h2 className="text-xl">{error || "Voucher not found"}</h2>
+        <Button className="mt-4" onClick={() => navigate("/petty-cash")}>
+          Back to vouchers
+        </Button>
       </div>
     );
   }
 
   // Determine available actions based on status
-  const canEdit = voucher.PostingStatus === "Draft" || voucher.PostingStatus === "Pending";
-  const canDelete = voucher.PostingStatus === "Draft" || voucher.PostingStatus === "Pending";
-  const canSubmit = voucher.PostingStatus === "Draft";
-  const canApprove = voucher.PostingStatus === "Pending";
-  const canReverse = voucher.PostingStatus === "Posted" && !voucher.IsReversed;
+  const canSubmit = voucher.PostingStatus === VoucherStatus.DRAFT;
+  const canApprove = isManager && voucher.PostingStatus === VoucherStatus.PENDING && voucher.ApprovalStatus === ApprovalStatus.PENDING;
+  const canReverse = isManager && voucher.PostingStatus === VoucherStatus.POSTED && !voucher.IsReversed;
+  const canDelete = canEditVoucher;
+
+  const ApprovalIcon = getApprovalIcon(voucher.ApprovalStatus || ApprovalStatus.PENDING);
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Petty Cash Voucher Details</CardTitle>
-            <CardDescription>View and manage voucher information</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate("/petty-cash")}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" size="icon" onClick={() => navigate("/petty-cash")}>
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-
+            <h1 className="text-2xl font-semibold">Petty Cash Voucher {voucher.VoucherNo}</h1>
+            <div className="ml-2 flex items-center gap-2">
+              <Badge variant="outline" className="cursor-pointer" onClick={handleCopyVoucherNo}>
+                <Copy className="h-3 w-3 mr-1" />
+                {voucher.VoucherNo}
+              </Badge>
+              {renderStatusBadge(voucher.PostingStatus || VoucherStatus.DRAFT)}
+              {voucher.RequiresApproval && (
+                <Badge
+                  className={`${
+                    voucher.ApprovalStatus === ApprovalStatus.APPROVED
+                      ? "bg-green-100 text-green-800"
+                      : voucher.ApprovalStatus === ApprovalStatus.REJECTED
+                      ? "bg-red-100 text-red-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  <ApprovalIcon className="h-3 w-3 mr-1" />
+                  {voucher.ApprovalStatus}
+                </Badge>
+              )}
+              {isPosted && !voucher.IsReversed && (
+                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Posted
+                </Badge>
+              )}
+              {voucher.IsReversed && (
+                <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-800">
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reversed
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="flex space-x-2">
             {/* PDF Generation Actions */}
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={pettyCashPdfReport.isLoading}>
-                    {pettyCashPdfReport.isLoading ? (
-                      <>
-                        <Download className="mr-2 h-4 w-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Printer className="mr-2 h-4 w-4" />
-                        Print/PDF
-                      </>
-                    )}
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handlePreviewPettyCashSlip}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview Voucher Slip
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleGeneratePettyCashSlip}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download Voucher Slip
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Alternative approach with direct buttons */}
+            <div className="flex space-x-2 mr-2">
               <PdfActionButtons
                 onDownload={handleGeneratePettyCashSlip}
                 onPreview={handlePreviewPettyCashSlip}
@@ -407,473 +534,622 @@ export const PettyCashDetails = () => {
               />
             </div>
 
-            {canEdit && (
+            {/* Approval Actions - Manager Only */}
+            {isManager && voucher.RequiresApproval && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    Approval Actions
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {voucher.ApprovalStatus === ApprovalStatus.PENDING && (
+                    <>
+                      <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        Approve Voucher
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
+                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                        Reject Voucher
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {voucher.ApprovalStatus !== ApprovalStatus.PENDING && (
+                    <DropdownMenuItem onClick={() => setResetApprovalDialogOpen(true)}>
+                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                      Reset Approval
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {canEditVoucher ? (
               <Button variant="outline" onClick={handleEdit}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" disabled onClick={handleEdit}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cannot edit posted or reversed vouchers.</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {canDelete ? (
+              <Button variant="destructive" onClick={openDeleteDialog}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="destructive" disabled onClick={openDeleteDialog}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cannot delete posted or reversed vouchers.</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
-        </CardHeader>
-      </Card>
+        </div>
 
-      {/* Voucher Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Voucher Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-6 mb-6">
-            <div className="flex items-center justify-center md:justify-start">
-              <div className="h-24 w-24 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Receipt className="h-12 w-12 text-primary" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-bold">{voucher.VoucherNo}</h2>
-                  <Button variant="ghost" size="sm" onClick={handleCopyVoucherNo}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
+        {/* Approval Status Alert */}
+        {voucher.RequiresApproval && (
+          <Alert
+            className={`border-l-4 ${
+              voucher.ApprovalStatus === ApprovalStatus.APPROVED
+                ? "border-l-green-500 bg-green-50"
+                : voucher.ApprovalStatus === ApprovalStatus.REJECTED
+                ? "border-l-red-500 bg-red-50"
+                : "border-l-yellow-500 bg-yellow-50"
+            }`}
+          >
+            <ApprovalIcon className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Approval Status: {voucher.ApprovalStatus}</div>
+              {voucher.ApprovalStatus === ApprovalStatus.APPROVED && voucher.ApprovedBy && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Approved by {voucher.ApprovedByName || `User ${voucher.ApprovedBy}`} on {formatDate(voucher.ApprovedOn)}
+                  {voucher.ApprovalComments && <div className="mt-1">Comments: {voucher.ApprovalComments}</div>}
                 </div>
-                {renderStatusBadge(voucher.PostingStatus || "Draft")}
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Transaction Date:</span>
-                  <span>{formatDate(voucher.TransactionDate)}</span>
+              )}
+              {voucher.ApprovalStatus === ApprovalStatus.REJECTED && voucher.RejectedBy && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Rejected by {voucher.RejectedByName || `User ${voucher.RejectedBy}`} on {formatDate(voucher.RejectedOn)}
+                  {voucher.RejectionReason && <div className="mt-1 text-red-700">Reason: {voucher.RejectionReason}</div>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Company:</span>
-                  <span>{voucher.CompanyName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Amount:</span>
-                  <span className="text-lg font-semibold">{formatCurrency(totalDebits, voucher.CurrencyName)}</span>
-                </div>
-                {voucher.PaidTo && (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Paid To:</span>
-                    <span>{voucher.PaidTo}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+              )}
+              {voucher.ApprovalStatus === ApprovalStatus.PENDING && <div className="text-sm text-muted-foreground mt-1">This voucher is awaiting approval from a manager.</div>}
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <Separator className="my-6" />
+        {/* Reversal Status Alert */}
+        {voucher.IsReversed && (
+          <Alert className="border-l-4 border-l-purple-500 bg-purple-50">
+            <RotateCcw className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">This voucher has been reversed</div>
+              {voucher.ReversedBy && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Reversed by {voucher.ReversedBy || `User ${voucher.ReversedBy}`} on {formatDate(voucher.ReversedOn)}
+                  {voucher.ReversalReason && <div className="mt-1">Reason: {voucher.ReversalReason}</div>}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Basic Information</h3>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Voucher No:</span>
-                  <span className="font-mono">{voucher.VoucherNo}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Voucher Type:</span>
-                  <span>{voucher.VoucherType}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Transaction Date:</span>
-                  <span>{formatDate(voucher.TransactionDate)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Posting Date:</span>
-                  <span>{formatDate(voucher.PostingDate)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Company:</span>
-                  <span>{voucher.CompanyName}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Fiscal Year:</span>
-                  <span>{voucher.FYDescription}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Currency:</span>
-                  <span>{voucher.CurrencyName}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Exchange Rate:</span>
-                  <span>{voucher.ExchangeRate || 1}</span>
-                </div>
-              </div>
-            </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid grid-cols-3 w-[300px]">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="lines">Lines ({lines.length})</TabsTrigger>
+            <TabsTrigger value="attachments">Attachments ({attachments.length})</TabsTrigger>
+          </TabsList>
 
-            {/* Additional Details */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Additional Details</h3>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Description:</span>
-                  <span>{voucher.Description || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Paid To:</span>
-                  <span>{voucher.PaidTo || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Invoice No:</span>
-                  <span>{voucher.InvoiceNo || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Reference No:</span>
-                  <span>{voucher.RefNo || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Cheque No:</span>
-                  <span>{voucher.ChequeNo || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Cheque Date:</span>
-                  <span>{voucher.ChequeDate ? formatDate(voucher.ChequeDate) : "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Bank:</span>
-                  <span>{voucher.BankName || "—"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
-                  {renderStatusBadge(voucher.PostingStatus || "Draft")}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Narration */}
-          {voucher.Narration && (
-            <>
-              <Separator className="my-6" />
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Narration</h3>
-                <p className="text-sm bg-muted/20 p-3 rounded-lg">{voucher.Narration}</p>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Voucher Lines */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Voucher Lines</CardTitle>
-          <CardDescription>Debit and credit entries</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Debit</TableHead>
-                  <TableHead className="text-right">Credit</TableHead>
-                  <TableHead>Customer/Supplier</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lines.map((line, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{line.AccountName}</div>
-                        <div className="text-sm text-muted-foreground">{line.AccountCode}</div>
+          <TabsContent value="details" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Receipt className="mr-2 h-5 w-5 text-muted-foreground" />
+                  Voucher Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Voucher Number</h3>
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-mono">{voucher.VoucherNo}</p>
+                        <Button variant="ghost" size="sm" onClick={handleCopyVoucherNo}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
                       </div>
-                    </TableCell>
-                    <TableCell>{line.LineDescription || "—"}</TableCell>
-                    <TableCell className="text-right">{line.DebitAmount > 0 ? formatCurrency(line.DebitAmount, voucher.CurrencyName) : "—"}</TableCell>
-                    <TableCell className="text-right">{line.CreditAmount > 0 ? formatCurrency(line.CreditAmount, voucher.CurrencyName) : "—"}</TableCell>
-                    <TableCell>
-                      {line.CustomerFullName && <div>Customer: {line.CustomerFullName}</div>}
-                      {line.SupplierName && <div>Supplier: {line.SupplierName}</div>}
-                      {!line.CustomerFullName && !line.SupplierName && "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {/* Totals Row */}
-                <TableRow className="font-semibold bg-muted/20">
-                  <TableCell colSpan={2}>Total</TableCell>
-                  <TableCell className="text-right">{formatCurrency(totalDebits, voucher.CurrencyName)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(totalCredits, voucher.CurrencyName)}</TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Attachments */}
-      {attachments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Attachments</CardTitle>
-            <CardDescription>Supporting documents</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {attachments.map((attachment, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{attachment.DocumentName}</span>
                     </div>
-                    {attachment.IsRequired && (
-                      <Badge variant="secondary" className="text-xs">
-                        Required
-                      </Badge>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Voucher Type</h3>
+                      <p className="text-base">{voucher.VoucherType || "Petty Cash"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+                      <div className="mt-1">{renderStatusBadge(voucher.PostingStatus || VoucherStatus.DRAFT)}</div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Transaction Date</h3>
+                      <p className="text-base">{formatDate(voucher.TransactionDate)}</p>
+                    </div>
+
+                    {voucher.PostingDate && (
+                      <div>
+                        <h3 className="text-sm font-medium text-muted-foreground">Posting Date</h3>
+                        <p className="text-base">{formatDate(voucher.PostingDate)}</p>
+                      </div>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">{attachment.DocTypeName}</div>
-                    {attachment.DocumentDescription && <div className="text-xs text-muted-foreground">{attachment.DocumentDescription}</div>}
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleViewAttachment(attachment)} disabled={!attachment.fileUrl}>
-                        <Eye className="mr-1 h-3 w-3" />
-                        View
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDownloadAttachment(attachment)} disabled={!attachment.fileUrl}>
-                        <Download className="mr-1 h-3 w-3" />
-                        Download
-                      </Button>
+
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Company</h3>
+                      <p className="text-base font-medium">{voucher.CompanyName || `Company ${voucher.CompanyID}`}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Fiscal Year</h3>
+                      <p className="text-base">{voucher.FYDescription || `FY ${voucher.FiscalYearID}`}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Currency</h3>
+                      <p className="text-base">{voucher.CurrencyName || "USD"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Exchange Rate</h3>
+                      <p className="text-base">{voucher.ExchangeRate || 1}</p>
+                    </div>
+
+                    {voucher.RequiresApproval && (
+                      <div>
+                        <h3 className="text-sm font-medium text-muted-foreground">Approval Status</h3>
+                        <div className="mt-1">{renderApprovalBadge(voucher.ApprovalStatus || ApprovalStatus.PENDING)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
+                      <p className="text-base">{voucher.Description || "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Paid To</h3>
+                      <p className="text-base">{voucher.PaidTo || "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Invoice Number</h3>
+                      <p className="text-base">{voucher.InvoiceNo || "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Reference Number</h3>
+                      <p className="text-base">{voucher.RefNo || "—"}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Cheque Number</h3>
+                      <p className="text-base">{voucher.ChequeNo || "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Cheque Date</h3>
+                      <p className="text-base">{voucher.ChequeDate ? formatDate(voucher.ChequeDate) : "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Bank</h3>
+                      <p className="text-base">{voucher.BankName || "—"}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Total Amount</h3>
+                      <p className="text-lg font-bold">{formatCurrency(totalDebits, voucher.CurrencyName)}</p>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {voucher.Narration && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground">Narration</h3>
+                      <p className="text-base mt-1 bg-muted/20 p-3 rounded-lg">{voucher.Narration}</p>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-6 text-sm">
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">Created By</div>
+                    <div>
+                      {voucher.CreatedBy} {voucher.CreatedOn && <span>on {formatDate(voucher.CreatedOn)}</span>}
+                    </div>
+                  </div>
+                  {voucher.UpdatedBy && (
+                    <div className="space-y-1">
+                      <div className="text-muted-foreground">Last Updated By</div>
+                      <div>
+                        {voucher.UpdatedBy} {voucher.UpdatedOn && <span>on {formatDate(voucher.UpdatedOn)}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="lines" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
+                  Voucher Lines
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Total: {formatCurrency(totalDebits, voucher.CurrencyName)}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {lines.length > 0 ? (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Account</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-right">Debit</TableHead>
+                          <TableHead className="text-right">Credit</TableHead>
+                          <TableHead>Customer/Supplier</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lines.map((line, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{line.AccountName}</div>
+                                <div className="text-sm text-muted-foreground">{line.AccountCode}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={line.TransactionType === TransactionType.DEBIT ? "text-red-600" : "text-green-600"}>
+                                {line.TransactionType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{line.LineDescription || "—"}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {line.DebitAmount && line.DebitAmount > 0 ? formatCurrency(line.DebitAmount, voucher.CurrencyName) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {line.CreditAmount && line.CreditAmount > 0 ? formatCurrency(line.CreditAmount, voucher.CurrencyName) : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {line.CustomerFullName && <div className="text-sm">Customer: {line.CustomerFullName}</div>}
+                              {line.SupplierName && <div className="text-sm">Supplier: {line.SupplierName}</div>}
+                              {!line.CustomerFullName && !line.SupplierName && "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Totals Row */}
+                        <TableRow className="font-semibold bg-muted/20 border-t-2">
+                          <TableCell colSpan={3}>Total</TableCell>
+                          <TableCell className="text-right">{formatCurrency(totalDebits, voucher.CurrencyName)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(totalCredits, voucher.CurrencyName)}</TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">No voucher lines found.</div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="attachments" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
+                  Supporting Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {attachments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                    <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground mb-4">No documents have been attached to this voucher.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-end mb-4">
+                      <Button variant="outline" onClick={() => openAttachmentGallery()}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        View All Documents
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {attachments.map((attachment) => (
+                        <Card key={attachment.PostingAttachmentID} className="overflow-hidden">
+                          <CardContent className="p-4">
+                            <div className="flex gap-4">
+                              <AttachmentThumbnail
+                                fileUrl={attachment.fileUrl}
+                                fileName={attachment.DocumentName || "Document"}
+                                fileType={attachment.FileContentType}
+                                onClick={() => attachment.fileUrl && openAttachmentPreview(attachment)}
+                              />
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center">
+                                  <span className="font-medium">{attachment.DocumentName}</span>
+                                  {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                                  {attachment.IsRequired && (
+                                    <Badge variant="secondary" className="ml-2">
+                                      Required
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm space-y-1">
+                                  {attachment.UploadedDate && (
+                                    <div className="flex items-center text-muted-foreground">
+                                      <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                      Uploaded: {formatDate(attachment.UploadedDate)}
+                                    </div>
+                                  )}
+                                  {attachment.DocumentDescription && <div className="text-muted-foreground mt-1">{attachment.DocumentDescription}</div>}
+                                </div>
+
+                                {attachment.fileUrl && (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Button variant="outline" size="sm" onClick={() => openAttachmentGallery(attachment.PostingAttachmentID)} className="h-8 px-3">
+                                      <FileTypeIcon fileName={attachment.DocumentName || "Document"} fileType={attachment.FileContentType} size={14} className="mr-1.5" />
+                                      Preview
+                                    </Button>
+                                    <a
+                                      href={attachment.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      download={attachment.DocumentName}
+                                      className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+                                    >
+                                      <Download className="h-3.5 w-3.5 mr-1.5" />
+                                      Download
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Action Buttons */}
+        <Card>
+          <CardContent className="flex flex-wrap justify-center gap-2 pt-6">
+            {canSubmit && (
+              <Button onClick={() => setSubmitDialogOpen(true)}>
+                <Send className="mr-2 h-4 w-4" />
+                Submit for Approval
+              </Button>
+            )}
+            {canReverse && (
+              <Button variant="outline" onClick={() => setReversalDialogOpen(true)}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reverse Voucher
+              </Button>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      {/* Audit Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Audit Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <span className="text-sm font-medium text-muted-foreground">Created By:</span>
-                <span>{voucher.CreatedBy || "—"}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <span className="text-sm font-medium text-muted-foreground">Created On:</span>
-                <span>{formatDate(voucher.CreatedOn)}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <span className="text-sm font-medium text-muted-foreground">Updated By:</span>
-                <span>{voucher.UpdatedBy || "—"}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <span className="text-sm font-medium text-muted-foreground">Updated On:</span>
-                <span>{voucher.UpdatedOn ? formatDate(voucher.UpdatedOn) : "—"}</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {voucher.ApprovedBy && (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Approved By:</span>
-                    <span>{voucher.ApprovedByUserName || `User ${voucher.ApprovedBy}`}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Approved On:</span>
-                    <span>{formatDate(voucher.ApprovedOn)}</span>
-                  </div>
-                </>
+        {/* PDF Preview Modal */}
+        <PdfPreviewModal
+          isOpen={showPdfPreview}
+          onClose={() => setShowPdfPreview(false)}
+          pdfBlob={pettyCashPdfReport.data}
+          title={`Petty Cash Voucher Slip - ${voucher.VoucherNo}`}
+          isLoading={pettyCashPdfReport.isLoading}
+          error={pettyCashPdfReport.error}
+          onDownload={() => pettyCashPdfReport.downloadCurrentPdf(`Petty_Cash_Slip_${voucher.VoucherNo}.pdf`)}
+          onRefresh={handlePreviewPettyCashSlip}
+        />
+
+        {/* Approval Dialog */}
+        <Dialog open={approvalDialogOpen} onOpenChange={setApprovalDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{approvalAction === ApprovalAction.APPROVE ? "Approve Voucher" : "Reject Voucher"}</DialogTitle>
+              <DialogDescription>{approvalAction === ApprovalAction.APPROVE ? "Approve this voucher to allow posting." : "Reject this voucher with a reason."}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {approvalAction === ApprovalAction.APPROVE && (
+                <div className="space-y-2">
+                  <Label htmlFor="approvalComments">Approval Comments (Optional)</Label>
+                  <Textarea
+                    id="approvalComments"
+                    value={approvalComments}
+                    onChange={(e) => setApprovalComments(e.target.value)}
+                    placeholder="Enter any comments about the approval"
+                    rows={3}
+                  />
+                </div>
               )}
-              {voucher.IsReversed && (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Reversed By:</span>
-                    <span>{voucher.ReversedByUserName || `User ${voucher.ReversedBy}`}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Reversed On:</span>
-                    <span>{formatDate(voucher.ReversedOn)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Reversal Reason:</span>
-                    <span>{voucher.ReversalReason || "—"}</span>
-                  </div>
-                </>
+              {approvalAction === ApprovalAction.REJECT && (
+                <div className="space-y-2">
+                  <Label htmlFor="rejectionReason">Rejection Reason *</Label>
+                  <Textarea
+                    id="rejectionReason"
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Enter the reason for rejection"
+                    rows={3}
+                    required
+                  />
+                </div>
               )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <Card>
-        <CardContent className="flex flex-wrap justify-center gap-2 pt-6">
-          {canSubmit && (
-            <Button onClick={() => setSubmitDialogOpen(true)}>
-              <Send className="mr-2 h-4 w-4" />
-              Submit for Approval
-            </Button>
-          )}
-          {canApprove && (
-            <>
-              <Button
-                onClick={() => {
-                  setApprovalAction(ApprovalAction.APPROVE);
-                  setApprovalDialogOpen(true);
-                }}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Check className="mr-2 h-4 w-4" />
-                Approve
+            <DialogFooter>
+              <Button variant="outline" onClick={closeApprovalDialog}>
+                Cancel
               </Button>
               <Button
-                variant="destructive"
-                onClick={() => {
-                  setApprovalAction(ApprovalAction.REJECT);
-                  setApprovalDialogOpen(true);
-                }}
+                onClick={handleApprovalAction}
+                disabled={actionLoading || (approvalAction === ApprovalAction.REJECT && !rejectionReason.trim())}
+                variant={approvalAction === ApprovalAction.REJECT ? "destructive" : "default"}
               >
-                <X className="mr-2 h-4 w-4" />
-                Reject
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {approvalAction === ApprovalAction.APPROVE && <CheckCircle className="mr-2 h-4 w-4" />}
+                    {approvalAction === ApprovalAction.REJECT && <XCircle className="mr-2 h-4 w-4" />}
+                    {approvalAction === ApprovalAction.APPROVE ? "Approve" : "Reject"}
+                  </>
+                )}
               </Button>
-            </>
-          )}
-          {canReverse && (
-            <Button variant="outline" onClick={() => setReversalDialogOpen(true)}>
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reverse
-            </Button>
-          )}
-          {canDelete && (
-            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* PDF Preview Modal */}
-      <PdfPreviewModal
-        isOpen={showPdfPreview}
-        onClose={() => setShowPdfPreview(false)}
-        pdfBlob={pettyCashPdfReport.data}
-        title={`Petty Cash Voucher Slip - ${voucher.VoucherNo}`}
-        isLoading={pettyCashPdfReport.isLoading}
-        error={pettyCashPdfReport.error}
-        onDownload={() => pettyCashPdfReport.downloadCurrentPdf(`Petty_Cash_Slip_${voucher.VoucherNo}.pdf`)}
-        onRefresh={handlePreviewPettyCashSlip}
-      />
+        {/* Reset Approval Dialog */}
+        <ConfirmationDialog
+          isOpen={resetApprovalDialogOpen}
+          onClose={() => setResetApprovalDialogOpen(false)}
+          onConfirm={handleResetApproval}
+          title="Reset Approval Status"
+          description={`Are you sure you want to reset the approval status of voucher "${voucher.VoucherNo}" to pending?`}
+          cancelText="Cancel"
+          confirmText="Reset"
+          type="warning"
+        />
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={handleDelete}
-        title="Delete Voucher"
-        description={`Are you sure you want to delete voucher "${voucher.VoucherNo}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
-      />
+        {/* Delete Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={handleDelete}
+          title="Delete Voucher"
+          description={`Are you sure you want to delete voucher "${voucher.VoucherNo}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="danger"
+        />
 
-      {/* Submit for Approval Dialog */}
-      <ConfirmationDialog
-        isOpen={submitDialogOpen}
-        onClose={() => setSubmitDialogOpen(false)}
-        onConfirm={handleSubmitForApproval}
-        title="Submit for Approval"
-        description={`Are you sure you want to submit voucher "${voucher.VoucherNo}" for approval?`}
-        confirmText="Submit"
-        cancelText="Cancel"
-        type="info"
-      />
+        {/* Submit for Approval Dialog */}
+        <ConfirmationDialog
+          isOpen={submitDialogOpen}
+          onClose={() => setSubmitDialogOpen(false)}
+          onConfirm={handleSubmitForApproval}
+          title="Submit for Approval"
+          description={`Are you sure you want to submit voucher "${voucher.VoucherNo}" for approval?`}
+          confirmText="Submit"
+          cancelText="Cancel"
+          type="info"
+        />
 
-      {/* Approval Dialog */}
-      <Dialog open={approvalDialogOpen} onOpenChange={setApprovalDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{approvalAction === ApprovalAction.APPROVE ? "Approve Voucher" : "Reject Voucher"}</DialogTitle>
-            <DialogDescription>
-              {approvalAction === ApprovalAction.APPROVE
-                ? `Are you sure you want to approve voucher "${voucher.VoucherNo}"?`
-                : `Are you sure you want to reject voucher "${voucher.VoucherNo}"?`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="approval-comments">Comments</Label>
-              <Textarea id="approval-comments" placeholder="Enter approval comments (optional)" value={approvalComments} onChange={(e) => setApprovalComments(e.target.value)} />
+        {/* Reversal Dialog */}
+        <Dialog open={reversalDialogOpen} onOpenChange={setReversalDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reverse Voucher</DialogTitle>
+              <DialogDescription>Are you sure you want to reverse voucher "{voucher.VoucherNo}"? This will create a reversal entry.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="reversal-reason">Reversal Reason *</Label>
+                <Textarea id="reversal-reason" placeholder="Enter reason for reversal" value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} required />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApprovalDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleApprovalAction}
-              disabled={actionLoading}
-              className={approvalAction === ApprovalAction.APPROVE ? "bg-green-600 hover:bg-green-700" : ""}
-              variant={approvalAction === ApprovalAction.REJECT ? "destructive" : "default"}
-            >
-              {actionLoading ? (
-                <>
-                  <Clock className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  {approvalAction === ApprovalAction.APPROVE ? <Check className="mr-2 h-4 w-4" /> : <X className="mr-2 h-4 w-4" />}
-                  {approvalAction}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReversalDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleReversal} disabled={actionLoading || !reversalReason.trim()} variant="destructive">
+                {actionLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reverse
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Reversal Dialog */}
-      <Dialog open={reversalDialogOpen} onOpenChange={setReversalDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reverse Voucher</DialogTitle>
-            <DialogDescription>Are you sure you want to reverse voucher "{voucher.VoucherNo}"? This will create a reversal entry.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="reversal-reason">Reversal Reason *</Label>
-              <Textarea id="reversal-reason" placeholder="Enter reason for reversal" value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} required />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReversalDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleReversal} disabled={actionLoading || !reversalReason.trim()} variant="destructive">
-              {actionLoading ? (
-                <>
-                  <Clock className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reverse
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Attachment Preview Dialog */}
+        {previewAttachment && (
+          <AttachmentPreview
+            isOpen={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            fileUrl={previewAttachment.fileUrl}
+            fileName={previewAttachment.DocumentName || "Document"}
+            fileType={previewAttachment.FileContentType}
+            fileSize={previewAttachment.FileSize}
+            uploadDate={previewAttachment.UploadedDate}
+            uploadedBy={previewAttachment.UploadedByUserName}
+            description={previewAttachment.DocumentDescription}
+            documentType={previewAttachment.DocTypeName}
+          />
+        )}
+
+        {/* Attachment Gallery Dialog */}
+        {attachments.length > 0 && (
+          <AttachmentGallery isOpen={galleryOpen} onClose={() => setGalleryOpen(false)} attachments={attachments} initialAttachmentId={initialAttachmentId} />
+        )}
+      </div>
+    </TooltipProvider>
   );
 };
 
