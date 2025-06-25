@@ -35,7 +35,9 @@ export interface Contract extends BaseContract {
 
   // Joined fields
   CustomerName?: string;
+  CustomerEmail?: string;
   JointCustomerName?: string;
+  JointCustomerEmail?: string;
   UnitCount?: number;
   ChargeCount?: number;
   AttachmentCount?: number;

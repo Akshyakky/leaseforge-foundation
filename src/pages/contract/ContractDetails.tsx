@@ -1,4 +1,4 @@
-// src/pages/contract/ContractDetails.tsx - Updated with Edit Restrictions for Approved Contracts
+// src/pages/contract/ContractDetails.tsx - Enhanced with Email Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractService, Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment } from "@/services/contractService";
@@ -32,6 +32,10 @@ import {
   RotateCcw,
   Lock,
   Shield,
+  Mail,
+  Send,
+  History,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -46,14 +50,19 @@ import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+
 // Import PDF components
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
 import { useAppSelector } from "@/lib/hooks";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+// Import Email components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -93,6 +102,11 @@ const ContractDetails: React.FC = () => {
   const [renewalPeriod, setRenewalPeriod] = useState<{ years: number; months: number }>({ years: 1, months: 0 });
   const [isRenewing, setIsRenewing] = useState(false);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
+  const [showEmailHistory, setShowEmailHistory] = useState(false);
+
   // Contract status options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
 
@@ -102,6 +116,12 @@ const ContractDetails: React.FC = () => {
   // Check if contract can be edited
   const canEditContract = contract && contract.ApprovalStatus !== "Approved";
   const isApproved = contract?.ApprovalStatus === "Approved";
+
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "contract",
+    entityId: contract?.ContractID || 0,
+  });
 
   useEffect(() => {
     const fetchContractDetails = async () => {
@@ -134,6 +154,13 @@ const ContractDetails: React.FC = () => {
 
     fetchContractDetails();
   }, [id, navigate]);
+
+  // Load email templates when contract is loaded
+  useEffect(() => {
+    if (contract) {
+      emailIntegration.loadEmailTemplates("Contract");
+    }
+  }, [contract, emailIntegration]);
 
   // PDF Generation Handlers
   const handleGenerateContractSlip = async () => {
@@ -174,7 +201,45 @@ const ContractDetails: React.FC = () => {
     }
   };
 
-  // Approval handlers
+  // Email handlers
+  const handleSendEmail = (triggerEvent?: string) => {
+    setEmailTriggerEvent(triggerEvent);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+    }
+  };
+
+  const getDefaultEmailRecipients = () => {
+    if (!contract) return [];
+
+    const recipients = [];
+
+    // Add primary customer
+    if (contract.CustomerEmail) {
+      recipients.push({
+        email: contract.CustomerEmail,
+        name: contract.CustomerName,
+        type: "to" as const,
+      });
+    }
+
+    // Add joint customer if available
+    if (contract.JointCustomerEmail) {
+      recipients.push({
+        email: contract.JointCustomerEmail,
+        name: contract.JointCustomerName || "Joint Customer",
+        type: "to" as const,
+      });
+    }
+
+    return recipients;
+  };
+
+  // Enhanced approval handlers with email notifications
   const openApprovalDialog = (action: "approve" | "reject" | "reset") => {
     setApprovalAction(action);
     setApprovalComments("");
@@ -226,6 +291,19 @@ const ContractDetails: React.FC = () => {
         const data = await contractService.getContractById(contract.ContractID);
         if (data.contract) {
           setContract(data.contract);
+
+          // Send automated email notification
+          const triggerEvent = approvalAction === "approve" ? "contract_approved" : approvalAction === "reject" ? "contract_rejected" : undefined;
+
+          if (triggerEvent) {
+            const contractVariables = emailIntegration.generateContractVariables(data.contract, {
+              customerEmail: data.contract.CustomerEmail,
+              approvalComments: approvalAction === "approve" ? approvalComments : undefined,
+              rejectionReason: approvalAction === "reject" ? rejectionReason : undefined,
+            });
+
+            await emailIntegration.sendAutomatedEmail(triggerEvent, contractVariables, getDefaultEmailRecipients());
+          }
         }
 
         const actionText = approvalAction === "approve" ? "approved" : approvalAction === "reject" ? "rejected" : "reset";
@@ -239,6 +317,50 @@ const ContractDetails: React.FC = () => {
     } finally {
       setApprovalLoading(false);
       closeApprovalDialog();
+    }
+  };
+
+  // Enhanced status change with email notifications
+  const handleStatusChange = async () => {
+    if (!contract || !selectedStatus) return;
+
+    try {
+      const response = await contractService.changeContractStatus(contract.ContractID, selectedStatus);
+
+      if (response.Status === 1) {
+        const updatedContract = {
+          ...contract,
+          ContractStatus: selectedStatus,
+        };
+        setContract(updatedContract);
+
+        // Send automated email notification for certain status changes
+        const emailTriggers: Record<string, string> = {
+          Active: "contract_activated",
+          Expired: "contract_expired",
+          Terminated: "contract_terminated",
+          Cancelled: "contract_cancelled",
+        };
+
+        const triggerEvent = emailTriggers[selectedStatus];
+        if (triggerEvent) {
+          const contractVariables = emailIntegration.generateContractVariables(updatedContract, {
+            customerEmail: updatedContract.CustomerEmail,
+            statusChangeReason: `Contract status changed to ${selectedStatus}`,
+          });
+
+          await emailIntegration.sendAutomatedEmail(triggerEvent, contractVariables, getDefaultEmailRecipients());
+        }
+
+        toast.success(`Contract status changed to ${selectedStatus}`);
+      } else {
+        toast.error(response.Message || "Failed to change contract status");
+      }
+    } catch (error) {
+      console.error("Error changing contract status:", error);
+      toast.error("Failed to change contract status");
+    } finally {
+      closeStatusChangeDialog();
     }
   };
 
@@ -308,29 +430,6 @@ const ContractDetails: React.FC = () => {
   const closeStatusChangeDialog = () => {
     setIsStatusChangeDialogOpen(false);
     setSelectedStatus("");
-  };
-
-  const handleStatusChange = async () => {
-    if (!contract || !selectedStatus) return;
-
-    try {
-      const response = await contractService.changeContractStatus(contract.ContractID, selectedStatus);
-
-      if (response.Status === 1) {
-        setContract({
-          ...contract,
-          ContractStatus: selectedStatus,
-        });
-        toast.success(`Contract status changed to ${selectedStatus}`);
-      } else {
-        toast.error(response.Message || "Failed to change contract status");
-      }
-    } catch (error) {
-      console.error("Error changing contract status:", error);
-      toast.error("Failed to change contract status");
-    } finally {
-      closeStatusChangeDialog();
-    }
   };
 
   const formatDate = (date?: string | Date) => {
@@ -450,6 +549,15 @@ const ContractDetails: React.FC = () => {
       const response = await contractService.createContract(renewalData);
 
       if (response.Status === 1 && response.NewContractID) {
+        // Send contract renewal notification
+        const contractVariables = emailIntegration.generateContractVariables(contract, {
+          customerEmail: contract.CustomerEmail,
+          renewalPeriod: `${renewalPeriod.years} years, ${renewalPeriod.months} months`,
+          newContractId: response.NewContractID,
+        });
+
+        await emailIntegration.sendAutomatedEmail("contract_renewed", contractVariables, getDefaultEmailRecipients());
+
         toast.success("Contract renewed successfully");
         navigate(`/contracts/${response.NewContractID}`);
       } else {
@@ -511,6 +619,43 @@ const ContractDetails: React.FC = () => {
             </div>
           </div>
           <div className="flex space-x-2">
+            {/* Email Actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Email Communications</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleSendEmail()}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Custom Email
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleSendEmail("contract_notification")}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Contract Notification
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSendEmail("payment_reminder")}>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Payment Reminder
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSendEmail("document_request")}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Document Request
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowEmailHistory(true)}>
+                  <History className="mr-2 h-4 w-4" />
+                  Email History
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* PDF Generation Actions */}
             <div className="flex space-x-2 mr-2">
               <PdfActionButtons
@@ -714,12 +859,14 @@ const ContractDetails: React.FC = () => {
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Customer</h3>
                       <p className="text-base font-medium">{contract.CustomerName}</p>
+                      {contract.CustomerEmail && <p className="text-sm text-muted-foreground">{contract.CustomerEmail}</p>}
                     </div>
 
                     {contract.JointCustomerName && (
                       <div>
                         <h3 className="text-sm font-medium text-muted-foreground">Joint Customer</h3>
                         <p className="text-base">{contract.JointCustomerName}</p>
+                        {contract.JointCustomerEmail && <p className="text-sm text-muted-foreground">{contract.JointCustomerEmail}</p>}
                       </div>
                     )}
                   </div>
@@ -1036,6 +1183,20 @@ const ContractDetails: React.FC = () => {
           </TabsContent>
         </Tabs>
 
+        {/* Email Send Dialog */}
+        {contract && (
+          <EmailSendDialog
+            isOpen={isEmailDialogOpen}
+            onClose={() => setIsEmailDialogOpen(false)}
+            entityType="contract"
+            entityId={contract.ContractID}
+            entityData={contract}
+            defaultRecipients={getDefaultEmailRecipients()}
+            triggerEvent={emailTriggerEvent}
+            onEmailSent={handleEmailSent}
+          />
+        )}
+
         {/* PDF Preview Modal */}
         <PdfPreviewModal
           isOpen={showPdfPreview}
@@ -1055,9 +1216,9 @@ const ContractDetails: React.FC = () => {
               <DialogTitle>{approvalAction === "approve" ? "Approve Contract" : approvalAction === "reject" ? "Reject Contract" : "Reset Approval Status"}</DialogTitle>
               <DialogDescription>
                 {approvalAction === "approve"
-                  ? "Approve this contract to allow processing. Note: Once approved, the contract will be protected from modifications."
+                  ? "Approve this contract to allow processing. Note: Once approved, the contract will be protected from modifications and email notifications will be sent automatically."
                   : approvalAction === "reject"
-                  ? "Reject this contract with a reason."
+                  ? "Reject this contract with a reason. Email notifications will be sent automatically."
                   : "Reset the approval status to pending."}
               </DialogDescription>
             </DialogHeader>
@@ -1110,7 +1271,7 @@ const ContractDetails: React.FC = () => {
                     {approvalAction === "approve" && <CheckCircle className="mr-2 h-4 w-4" />}
                     {approvalAction === "reject" && <XCircle className="mr-2 h-4 w-4" />}
                     {approvalAction === "reset" && <RotateCcw className="mr-2 h-4 w-4" />}
-                    {approvalAction === "approve" ? "Approve" : approvalAction === "reject" ? "Reject" : "Reset"}
+                    {approvalAction === "approve" ? "Approve & Send Email" : approvalAction === "reject" ? "Reject & Send Email" : "Reset"}
                   </>
                 )}
               </Button>
@@ -1136,7 +1297,7 @@ const ContractDetails: React.FC = () => {
           onClose={closeStatusChangeDialog}
           onConfirm={handleStatusChange}
           title="Change Contract Status"
-          description={`Are you sure you want to change the status of contract "${contract.ContractNo}" to "${selectedStatus}"?`}
+          description={`Are you sure you want to change the status of contract "${contract.ContractNo}" to "${selectedStatus}"? Email notifications will be sent automatically for certain status changes.`}
           cancelText="Cancel"
           confirmText="Change Status"
           type="warning"
@@ -1178,7 +1339,7 @@ const ContractDetails: React.FC = () => {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Renew Contract</DialogTitle>
-              <DialogDescription>Create a new contract based on the current one with updated dates.</DialogDescription>
+              <DialogDescription>Create a new contract based on the current one with updated dates. Email notifications will be sent automatically.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1215,6 +1376,10 @@ const ContractDetails: React.FC = () => {
                   </ul>
                 </div>
               </div>
+              <Alert>
+                <Mail className="h-4 w-4" />
+                <AlertDescription>Contract renewal notifications will be sent automatically to all relevant parties.</AlertDescription>
+              </Alert>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsRenewDialogOpen(false)}>
@@ -1229,7 +1394,7 @@ const ContractDetails: React.FC = () => {
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Renew Contract
+                    Renew & Send Email
                   </>
                 )}
               </Button>

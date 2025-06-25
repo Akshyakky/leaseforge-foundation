@@ -1,4 +1,4 @@
-// src/pages/contract/ContractList.tsx - Enhanced with Approval Features and Edit Restrictions
+// src/pages/contract/ContractList.tsx - Enhanced with Email Integration
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,13 @@ import {
   RotateCcw,
   Lock,
   AlertTriangle,
+  Mail,
+  Send,
+  History,
+  BellRing,
+  MailCheck,
+  MailX,
+  MessageSquare,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -58,8 +65,12 @@ import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/hooks";
 
 // PDF Report Components
-import { PdfPreviewModal, GenericPdfReport } from "@/components/pdf/PdfReportComponents";
+import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+
+// Email Components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
 // Types and interfaces
 interface ContractFilter {
@@ -70,6 +81,7 @@ interface ContractFilter {
   selectedPropertyId: string;
   dateFrom?: Date;
   dateTo?: Date;
+  emailStatus?: string; // New filter for email status
 }
 
 interface SortConfig {
@@ -91,7 +103,46 @@ interface ContractListStats {
   approvalApproved: number;
   approvalRejected: number;
   approvedProtected: number;
+  // Email-related stats
+  emailNotificationsSent: number;
+  pendingEmailReminders: number;
+  expiringSoon: number;
 }
+
+// Email reminder types
+interface EmailReminderConfig {
+  triggerEvent: string;
+  triggerName: string;
+  description: string;
+  defaultEnabled: boolean;
+}
+
+const CONTRACT_EMAIL_REMINDERS: EmailReminderConfig[] = [
+  {
+    triggerEvent: "contract_expiring_30",
+    triggerName: "Expiring in 30 Days",
+    description: "Send reminder 30 days before contract expiration",
+    defaultEnabled: true,
+  },
+  {
+    triggerEvent: "contract_expiring_7",
+    triggerName: "Expiring in 7 Days",
+    description: "Send reminder 7 days before contract expiration",
+    defaultEnabled: true,
+  },
+  {
+    triggerEvent: "payment_reminder",
+    triggerName: "Payment Reminder",
+    description: "Send payment reminder notifications",
+    defaultEnabled: false,
+  },
+  {
+    triggerEvent: "document_expiry_reminder",
+    triggerName: "Document Expiry",
+    description: "Remind about expiring documents",
+    defaultEnabled: false,
+  },
+];
 
 const ContractList: React.FC = () => {
   const navigate = useNavigate();
@@ -118,6 +169,7 @@ const ContractList: React.FC = () => {
     selectedPropertyId: searchParams.get("property") || "",
     dateFrom: searchParams.get("from") ? new Date(searchParams.get("from")!) : undefined,
     dateTo: searchParams.get("to") ? new Date(searchParams.get("to")!) : undefined,
+    emailStatus: searchParams.get("emailStatus") || "",
   });
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: "asc" });
@@ -131,16 +183,38 @@ const ContractList: React.FC = () => {
   const [bulkApprovalAction, setBulkApprovalAction] = useState<"approve" | "reject" | null>(null);
   const [bulkApprovalLoading, setBulkApprovalLoading] = useState(false);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailDialogContract, setEmailDialogContract] = useState<Contract | null>(null);
+  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
+  const [isBulkEmailing, setIsBulkEmailing] = useState(false);
+  const [showEmailRemindersDialog, setShowEmailRemindersDialog] = useState(false);
+
   // Contract status and approval options
   const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
   const approvalStatusOptions = ["Pending", "Approved", "Rejected"];
+  const emailStatusOptions = [
+    { label: "All", value: "" },
+    { label: "Email Sent", value: "sent" },
+    { label: "No Email Sent", value: "not_sent" },
+    { label: "Email Pending", value: "pending" },
+    { label: "Email Failed", value: "failed" },
+  ];
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
 
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "contract",
+    entityId: 0, // Will be set when needed
+  });
+
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
+    // Load email templates for contract category
+    emailIntegration.loadEmailTemplates("Contract");
   }, []);
 
   // Update URL params when filters change
@@ -151,6 +225,7 @@ const ContractList: React.FC = () => {
     if (filters.selectedStatus) params.set("status", filters.selectedStatus);
     if (filters.selectedApprovalStatus) params.set("approval", filters.selectedApprovalStatus);
     if (filters.selectedPropertyId) params.set("property", filters.selectedPropertyId);
+    if (filters.emailStatus) params.set("emailStatus", filters.emailStatus);
     if (filters.dateFrom) params.set("from", filters.dateFrom.toISOString().split("T")[0]);
     if (filters.dateTo) params.set("to", filters.dateTo.toISOString().split("T")[0]);
 
@@ -204,7 +279,6 @@ const ContractList: React.FC = () => {
       setProperties(propertiesData);
     } catch (error) {
       console.error("Error fetching properties:", error);
-      // Don't show error toast for properties as it's not critical
       console.warn("Properties filter will not be available");
     }
   };
@@ -255,10 +329,22 @@ const ContractList: React.FC = () => {
       filtered = filtered.filter((contract) => contract.ApprovalStatus === filters.selectedApprovalStatus);
     }
 
-    // Apply property filter (if available)
-    if (filters.selectedPropertyId) {
-      // This would require property information in contract data or a separate call
-      // For now, we'll skip this filter if property data isn't available
+    // Apply email status filter
+    if (filters.emailStatus) {
+      switch (filters.emailStatus) {
+        case "sent":
+          filtered = filtered.filter((contract) => contract.EmailNotificationSent === true);
+          break;
+        case "not_sent":
+          filtered = filtered.filter((contract) => contract.EmailNotificationSent !== true);
+          break;
+        case "pending":
+          filtered = filtered.filter((contract) => contract.EmailNotificationPending === true);
+          break;
+        case "failed":
+          filtered = filtered.filter((contract) => contract.EmailNotificationFailed === true);
+          break;
+      }
     }
 
     // Apply date filters
@@ -322,6 +408,7 @@ const ContractList: React.FC = () => {
       selectedStatus: "",
       selectedApprovalStatus: "",
       selectedPropertyId: "",
+      emailStatus: "",
       dateFrom: undefined,
       dateTo: undefined,
     });
@@ -339,6 +426,168 @@ const ContractList: React.FC = () => {
   // Check if contract can be edited
   const canEditContract = (contract: Contract) => {
     return contract.ApprovalStatus !== "Approved";
+  };
+
+  // Email helper functions
+  const getDefaultEmailRecipients = (contract: Contract) => {
+    const recipients = [];
+
+    if (contract.CustomerEmail) {
+      recipients.push({
+        email: contract.CustomerEmail,
+        name: contract.CustomerName,
+        type: "to" as const,
+      });
+    }
+
+    if (contract.JointCustomerEmail) {
+      recipients.push({
+        email: contract.JointCustomerEmail,
+        name: contract.JointCustomerName || "Joint Customer",
+        type: "to" as const,
+      });
+    }
+
+    return recipients;
+  };
+
+  // Email action handlers
+  const handleSendEmail = (contract: Contract, triggerEvent?: string) => {
+    setEmailDialogContract(contract);
+    setEmailTriggerEvent(triggerEvent);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+      // Optionally update the contract's email status
+      if (emailDialogContract) {
+        setContracts(
+          contracts.map((c) => (c.ContractID === emailDialogContract.ContractID ? { ...c, EmailNotificationSent: true, LastEmailSentDate: new Date().toISOString() } : c))
+        );
+      }
+    }
+  };
+
+  // Bulk email operations
+  const handleBulkEmail = async (triggerEvent: string) => {
+    if (selectedContracts.size === 0) {
+      toast.error("Please select contracts to send emails");
+      return;
+    }
+
+    setIsBulkEmailing(true);
+
+    try {
+      const contractsToEmail = Array.from(selectedContracts)
+        .map((contractId) => contracts.find((c) => c.ContractID === contractId))
+        .filter(Boolean) as Contract[];
+
+      const emailPromises = contractsToEmail.map(async (contract) => {
+        const recipients = getDefaultEmailRecipients(contract);
+        if (recipients.length === 0) {
+          return { contract, success: false, error: "No email recipients found" };
+        }
+
+        try {
+          const contractVariables = emailIntegration.generateContractVariables(contract, {
+            customerEmail: recipients[0]?.email,
+          });
+
+          const result = await emailIntegration.sendAutomatedEmail(triggerEvent, contractVariables, recipients);
+
+          return { contract, success: result.success, result };
+        } catch (error) {
+          return { contract, success: false, error: error.message };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successCount = results.filter((r) => r.success).length;
+      const failureCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} emails sent successfully`);
+
+        // Update contracts with email sent status
+        setContracts(
+          contracts.map((contract) => {
+            const result = results.find((r) => r.contract.ContractID === contract.ContractID);
+            if (result && result.success) {
+              return { ...contract, EmailNotificationSent: true, LastEmailSentDate: new Date().toISOString() };
+            }
+            return contract;
+          })
+        );
+      }
+
+      if (failureCount > 0) {
+        toast.warning(`${failureCount} emails failed to send`);
+      }
+
+      setSelectedContracts(new Set());
+    } catch (error) {
+      console.error("Bulk email error:", error);
+      toast.error("Failed to send bulk emails");
+    } finally {
+      setIsBulkEmailing(false);
+    }
+  };
+
+  // Automated reminder handlers
+  const handleSendExpiryReminders = async () => {
+    try {
+      // Find contracts expiring in the next 30 days
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+      const expiringContracts = contracts.filter((contract) => {
+        if (contract.ContractStatus !== "Active") return false;
+
+        // This would need actual expiry date logic based on your contract structure
+        // For now, using transaction date + 1 year as example
+        const expiryDate = new Date(contract.TransactionDate);
+        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+        return expiryDate <= thirtyDaysFromNow && expiryDate > new Date();
+      });
+
+      if (expiringContracts.length === 0) {
+        toast.info("No contracts are expiring in the next 30 days");
+        return;
+      }
+
+      const emailPromises = expiringContracts.map(async (contract) => {
+        const recipients = getDefaultEmailRecipients(contract);
+        if (recipients.length === 0) return { contract, success: false };
+
+        try {
+          const contractVariables = emailIntegration.generateContractVariables(contract, {
+            customerEmail: recipients[0]?.email,
+            expiryDate: new Date(contract.TransactionDate).setFullYear(new Date(contract.TransactionDate).getFullYear() + 1),
+          });
+
+          const result = await emailIntegration.sendAutomatedEmail("contract_expiring_30", contractVariables, recipients);
+
+          return { contract, success: result.success };
+        } catch (error) {
+          return { contract, success: false };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successCount = results.filter((r) => r.success).length;
+
+      if (successCount > 0) {
+        toast.success(`Expiry reminders sent for ${successCount} contracts`);
+      } else {
+        toast.error("Failed to send expiry reminders");
+      }
+    } catch (error) {
+      console.error("Error sending expiry reminders:", error);
+      toast.error("Failed to send expiry reminders");
+    }
   };
 
   // Navigation handlers
@@ -395,7 +644,6 @@ const ContractList: React.FC = () => {
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedContracts.size === 0) return;
 
-    // Filter out approved contracts
     const editableContracts = Array.from(selectedContracts).filter((contractId) => {
       const contract = contracts.find((c) => c.ContractID === contractId);
       return contract && canEditContract(contract);
@@ -416,7 +664,6 @@ const ContractList: React.FC = () => {
 
       await Promise.all(promises);
 
-      // Update local state
       setContracts((prev) => prev.map((contract) => (editableContracts.includes(contract.ContractID) ? { ...contract, ContractStatus: newStatus } : contract)));
 
       setSelectedContracts(new Set());
@@ -456,7 +703,6 @@ const ContractList: React.FC = () => {
 
       await Promise.all(promises);
 
-      // Refresh contracts to get updated approval status
       await fetchContracts();
 
       setSelectedContracts(new Set());
@@ -565,11 +811,11 @@ const ContractList: React.FC = () => {
     }
   };
 
+  // PDF generation handlers
   const filterEmptyParameters = (params) => {
     const filtered = {};
 
     Object.entries(params).forEach(([key, value]) => {
-      // Include parameter only if it's not null, not undefined, not empty string, and not 0
       if (value !== null && value !== undefined && value !== "" && value !== 0) {
         filtered[key] = value;
       }
@@ -587,9 +833,9 @@ const ContractList: React.FC = () => {
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+      FilterEmailStatus: filters.emailStatus || "",
     };
 
-    // Filter out empty parameters
     const filteredParameters = filterEmptyParameters(parameters);
 
     const response = await contractListPdf.generateReport("contract-list", filteredParameters, {
@@ -613,9 +859,9 @@ const ContractList: React.FC = () => {
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+      FilterEmailStatus: filters.emailStatus || "",
     };
 
-    // Filter out empty parameters
     const filteredParameters = filterEmptyParameters(parameters);
 
     setShowPdfPreview(true);
@@ -673,6 +919,60 @@ const ContractList: React.FC = () => {
     );
   };
 
+  // Render email status indicator
+  const renderEmailStatusIndicator = (contract: Contract) => {
+    if (contract.EmailNotificationSent) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <MailCheck className="h-4 w-4 text-green-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification sent</p>
+            {contract.LastEmailSentDate && <p className="text-xs">Last sent: {format(new Date(contract.LastEmailSentDate), "MMM dd, yyyy")}</p>}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    if (contract.EmailNotificationFailed) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <MailX className="h-4 w-4 text-red-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification failed</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    if (contract.EmailNotificationPending) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification pending</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <Mail className="h-4 w-4 text-gray-400" />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>No email sent</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
@@ -710,6 +1010,17 @@ const ContractList: React.FC = () => {
       approvalApproved: filtered.filter((c) => c.ApprovalStatus === "Approved").length,
       approvalRejected: filtered.filter((c) => c.ApprovalStatus === "Rejected").length,
       approvedProtected: filtered.filter((c) => c.ApprovalStatus === "Approved").length,
+      // Email-related stats
+      emailNotificationsSent: filtered.filter((c) => c.EmailNotificationSent === true).length,
+      pendingEmailReminders: filtered.filter((c) => c.EmailNotificationPending === true).length,
+      expiringSoon: filtered.filter((c) => {
+        if (c.ContractStatus !== "Active") return false;
+        const expiryDate = new Date(c.TransactionDate);
+        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        return expiryDate <= thirtyDaysFromNow && expiryDate > new Date();
+      }).length,
     };
   }, [filteredContracts]);
 
@@ -720,6 +1031,7 @@ const ContractList: React.FC = () => {
     filters.selectedStatus ||
     filters.selectedApprovalStatus ||
     filters.selectedPropertyId ||
+    filters.emailStatus ||
     filters.dateFrom ||
     filters.dateTo;
 
@@ -738,15 +1050,39 @@ const ContractList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Management</h1>
-            <p className="text-muted-foreground">Manage rental and property contracts</p>
+            <p className="text-muted-foreground">Manage rental and property contracts with integrated email communications</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Email Reminders Button */}
+            {stats.expiringSoon > 0 && (
+              <Button variant="outline" onClick={handleSendExpiryReminders} className="bg-orange-50 border-orange-200 text-orange-800">
+                <BellRing className="mr-2 h-4 w-4" />
+                {stats.expiringSoon} Expiring Soon
+              </Button>
+            )}
+
+            {/* Email Notifications Summary */}
+            {stats.emailNotificationsSent > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" className="bg-blue-50 border-blue-200 text-blue-800">
+                    <MailCheck className="mr-2 h-4 w-4" />
+                    {stats.emailNotificationsSent} Emails Sent
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{stats.emailNotificationsSent} contracts have email notifications sent</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {isManager && stats.approvalPending > 0 && (
               <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
             )}
+
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -760,6 +1096,7 @@ const ContractList: React.FC = () => {
                 </TooltipContent>
               </Tooltip>
             )}
+
             <Button variant="outline" onClick={handleViewAnalytics}>
               <BarChart3 className="mr-2 h-4 w-4" />
               Analytics
@@ -838,6 +1175,27 @@ const ContractList: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Email-specific stats */}
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <MailCheck className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">Emails Sent</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-600">{stats.emailNotificationsSent}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <BellRing className="h-4 w-4 text-orange-600" />
+                <span className="text-sm text-muted-foreground">Expiring Soon</span>
+              </div>
+              <div className="text-2xl font-bold text-orange-600">{stats.expiringSoon}</div>
+            </CardContent>
+          </Card>
+
           {isManager && (
             <>
               <Card className="hover:shadow-md transition-shadow">
@@ -911,9 +1269,43 @@ const ContractList: React.FC = () => {
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredContracts.length} of ${contracts.length} contracts` : `Showing all ${contracts.length} contracts`}
                   {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved contracts are protected from modifications</span>}
+                  {stats.emailNotificationsSent > 0 && <span className="ml-2 text-blue-600">• {stats.emailNotificationsSent} have email notifications sent</span>}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
+                {/* Email Actions */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" disabled={emailIntegration.isLoading}>
+                      {emailIntegration.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                      Email Actions
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Automated Reminders</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={handleSendExpiryReminders} disabled={stats.expiringSoon === 0}>
+                      <BellRing className="mr-2 h-4 w-4" />
+                      Send Expiry Reminders ({stats.expiringSoon})
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Bulk Email Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => handleBulkEmail("contract_notification")} disabled={selectedContracts.size === 0 || isBulkEmailing}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Contract Notifications ({selectedContracts.size})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkEmail("payment_reminder")} disabled={selectedContracts.size === 0 || isBulkEmailing}>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Send Payment Reminders ({selectedContracts.size})
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowEmailRemindersDialog(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure Email Reminders
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* PDF Generation */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -951,6 +1343,17 @@ const ContractList: React.FC = () => {
                           Set as {status}
                         </DropdownMenuItem>
                       ))}
+
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Email Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleBulkEmail("contract_notification")} disabled={isBulkEmailing}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Contract Notifications
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkEmail("payment_reminder")} disabled={isBulkEmailing}>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Send Payment Reminders
+                      </DropdownMenuItem>
 
                       {isManager && (
                         <>
@@ -994,7 +1397,7 @@ const ContractList: React.FC = () => {
 
               {/* Advanced Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 p-4 bg-muted/50 rounded-lg">
                   <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Filter by customer" />
@@ -1032,6 +1435,19 @@ const ContractList: React.FC = () => {
                       {approvalStatusOptions.map((status) => (
                         <SelectItem key={status} value={status}>
                           {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filters.emailStatus || "all"} onValueChange={(value) => handleFilterChange("emailStatus", value === "all" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Email Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailStatusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value || "all"}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1089,6 +1505,11 @@ const ContractList: React.FC = () => {
                   {filters.selectedApprovalStatus && (
                     <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedApprovalStatus", "")}>
                       Approval: {filters.selectedApprovalStatus} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.emailStatus && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("emailStatus", "")}>
+                      Email: {emailStatusOptions.find((o) => o.value === filters.emailStatus)?.label} <X className="ml-1 h-3 w-3" />
                     </Badge>
                   )}
                   {filters.dateFrom && (
@@ -1226,6 +1647,7 @@ const ContractList: React.FC = () => {
                           )}
                         </div>
                       </TableHead>
+                      <TableHead>Email</TableHead>
                       <TableHead>Units</TableHead>
                       <TableHead>Created By</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
@@ -1271,6 +1693,7 @@ const ContractList: React.FC = () => {
                               <Users className="h-4 w-4 mr-2 text-muted-foreground" />
                               <div>
                                 <div className="font-medium">{contract.CustomerName}</div>
+                                {contract.CustomerEmail && <div className="text-xs text-muted-foreground">{contract.CustomerEmail}</div>}
                                 {contract.JointCustomerName && <div className="text-sm text-muted-foreground">Joint: {contract.JointCustomerName}</div>}
                               </div>
                             </div>
@@ -1307,6 +1730,9 @@ const ContractList: React.FC = () => {
                                 </Tooltip>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">{renderEmailStatusIndicator(contract)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -1355,6 +1781,25 @@ const ContractList: React.FC = () => {
                                     </TooltipContent>
                                   </Tooltip>
                                 )}
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Email Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => handleSendEmail(contract)}>
+                                  <Mail className="mr-2 h-4 w-4" />
+                                  Send Custom Email
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(contract, "contract_notification")}>
+                                  <Send className="mr-2 h-4 w-4" />
+                                  Contract Notification
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(contract, "payment_reminder")}>
+                                  <MessageSquare className="mr-2 h-4 w-4" />
+                                  Payment Reminder
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(contract, "document_request")}>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Document Request
+                                </DropdownMenuItem>
 
                                 {(contract.ContractStatus === "Active" || contract.ContractStatus === "Completed" || contract.ContractStatus === "Expired") && (
                                   <DropdownMenuItem onClick={() => handleRenewContract(contract)}>
@@ -1454,6 +1899,20 @@ const ContractList: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Email Send Dialog */}
+        {emailDialogContract && (
+          <EmailSendDialog
+            isOpen={isEmailDialogOpen}
+            onClose={() => setIsEmailDialogOpen(false)}
+            entityType="contract"
+            entityId={emailDialogContract.ContractID}
+            entityData={emailDialogContract}
+            defaultRecipients={getDefaultEmailRecipients(emailDialogContract)}
+            triggerEvent={emailTriggerEvent}
+            onEmailSent={handleEmailSent}
+          />
+        )}
 
         {/* PDF Preview Modal */}
         <PdfPreviewModal

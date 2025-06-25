@@ -1,4 +1,4 @@
-// src/pages/contract/ContractForm.tsx - Updated with Contract Number Read-only in Edit Mode
+// src/pages/contract/ContractForm.tsx - Enhanced with Email Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -38,6 +38,9 @@ import {
   Download,
   Lock,
   Shield,
+  Mail,
+  Send,
+  Settings,
 } from "lucide-react";
 import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
@@ -53,6 +56,10 @@ import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnai
 import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
+
+// Import Email components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
 // Enhanced schema for contract form validation
 const contractUnitSchema = z.object({
@@ -108,6 +115,17 @@ const contractSchema = z.object({
   units: z.array(contractUnitSchema).min(1, "At least one unit is required"),
   additionalCharges: z.array(contractChargeSchema).optional(),
   attachments: z.array(contractAttachmentSchema).optional(),
+  // Email notification settings
+  sendEmailNotification: z.boolean().default(false),
+  emailRecipients: z
+    .array(
+      z.object({
+        email: z.string().email(),
+        name: z.string(),
+        type: z.enum(["to", "cc", "bcc"]),
+      })
+    )
+    .optional(),
 });
 
 type ContractFormValues = z.infer<typeof contractSchema>;
@@ -210,9 +228,19 @@ const ContractForm: React.FC = () => {
   const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
   const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [showEmailSettings, setShowEmailSettings] = useState(false);
+
   // Check if editing is allowed
   const canEditContract = !contract || contract.ApprovalStatus !== "Approved";
   const isApproved = contract?.ApprovalStatus === "Approved";
+
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "contract",
+    entityId: contract?.ContractID || 0,
+  });
 
   // Initialize form
   const form = useForm<ContractFormValues>({
@@ -227,6 +255,8 @@ const ContractForm: React.FC = () => {
       units: [],
       additionalCharges: [],
       attachments: [],
+      sendEmailNotification: false,
+      emailRecipients: [],
     },
   });
 
@@ -273,6 +303,36 @@ const ContractForm: React.FC = () => {
       chargesTotal: roundToTwo(chargesTotal),
       grandTotal: roundToTwo(unitTotal + chargesTotal),
     };
+  };
+
+  // Generate default email recipients based on contract data
+  const getDefaultEmailRecipients = () => {
+    const formValues = form.getValues();
+    const recipients = [];
+
+    if (formValues.CustomerID) {
+      const customer = customers.find((c) => c.CustomerID.toString() === formValues.CustomerID);
+      if (customer && customer.Email) {
+        recipients.push({
+          email: customer.Email,
+          name: customer.CustomerFullName,
+          type: "to" as const,
+        });
+      }
+    }
+
+    if (formValues.JointCustomerID) {
+      const jointCustomer = customers.find((c) => c.CustomerID.toString() === formValues.JointCustomerID);
+      if (jointCustomer && jointCustomer.Email) {
+        recipients.push({
+          email: jointCustomer.Email,
+          name: jointCustomer.CustomerFullName,
+          type: "to" as const,
+        });
+      }
+    }
+
+    return recipients;
   };
 
   // Initialize and fetch reference data
@@ -330,6 +390,8 @@ const ContractForm: React.FC = () => {
               units: formattedUnits,
               additionalCharges: formattedCharges,
               attachments: formattedAttachments,
+              sendEmailNotification: false,
+              emailRecipients: [],
             });
           } else {
             toast.error("Contract not found");
@@ -346,6 +408,19 @@ const ContractForm: React.FC = () => {
 
     initializeForm();
   }, [id, isEdit, navigate, form]);
+
+  // Load email templates when component mounts
+  useEffect(() => {
+    emailIntegration.loadEmailTemplates("Contract");
+  }, [emailIntegration]);
+
+  // Auto-update email recipients when customers change
+  useEffect(() => {
+    if (form.watch("sendEmailNotification")) {
+      const recipients = getDefaultEmailRecipients();
+      form.setValue("emailRecipients", recipients);
+    }
+  }, [form.watch("CustomerID"), form.watch("JointCustomerID"), customers]);
 
   // Fetch reference data
   const fetchReferenceData = async () => {
@@ -369,7 +444,7 @@ const ContractForm: React.FC = () => {
     }
   };
 
-  // Auto-calculation effects (same as before - keeping the existing logic)
+  // Auto-calculation effects (keeping existing logic)
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (!name) return;
@@ -592,7 +667,6 @@ const ContractForm: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [form, taxes]);
 
-  // Auto-populate unit rent values (keeping existing logic)
   useEffect(() => {
     const handleUnitChange = async (unitId: string, index: number) => {
       if (unitId) {
@@ -673,6 +747,17 @@ const ContractForm: React.FC = () => {
       TaxAmount: 0,
       TotalAmount: 0,
     });
+  };
+
+  // Email handlers
+  const handleSendTestEmail = () => {
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+    }
   };
 
   // Attachment management functions
@@ -802,6 +887,9 @@ const ContractForm: React.FC = () => {
         })),
       };
 
+      let contractId: number;
+      let isNewContract = false;
+
       if (isEdit && contract) {
         const response = await contractService.updateContract({
           ...contractData,
@@ -812,21 +900,53 @@ const ContractForm: React.FC = () => {
         });
 
         if (response.Status === 1) {
+          contractId = contract.ContractID;
           toast.success("Contract updated successfully");
-          navigate(`/contracts/${contract.ContractID}`);
         } else {
           toast.error(response.Message || "Failed to update contract");
+          return;
         }
       } else {
         const response = await contractService.createContract(contractData);
 
         if (response.Status === 1 && response.NewContractID) {
+          contractId = response.NewContractID;
+          isNewContract = true;
           toast.success("Contract created successfully");
-          navigate(`/contracts/${response.NewContractID}`);
         } else {
           toast.error(response.Message || "Failed to create contract");
+          return;
         }
       }
+
+      // Send email notification if enabled
+      if (data.sendEmailNotification && data.emailRecipients && data.emailRecipients.length > 0) {
+        try {
+          const contractVariables = emailIntegration.generateContractVariables(contractData.contract, {
+            customerEmail: data.emailRecipients.find((r) => r.type === "to")?.email,
+            isNewContract,
+            contractId,
+          });
+
+          const triggerEvent = isNewContract ? "contract_created" : "contract_updated";
+
+          // Filter recipients to ensure all required properties are present
+          const validRecipients = data.emailRecipients.filter((recipient) => recipient.email && recipient.name && recipient.type) as Array<{
+            email: string;
+            name: string;
+            type: "to" | "cc" | "bcc";
+          }>;
+
+          await emailIntegration.sendAutomatedEmail(triggerEvent, contractVariables, validRecipients);
+
+          toast.success("Contract saved and email notifications sent successfully");
+        } catch (emailError) {
+          console.error("Error sending email notification:", emailError);
+          toast.warning("Contract saved successfully, but email notification failed");
+        }
+      }
+
+      navigate(`/contracts/${contractId}`);
     } catch (error) {
       console.error("Error saving contract:", error);
       toast.error("Failed to save contract");
@@ -855,6 +975,8 @@ const ContractForm: React.FC = () => {
         units: [],
         additionalCharges: [],
         attachments: [],
+        sendEmailNotification: false,
+        emailRecipients: [],
       });
     }
   };
@@ -885,6 +1007,7 @@ const ContractForm: React.FC = () => {
 
   const { unitTotal, chargesTotal, grandTotal } = calculateTotals();
   const attachmentList = form.watch("attachments") || [];
+  const sendEmailNotification = form.watch("sendEmailNotification");
 
   return (
     <div className="space-y-6">
@@ -934,7 +1057,7 @@ const ContractForm: React.FC = () => {
                   label="Contract Number"
                   placeholder={isEdit ? "Contract number (cannot be changed)" : "Auto-generated if left empty"}
                   description={isEdit ? "Contract number cannot be modified in edit mode" : "Leave blank for auto-generated contract number"}
-                  disabled={isEdit} // Always disabled in edit mode
+                  disabled={isEdit}
                   className={isEdit ? "bg-muted" : ""}
                 />
                 <FormField
@@ -999,6 +1122,83 @@ const ContractForm: React.FC = () => {
                 description="Additional notes about this contract"
                 disabled={!canEditContract}
               />
+            </CardContent>
+          </Card>
+
+          {/* Email Notification Settings */}
+          <Card className={isApproved ? "opacity-60" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                Email Notifications
+                {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+              </CardTitle>
+              <CardDescription>Configure email notifications for this contract</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="sendEmailNotification"
+                  checked={sendEmailNotification}
+                  onCheckedChange={(checked) => {
+                    form.setValue("sendEmailNotification", !!checked);
+                    if (checked) {
+                      const recipients = getDefaultEmailRecipients();
+                      form.setValue("emailRecipients", recipients);
+                    }
+                  }}
+                  disabled={!canEditContract}
+                />
+                <Label htmlFor="sendEmailNotification" className="text-sm font-medium">
+                  Send email notification when contract is {isEdit ? "updated" : "created"}
+                </Label>
+              </div>
+
+              {sendEmailNotification && (
+                <div className="space-y-4 pl-6 border-l-2 border-blue-200">
+                  <div className="text-sm text-muted-foreground">
+                    Email notifications will be sent automatically to the selected recipients when the contract is {isEdit ? "updated" : "created"}.
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Email Recipients</Label>
+                    <div className="space-y-2">
+                      {form.watch("emailRecipients")?.map((recipient, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
+                          <Badge variant="outline">{recipient.type.toUpperCase()}</Badge>
+                          <span className="font-medium">{recipient.name}</span>
+                          <span className="text-muted-foreground">({recipient.email})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={handleSendTestEmail} disabled={!canEditContract}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Preview Email Template
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmailSettings(!showEmailSettings)} disabled={!canEditContract}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Advanced Settings
+                    </Button>
+                  </div>
+
+                  {showEmailSettings && (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <div className="font-medium">Email Template Configuration</div>
+                          <div className="text-sm">• For new contracts: "contract_created" template will be used</div>
+                          <div className="text-sm">• For updates: "contract_updated" template will be used</div>
+                          <div className="text-sm">• All contract details including units, charges, and totals will be included</div>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1563,23 +1763,44 @@ const ContractForm: React.FC = () => {
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading || unitsFieldArray.fields.length === 0 || !canEditContract}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isEdit ? "Update Contract" : "Create Contract"}
-                  </>
+              <div className="flex gap-2">
+                {sendEmailNotification && (
+                  <Alert className="p-2 inline-flex items-center">
+                    <Mail className="h-4 w-4 mr-2" />
+                    <span className="text-sm">Email notifications will be sent</span>
+                  </Alert>
                 )}
-              </Button>
+                <Button type="submit" disabled={loading || unitsFieldArray.fields.length === 0 || !canEditContract}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {isEdit ? "Update Contract" : "Create Contract"}
+                      {sendEmailNotification && " & Send Email"}
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardFooter>
           </Card>
         </form>
       </Form>
+
+      {/* Email Send Dialog for Preview */}
+      <EmailSendDialog
+        isOpen={isEmailDialogOpen}
+        onClose={() => setIsEmailDialogOpen(false)}
+        entityType="contract"
+        entityId={0} // Preview mode
+        entityData={form.getValues()}
+        defaultRecipients={getDefaultEmailRecipients()}
+        triggerEvent={isEdit ? "contract_updated" : "contract_created"}
+        onEmailSent={handleEmailSent}
+      />
 
       {/* Attachment Dialog */}
       <AttachmentDialog
