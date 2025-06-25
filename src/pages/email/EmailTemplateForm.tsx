@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { ArrowLeft, Loader2, Save, Eye, Send, Copy, Code, Palette, Settings } from "lucide-react";
-import { emailService } from "@/services/emailService";
+import { emailTemplateService } from "@/services/emailTemplateService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { companyService } from "@/services";
 
 const formSchema = z
   .object({
@@ -143,9 +144,9 @@ const EmailTemplateForm = () => {
     const fetchReferenceData = async () => {
       try {
         const [companiesData, triggerEventsData, variablesData] = await Promise.all([
-          emailService.getCompanies(),
-          emailService.getEmailTriggerEvents(),
-          emailService.getEmailVariables(),
+          companyService.getAllCompanies(),
+          emailTemplateService.getEmailTriggerEvents(),
+          emailTemplateService.getEmailVariables(),
         ]);
 
         setCompanies(companiesData);
@@ -164,7 +165,7 @@ const EmailTemplateForm = () => {
     const fetchEmailTemplate = async () => {
       if (isEdit && id) {
         try {
-          const templateData = await emailService.getEmailTemplateById(parseInt(id));
+          const templateData = await emailTemplateService.getEmailTemplateById(parseInt(id));
           if (templateData) {
             setEmailTemplate(templateData);
             form.reset({
@@ -242,12 +243,12 @@ const EmailTemplateForm = () => {
 
       let result;
       if (isEdit && emailTemplate) {
-        result = await emailService.updateEmailTemplate({
+        result = await emailTemplateService.updateEmailTemplate({
           ...templateData,
           EmailTemplateID: emailTemplate.EmailTemplateID,
         });
       } else {
-        result = await emailService.createEmailTemplate(templateData);
+        result = await emailTemplateService.createEmailTemplate(templateData);
       }
 
       if (result.success) {

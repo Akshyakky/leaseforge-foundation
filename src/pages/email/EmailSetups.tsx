@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MoreHorizontal, Search, Plus, Server, Settings, TestTube, CheckCircle, XCircle, AlertCircle, Star } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { emailService } from "@/services/emailService";
+import { emailSetupService } from "@/services/emailSetupService";
 import { EmailSetup, Company } from "@/types/emailTypes";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
@@ -21,6 +21,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form } from "@/components/ui/form";
 import * as z from "zod";
+import { companyService } from "@/services";
 
 const testEmailSchema = z.object({
   TestToEmail: z.string().email("Please enter a valid email address"),
@@ -69,13 +70,13 @@ const EmailSetups = () => {
       let setupsData: EmailSetup[];
 
       if (search || companyId || isActive !== undefined) {
-        setupsData = await emailService.searchEmailSetups({
+        setupsData = await emailSetupService.searchEmailSetups({
           searchText: search,
           companyId: companyId,
           isActive: isActive,
         });
       } else {
-        setupsData = await emailService.getAllEmailSetups();
+        setupsData = await emailSetupService.getAllEmailSetups();
       }
 
       setEmailSetups(setupsData);
@@ -90,7 +91,7 @@ const EmailSetups = () => {
   // Fetch companies for filtering
   const fetchCompanies = async () => {
     try {
-      const companiesData = await emailService.getCompanies();
+      const companiesData = await companyService.getAllCompanies();
       setCompanies(companiesData);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -157,7 +158,7 @@ const EmailSetups = () => {
 
     setTestingSetup(true);
     try {
-      const result = await emailService.testEmailConfiguration({
+      const result = await emailSetupService.testEmailConfiguration({
         EmailSetupID: selectedSetup.EmailSetupID,
         TestToEmail: data.TestToEmail,
         TestSubject: data.TestSubject,
@@ -183,7 +184,7 @@ const EmailSetups = () => {
   // Set as default functionality
   const handleSetAsDefault = async (setup: EmailSetup) => {
     try {
-      const result = await emailService.setDefaultEmailSetup(setup.EmailSetupID);
+      const result = await emailSetupService.setDefaultEmailSetup(setup.EmailSetupID);
 
       if (result.success) {
         toast.success(result.message);
@@ -213,7 +214,7 @@ const EmailSetups = () => {
     if (!selectedSetup) return;
 
     try {
-      const result = await emailService.deleteEmailSetup(selectedSetup.EmailSetupID);
+      const result = await emailSetupService.deleteEmailSetup(selectedSetup.EmailSetupID);
 
       if (result.success) {
         setEmailSetups(emailSetups.filter((s) => s.EmailSetupID !== selectedSetup.EmailSetupID));
@@ -300,7 +301,7 @@ const EmailSetups = () => {
                   <SelectValue placeholder="Filter by company" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Companies</SelectItem>
+                  <SelectItem value="0">All Companies</SelectItem>
                   {companies.map((company) => (
                     <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
                       {company.CompanyName}
@@ -313,7 +314,7 @@ const EmailSetups = () => {
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="0">All Status</SelectItem>
                   <SelectItem value="true">Active Only</SelectItem>
                   <SelectItem value="false">Inactive Only</SelectItem>
                 </SelectContent>

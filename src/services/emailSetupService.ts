@@ -2,34 +2,24 @@
 import { BaseService, BaseRequest, BaseResponse } from "./BaseService";
 import {
   EmailSetup,
-  EmailTemplate,
   EmailSetupRequest,
-  EmailTemplateRequest,
   TestEmailRequest,
-  CloneTemplateRequest,
   EmailSetupSearchFilters,
-  EmailTemplateSearchFilters,
   EmailStatistics,
-  EmailVariable,
   EmailVariableCategory,
-  EmailPreviewRequest,
-  EmailPreviewResult,
-  EmailSendRequest,
-  EmailSendResult,
   EmailHistory,
   TemplateUsageAnalytics,
   EmailSetupHealthCheck,
-  Company,
   EmailTriggerEvent,
 } from "../types/emailTypes";
 
 /**
  * Service for email setup and template management operations
  */
-class EmailService extends BaseService {
+class EmailSetupService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/email");
+    super("/Master/emailSetup");
   }
 
   // =============================================
@@ -274,288 +264,8 @@ class EmailService extends BaseService {
   }
 
   // =============================================
-  // EMAIL TEMPLATE MANAGEMENT METHODS
-  // =============================================
-
-  /**
-   * Create a new email template
-   * @param templateData - The email template data
-   * @returns Response with status and newly created template ID
-   */
-  async createEmailTemplate(templateData: EmailTemplateRequest): Promise<{
-    success: boolean;
-    message: string;
-    templateId?: number;
-  }> {
-    const request: BaseRequest = {
-      mode: 11, // Mode 1 for template management (assuming different endpoint or mode offset)
-      parameters: {
-        ...templateData,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    if (response.success) {
-      this.showSuccess("Email template created successfully");
-      return {
-        success: true,
-        message: response.message || "Email template created successfully",
-        templateId: response.NewEmailTemplateID,
-      };
-    }
-
-    return {
-      success: false,
-      message: response.message || "Failed to create email template",
-    };
-  }
-
-  /**
-   * Update an existing email template
-   * @param templateData - The email template data to update
-   * @returns Response with status
-   */
-  async updateEmailTemplate(templateData: EmailTemplateRequest & { EmailTemplateID: number }): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    const request: BaseRequest = {
-      mode: 12, // Mode 2 for template management
-      parameters: {
-        ...templateData,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    if (response.success) {
-      this.showSuccess("Email template updated successfully");
-      return {
-        success: true,
-        message: response.message || "Email template updated successfully",
-      };
-    }
-
-    return {
-      success: false,
-      message: response.message || "Failed to update email template",
-    };
-  }
-
-  /**
-   * Get all email templates
-   * @param filters - Optional filters for the query
-   * @returns Array of email templates
-   */
-  async getAllEmailTemplates(filters?: {
-    companyId?: number;
-    templateCategory?: string;
-    templateType?: string;
-    triggerEvent?: string;
-    isActive?: boolean;
-    isSystemTemplate?: boolean;
-  }): Promise<EmailTemplate[]> {
-    const request: BaseRequest = {
-      mode: 13, // Mode 3 for template management
-      parameters: {
-        FilterCompanyID: filters?.companyId,
-        FilterTemplateCategory: filters?.templateCategory,
-        FilterTemplateType: filters?.templateType,
-        FilterTriggerEvent: filters?.triggerEvent,
-        FilterIsActive: filters?.isActive,
-        FilterIsSystemTemplate: filters?.isSystemTemplate,
-      },
-    };
-
-    const response = await this.execute<EmailTemplate[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
-  /**
-   * Get an email template by ID
-   * @param templateId - The ID of the email template to fetch
-   * @returns Email template object
-   */
-  async getEmailTemplateById(templateId: number): Promise<EmailTemplate | null> {
-    const request: BaseRequest = {
-      mode: 14, // Mode 4 for template management
-      parameters: {
-        EmailTemplateID: templateId,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    if (response.success && response.table1 && response.table1.length > 0) {
-      return response.table1[0];
-    }
-
-    return null;
-  }
-
-  /**
-   * Delete an email template
-   * @param templateId - The ID of the email template to delete
-   * @returns Response with status
-   */
-  async deleteEmailTemplate(templateId: number): Promise<{ success: boolean; message: string }> {
-    const request: BaseRequest = {
-      mode: 15, // Mode 5 for template management
-      parameters: {
-        EmailTemplateID: templateId,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    if (response.success) {
-      this.showSuccess("Email template deleted successfully");
-      return {
-        success: true,
-        message: response.message || "Email template deleted successfully",
-      };
-    }
-
-    return {
-      success: false,
-      message: response.message || "Failed to delete email template",
-    };
-  }
-
-  /**
-   * Search email templates
-   * @param filters - Search filters
-   * @returns Array of matching email templates
-   */
-  async searchEmailTemplates(filters: EmailTemplateSearchFilters): Promise<EmailTemplate[]> {
-    const request: BaseRequest = {
-      mode: 16, // Mode 6 for template management
-      parameters: {
-        SearchText: filters.searchText,
-        FilterCompanyID: filters.companyId,
-        FilterTemplateCategory: filters.templateCategory,
-        FilterTemplateType: filters.templateType,
-        FilterTriggerEvent: filters.triggerEvent,
-        FilterIsActive: filters.isActive,
-        FilterIsSystemTemplate: filters.isSystemTemplate,
-      },
-    };
-
-    const response = await this.execute<EmailTemplate[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
-  /**
-   * Get email templates by category
-   * @param category - The template category
-   * @param companyId - Optional company ID filter
-   * @returns Array of templates in the specified category
-   */
-  async getTemplatesByCategory(category: string, companyId?: number): Promise<EmailTemplate[]> {
-    const request: BaseRequest = {
-      mode: 17, // Mode 7 for template management
-      parameters: {
-        TemplateCategory: category,
-        CompanyID: companyId,
-      },
-    };
-
-    const response = await this.execute<EmailTemplate[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
-  /**
-   * Get email templates by trigger event
-   * @param triggerEvent - The trigger event
-   * @param companyId - Optional company ID filter
-   * @returns Array of templates for the specified trigger event
-   */
-  async getTemplatesByTriggerEvent(triggerEvent: string, companyId?: number): Promise<EmailTemplate[]> {
-    const request: BaseRequest = {
-      mode: 18, // Mode 8 for template management
-      parameters: {
-        TriggerEvent: triggerEvent,
-        CompanyID: companyId,
-      },
-    };
-
-    const response = await this.execute<EmailTemplate[]>(request);
-    return response.success ? response.data || [] : [];
-  }
-
-  /**
-   * Update template usage statistics
-   * @param templateId - The template ID
-   * @returns Response with status
-   */
-  async updateTemplateUsage(templateId: number): Promise<{ success: boolean; message: string }> {
-    const request: BaseRequest = {
-      mode: 19, // Mode 9 for template management
-      parameters: {
-        EmailTemplateID: templateId,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    return {
-      success: response.success,
-      message: response.message || (response.success ? "Usage updated" : "Failed to update usage"),
-    };
-  }
-
-  /**
-   * Clone an email template
-   * @param cloneData - Clone template data
-   * @returns Response with status and new template ID
-   */
-  async cloneEmailTemplate(cloneData: CloneTemplateRequest): Promise<{
-    success: boolean;
-    message: string;
-    templateId?: number;
-  }> {
-    const request: BaseRequest = {
-      mode: 20, // Mode 10 for template management
-      parameters: {
-        ...cloneData,
-      },
-    };
-
-    const response = await this.execute(request);
-
-    if (response.success) {
-      this.showSuccess("Email template cloned successfully");
-      return {
-        success: true,
-        message: response.message || "Email template cloned successfully",
-        templateId: response.NewTemplateID,
-      };
-    }
-
-    return {
-      success: false,
-      message: response.message || "Failed to clone email template",
-    };
-  }
-
-  // =============================================
   // HELPER AND UTILITY METHODS
   // =============================================
-
-  /**
-   * Get companies for dropdown
-   * @returns Array of companies
-   */
-  async getCompanies(): Promise<Company[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data - should be replaced with actual API call
-    return [
-      { CompanyID: 1, CompanyName: "Main Company" },
-      { CompanyID: 2, CompanyName: "Subsidiary 1" },
-      { CompanyID: 3, CompanyName: "Subsidiary 2" },
-    ];
-  }
 
   /**
    * Get email trigger events for dropdown
@@ -726,56 +436,6 @@ class EmailService extends BaseService {
   }
 
   /**
-   * Preview an email template with variables
-   * @param previewData - Preview request data
-   * @returns Preview result with processed content
-   */
-  async previewEmailTemplate(previewData: EmailPreviewRequest): Promise<EmailPreviewResult | null> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock preview processing
-    const template = await this.getEmailTemplateById(previewData.TemplateID);
-
-    if (!template) {
-      return null;
-    }
-
-    // Simple variable replacement (in real implementation, this would be server-side)
-    let processedSubject = template.SubjectLine;
-    let processedBody = template.EmailBody;
-
-    Object.entries(previewData.Variables).forEach(([key, value]) => {
-      const placeholder = `{{${key}}}`;
-      processedSubject = processedSubject.replace(new RegExp(placeholder, "g"), String(value));
-      processedBody = processedBody.replace(new RegExp(placeholder, "g"), String(value));
-    });
-
-    return {
-      Subject: processedSubject,
-      Body: processedBody,
-      IsHTML: template.IsHTMLFormat,
-      Variables: previewData.Variables,
-    };
-  }
-
-  /**
-   * Send an email using a template
-   * @param sendData - Email send request data
-   * @returns Send result
-   */
-  async sendEmail(sendData: EmailSendRequest): Promise<EmailSendResult> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock success
-    await this.updateTemplateUsage(sendData.TemplateID);
-
-    return {
-      Success: true,
-      Message: "Email sent successfully",
-      EmailId: Math.floor(Math.random() * 10000),
-      SentDate: new Date().toISOString(),
-    };
-  }
-
-  /**
    * Get email statistics for dashboard
    * @returns Email system statistics
    */
@@ -793,17 +453,6 @@ class EmailService extends BaseService {
       TemplatesByType: [],
       SetupsByCompany: [],
     };
-  }
-
-  /**
-   * Get template usage analytics
-   * @param templateId - Optional template ID for specific analytics
-   * @returns Array of template usage analytics
-   */
-  async getTemplateUsageAnalytics(templateId?: number): Promise<TemplateUsageAnalytics[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning empty array
-    return [];
   }
 
   /**
@@ -830,4 +479,4 @@ class EmailService extends BaseService {
 }
 
 // Export a singleton instance
-export const emailService = new EmailService();
+export const emailSetupService = new EmailSetupService();

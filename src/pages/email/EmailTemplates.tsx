@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MoreHorizontal, Search, Plus, Mail, Eye, Copy, PlayCircle, BarChart3, CheckCircle, XCircle, Calendar, User } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { emailService } from "@/services/emailService";
+import { emailTemplateService } from "@/services/emailTemplateService";
 import { EmailTemplate, Company, EmailTemplateCategory, EmailTemplateType } from "@/types/emailTypes";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
+import { companyService } from "@/services";
 
 const EmailTemplates = () => {
   const { t } = useTranslation();
@@ -55,7 +56,7 @@ const EmailTemplates = () => {
       let templatesData: EmailTemplate[];
 
       if (search || companyId || category || type || triggerEvent || isActive !== undefined) {
-        templatesData = await emailService.searchEmailTemplates({
+        templatesData = await emailTemplateService.searchEmailTemplates({
           searchText: search,
           companyId: companyId,
           templateCategory: category as EmailTemplateCategory,
@@ -64,7 +65,7 @@ const EmailTemplates = () => {
           isActive: isActive,
         });
       } else {
-        templatesData = await emailService.getAllEmailTemplates();
+        templatesData = await emailTemplateService.getAllEmailTemplates();
       }
 
       setEmailTemplates(templatesData);
@@ -79,7 +80,7 @@ const EmailTemplates = () => {
   // Fetch companies for filtering
   const fetchCompanies = async () => {
     try {
-      const companiesData = await emailService.getCompanies();
+      const companiesData = await companyService.getAllCompanies();
       setCompanies(companiesData);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -146,7 +147,7 @@ const EmailTemplates = () => {
   // Clone template functionality
   const handleCloneTemplate = async (template: EmailTemplate) => {
     try {
-      const result = await emailService.cloneEmailTemplate({
+      const result = await emailTemplateService.cloneEmailTemplate({
         SourceTemplateID: template.EmailTemplateID,
         NewTemplateCode: `${template.TemplateCode}_COPY`,
         NewTemplateName: `${template.TemplateName} (Copy)`,
@@ -167,7 +168,7 @@ const EmailTemplates = () => {
   // Update usage statistics
   const handleUpdateUsage = async (templateId: number) => {
     try {
-      await emailService.updateTemplateUsage(templateId);
+      await emailTemplateService.updateTemplateUsage(templateId);
       fetchEmailTemplates(); // Refresh to show updated usage
     } catch (error) {
       console.error("Error updating usage:", error);
@@ -189,7 +190,7 @@ const EmailTemplates = () => {
     if (!selectedTemplate) return;
 
     try {
-      const result = await emailService.deleteEmailTemplate(selectedTemplate.EmailTemplateID);
+      const result = await emailTemplateService.deleteEmailTemplate(selectedTemplate.EmailTemplateID);
 
       if (result.success) {
         setEmailTemplates(emailTemplates.filter((t) => t.EmailTemplateID !== selectedTemplate.EmailTemplateID));
@@ -317,7 +318,7 @@ const EmailTemplates = () => {
                   <SelectValue placeholder="Filter by company" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Companies</SelectItem>
+                  <SelectItem value="0">All Companies</SelectItem>
                   {companies.map((company) => (
                     <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
                       {company.CompanyName}
@@ -337,7 +338,7 @@ const EmailTemplates = () => {
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="0">All Categories</SelectItem>
                   {templateCategories.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -357,7 +358,7 @@ const EmailTemplates = () => {
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="0">All Types</SelectItem>
                   {templateTypes.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
@@ -377,7 +378,7 @@ const EmailTemplates = () => {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="0">All Status</SelectItem>
                   <SelectItem value="true">Active Only</SelectItem>
                   <SelectItem value="false">Inactive Only</SelectItem>
                 </SelectContent>

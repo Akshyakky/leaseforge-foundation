@@ -34,6 +34,7 @@ import paymentVoucherRoutes from "./paymentVoucherRoutes";
 import journalVoucherRoutes from "./journalVoucherRoutes";
 import bankRoutes from "./bankRoutes";
 import leaseRevenuePostingRoutes from "./leaseRevenuePostingRoutes";
+import emailRoutes from "./emailRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -53,85 +54,60 @@ const AppRoutes = () => {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-
           {/* Dashboard routes */}
           {dashboardRoutes}
-
           {/* User routes */}
           {userRoutes}
-
           {/* Role routes */}
           {roleRoutes}
-
           {/* Department routes */}
           {departmentRoutes}
-
           {/* Customer routes */}
           {customerRoutes}
-
           {/* Company routes */}
           {companyRoutes}
-
           {/* Cost Center routes */}
           {costCenterRoutes}
-
           {/* Unit routes */}
           {unitRoutes}
-
           {/* Property routes */}
           {propertyRoutes}
-
           {/* Tax routes */}
           {taxRoutes}
-
           {/* Additional Charges routes */}
           {additionalChargesRoutes}
-
           {/* Currency routes */}
           {currencyRoutes}
-
           {/* Settings routes */}
           {settingsRoutes}
-
           {/* Deduction Charges routes */}
           {deductionChargesRoutes}
-
+          {/* Email Setup routes */}
+          {emailRoutes}
           {/* Contract Management routes */}
           {contractRoutes}
-
           {/* Termination Management routes */}
           {terminationRoutes}
-
           {/* Account Management routes */}
           {accountRoutes}
-
           {/* Supplier Management routes */}
           {supplierRoutes}
-
           {/* Invoice Management routes */}
           {invoiceRoutes}
-
           {/* Receipt Management routes */}
           {receiptRoutes}
-
           {/* Petty Cash Management routes */}
           {pettyCashRoutes}
-
           {/* Payment Voucher Management routes */}
           {paymentVoucherRoutes}
-
           {/* Journal Voucher Management routes */}
           {journalVoucherRoutes}
-
           {/* Fiscal Year Management routes */}
           {fiscalYearRoutes}
-
           {/* General Ledger routes */}
           {generalLedgerRoutes}
-
           {/* Bank routes */}
           {bankRoutes}
-
           {/* Lease Revenue Posting routes */}
           {leaseRevenuePostingRoutes}
         </Route>

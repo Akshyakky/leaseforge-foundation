@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { ArrowLeft, Loader2, Save, TestTube, Eye, EyeOff } from "lucide-react";
-import { emailService } from "@/services/emailService";
+import { emailSetupService } from "@/services/emailSetupService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -17,6 +17,7 @@ import { EmailSetup, Company } from "@/types/emailTypes";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { companyService } from "@/services";
 
 const formSchema = z
   .object({
@@ -113,7 +114,7 @@ const EmailSetupForm = () => {
   useEffect(() => {
     const fetchReferenceData = async () => {
       try {
-        const companiesData = await emailService.getCompanies();
+        const companiesData = await companyService.getAllCompanies();
         setCompanies(companiesData);
       } catch (error) {
         console.error("Error fetching reference data:", error);
@@ -128,7 +129,7 @@ const EmailSetupForm = () => {
     const fetchEmailSetup = async () => {
       if (isEdit && id) {
         try {
-          const setupData = await emailService.getEmailSetupById(parseInt(id));
+          const setupData = await emailSetupService.getEmailSetupById(parseInt(id));
           if (setupData) {
             setEmailSetup(setupData);
             form.reset({
@@ -194,12 +195,12 @@ const EmailSetupForm = () => {
 
       let result;
       if (isEdit && emailSetup) {
-        result = await emailService.updateEmailSetup({
+        result = await emailSetupService.updateEmailSetup({
           ...setupData,
           EmailSetupID: emailSetup.EmailSetupID,
         });
       } else {
-        result = await emailService.createEmailSetup(setupData);
+        result = await emailSetupService.createEmailSetup(setupData);
       }
 
       if (result.success) {
@@ -234,7 +235,7 @@ const EmailSetupForm = () => {
 
     setTestingEmail(true);
     try {
-      const result = await emailService.testEmailConfiguration({
+      const result = await emailSetupService.testEmailConfiguration({
         EmailSetupID: emailSetup.EmailSetupID,
         TestToEmail: testData.TestToEmail,
         TestSubject: testData.TestSubject,
