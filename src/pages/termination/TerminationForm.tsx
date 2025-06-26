@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationForm.tsx - Updated with Edit Mode Restrictions
+// src/pages/termination/TerminationForm.tsx - Enhanced with Email Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -8,7 +8,31 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, Save, RotateCcw, Plus, Trash2, FileText, Calculator, Calendar, Upload, Percent, PlusCircle, X, Lock, Shield, DollarSign } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  ArrowLeft,
+  Loader2,
+  Save,
+  RotateCcw,
+  Plus,
+  Trash2,
+  FileText,
+  Calculator,
+  Calendar,
+  Upload,
+  Percent,
+  PlusCircle,
+  X,
+  Lock,
+  Shield,
+  DollarSign,
+  Mail,
+  Send,
+  Settings,
+  Info,
+} from "lucide-react";
 import { terminationService, ContractTermination } from "@/services/terminationService";
 import { contractService } from "@/services/contractService";
 import { docTypeService } from "@/services/docTypeService";
@@ -21,9 +45,12 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { FormField as CustomFormField } from "@/components/forms/FormField";
 import { format } from "date-fns";
+
+// Import Email components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
 // Create Document Type Dialog
 const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: any) => void }) => {
@@ -98,7 +125,7 @@ const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onC
   );
 };
 
-// Create schema for termination form validation
+// Enhanced schema for termination form validation with email settings
 const terminationSchema = z.object({
   TerminationNo: z.string().optional(),
   ContractID: z.string().min(1, "Contract is required"),
@@ -161,6 +188,18 @@ const terminationSchema = z.object({
       })
     )
     .optional(),
+
+  // Email notification settings
+  sendEmailNotification: z.boolean().default(false),
+  emailRecipients: z
+    .array(
+      z.object({
+        email: z.string().email(),
+        name: z.string(),
+        type: z.enum(["to", "cc", "bcc"]),
+      })
+    )
+    .optional(),
 });
 
 type TerminationFormValues = z.infer<typeof terminationSchema>;
@@ -194,9 +233,19 @@ const TerminationForm: React.FC = () => {
   // Dialog states
   const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [showEmailSettings, setShowEmailSettings] = useState(false);
+
   // Check if editing is allowed
   const canEditTermination = !termination || termination.ApprovalStatus !== "Approved";
   const isApproved = termination?.ApprovalStatus === "Approved";
+
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "termination",
+    entityId: termination?.TerminationID || 0,
+  });
 
   // Initialize form
   const form = useForm<TerminationFormValues>({
@@ -219,6 +268,8 @@ const TerminationForm: React.FC = () => {
       Notes: "",
       deductions: [],
       attachments: [],
+      sendEmailNotification: false,
+      emailRecipients: [],
     },
   });
 
@@ -299,6 +350,8 @@ const TerminationForm: React.FC = () => {
               ...formattedTermination,
               deductions: formattedDeductions,
               attachments: formattedAttachments,
+              sendEmailNotification: false,
+              emailRecipients: [],
             });
 
             // Get contract details
@@ -324,6 +377,19 @@ const TerminationForm: React.FC = () => {
     initializeForm();
   }, [id, contractId, isEdit, isNewFromContract, navigate, form]);
 
+  // Load email templates when component mounts
+  useEffect(() => {
+    emailIntegration.loadEmailTemplates("Termination");
+  }, [emailIntegration]);
+
+  // Auto-update email recipients when contract changes
+  useEffect(() => {
+    if (form.watch("sendEmailNotification") && contractDetails) {
+      const recipients = getDefaultEmailRecipients();
+      form.setValue("emailRecipients", recipients);
+    }
+  }, [form.watch("ContractID"), contractDetails, form.watch("sendEmailNotification")]);
+
   // Fetch contract details
   const fetchContractDetails = async (contractId: number) => {
     try {
@@ -332,6 +398,33 @@ const TerminationForm: React.FC = () => {
     } catch (error) {
       console.error("Error fetching contract details:", error);
     }
+  };
+
+  // Generate default email recipients based on contract data
+  const getDefaultEmailRecipients = () => {
+    if (!contractDetails) return [];
+
+    const recipients = [];
+
+    // Add primary customer
+    if (contractDetails.CustomerEmail) {
+      recipients.push({
+        email: contractDetails.CustomerEmail,
+        name: contractDetails.CustomerName,
+        type: "to" as const,
+      });
+    }
+
+    // Add joint customer if available
+    if (contractDetails.JointCustomerEmail) {
+      recipients.push({
+        email: contractDetails.JointCustomerEmail,
+        name: contractDetails.JointCustomerName || "Joint Customer",
+        type: "to" as const,
+      });
+    }
+
+    return recipients;
   };
 
   // Effect to auto-calculate tax and total amount when deduction amount changes
@@ -425,6 +518,17 @@ const TerminationForm: React.FC = () => {
     setActiveTab("attachments");
   };
 
+  // Email handlers
+  const handleSendTestEmail = () => {
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+    }
+  };
+
   // Handle document type creation
   const handleSaveDocType = (newDocType: any) => {
     setDocTypes([...docTypes, newDocType]);
@@ -476,7 +580,7 @@ const TerminationForm: React.FC = () => {
     setUploadError(null);
   };
 
-  // Handle form submission
+  // Handle form submission with email integration
   const onSubmit = async (data: TerminationFormValues) => {
     if (!user) {
       toast.error("User information not available");
@@ -538,6 +642,9 @@ const TerminationForm: React.FC = () => {
         })),
       };
 
+      let terminationId: number;
+      let isNewTermination = false;
+
       if (isEdit && termination) {
         // Update existing termination
         const response = await terminationService.updateTermination({
@@ -549,22 +656,55 @@ const TerminationForm: React.FC = () => {
         });
 
         if (response.Status === 1) {
+          terminationId = termination.TerminationID;
           toast.success("Termination updated successfully");
-          navigate(`/terminations/${termination.TerminationID}`);
         } else {
           toast.error(response.Message || "Failed to update termination");
+          return;
         }
       } else {
         // Create new termination
         const response = await terminationService.createTermination(terminationData);
 
         if (response.Status === 1 && response.NewTerminationID) {
+          terminationId = response.NewTerminationID;
+          isNewTermination = true;
           toast.success("Termination created successfully");
-          navigate(`/terminations/${response.NewTerminationID}`);
         } else {
           toast.error(response.Message || "Failed to create termination");
+          return;
         }
       }
+
+      // Send email notification if enabled
+      if (data.sendEmailNotification && data.emailRecipients && data.emailRecipients.length > 0) {
+        try {
+          const terminationVariables = emailIntegration.generateTerminationVariables(terminationData.termination, {
+            customerEmail: data.emailRecipients.find((r) => r.type === "to")?.email,
+            isNewTermination,
+            terminationId,
+            contractDetails,
+          });
+
+          const triggerEvent = isNewTermination ? "termination_created" : "termination_updated";
+
+          // Filter recipients to ensure all required properties are present
+          const validRecipients = data.emailRecipients.filter((recipient) => recipient.email && recipient.name && recipient.type) as Array<{
+            email: string;
+            name: string;
+            type: "to" | "cc" | "bcc";
+          }>;
+
+          await emailIntegration.sendAutomatedEmail(triggerEvent, terminationVariables, validRecipients);
+
+          toast.success("Termination saved and email notifications sent successfully");
+        } catch (emailError) {
+          console.error("Error sending email notification:", emailError);
+          toast.warning("Termination saved successfully, but email notification failed");
+        }
+      }
+
+      navigate(`/terminations/${terminationId}`);
     } catch (error) {
       console.error("Error saving termination:", error);
       toast.error("Failed to save termination");
@@ -601,6 +741,8 @@ const TerminationForm: React.FC = () => {
         Notes: "",
         deductions: [],
         attachments: [],
+        sendEmailNotification: false,
+        emailRecipients: [],
       });
     }
   };
@@ -724,6 +866,7 @@ const TerminationForm: React.FC = () => {
   }
 
   const figures = calculateFigures();
+  const sendEmailNotification = form.watch("sendEmailNotification");
 
   return (
     <div className="space-y-6">
@@ -758,10 +901,11 @@ const TerminationForm: React.FC = () => {
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <div className="space-y-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid grid-cols-3 w-[400px]">
+              <TabsList className="grid grid-cols-4 w-[500px]">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="deductions">Deductions ({deductionsFieldArray.fields.length})</TabsTrigger>
                 <TabsTrigger value="attachments">Documents ({attachmentsFieldArray.fields.length})</TabsTrigger>
+                <TabsTrigger value="email">Email Settings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details">
@@ -863,6 +1007,11 @@ const TerminationForm: React.FC = () => {
                               <div>
                                 <span className="font-medium">Total Value:</span> {contractDetails.GrandTotal?.toLocaleString()}
                               </div>
+                              {contractDetails.CustomerEmail && (
+                                <div>
+                                  <span className="font-medium">Customer Email:</span> {contractDetails.CustomerEmail}
+                                </div>
+                              )}
                             </div>
                           )}
                         </FormItem>
@@ -1525,6 +1674,85 @@ const TerminationForm: React.FC = () => {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              <TabsContent value="email">
+                <Card className={isApproved ? "opacity-60" : ""}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5 text-primary" />
+                      Email Notifications
+                      {isApproved && <Lock className="h-4 w-4 text-red-500" />}
+                    </CardTitle>
+                    <CardDescription>Configure email notifications for this termination</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="sendEmailNotification"
+                        checked={sendEmailNotification}
+                        onCheckedChange={(checked) => {
+                          form.setValue("sendEmailNotification", !!checked);
+                          if (checked) {
+                            const recipients = getDefaultEmailRecipients();
+                            form.setValue("emailRecipients", recipients);
+                          }
+                        }}
+                        disabled={!canEditTermination}
+                      />
+                      <Label htmlFor="sendEmailNotification" className="text-sm font-medium">
+                        Send email notification when termination is {isEdit ? "updated" : "created"}
+                      </Label>
+                    </div>
+
+                    {sendEmailNotification && (
+                      <div className="space-y-4 pl-6 border-l-2 border-blue-200">
+                        <div className="text-sm text-muted-foreground">
+                          Email notifications will be sent automatically to the selected recipients when the termination is {isEdit ? "updated" : "created"}.
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Email Recipients</Label>
+                          <div className="space-y-2">
+                            {form.watch("emailRecipients")?.map((recipient, index) => (
+                              <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
+                                <Badge variant="outline">{recipient.type.toUpperCase()}</Badge>
+                                <span className="font-medium">{recipient.name}</span>
+                                <span className="text-muted-foreground">({recipient.email})</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={handleSendTestEmail} disabled={!canEditTermination}>
+                            <Send className="mr-2 h-4 w-4" />
+                            Preview Email Template
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmailSettings(!showEmailSettings)} disabled={!canEditTermination}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Advanced Settings
+                          </Button>
+                        </div>
+
+                        {showEmailSettings && (
+                          <Alert>
+                            <Info className="h-4 w-4" />
+                            <AlertDescription>
+                              <div className="space-y-2">
+                                <div className="font-medium">Email Template Configuration</div>
+                                <div className="text-sm">• For new terminations: "termination_created" template will be used</div>
+                                <div className="text-sm">• For updates: "termination_updated" template will be used</div>
+                                <div className="text-sm">• All termination details including deductions, refund amounts, and important dates will be included</div>
+                                <div className="text-sm">• Recipients will receive notifications about refund processing, status changes, and approvals</div>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
 
             <div className="flex justify-between mt-6">
@@ -1537,23 +1765,44 @@ const TerminationForm: React.FC = () => {
                   Reset
                 </Button>
               </div>
-              <Button type="submit" disabled={loading || !canEditTermination}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isEdit ? "Update Termination" : "Create Termination"}
-                  </>
+              <div className="flex items-center space-x-4">
+                {sendEmailNotification && (
+                  <Alert className="p-2 inline-flex items-center">
+                    <Mail className="h-4 w-4 mr-2" />
+                    <span className="text-sm">Email notifications will be sent</span>
+                  </Alert>
                 )}
-              </Button>
+                <Button type="submit" disabled={loading || !canEditTermination}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {isEdit ? "Update Termination" : "Create Termination"}
+                      {sendEmailNotification && " & Send Email"}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </form>
       </Form>
+
+      {/* Email Send Dialog for Preview */}
+      <EmailSendDialog
+        isOpen={isEmailDialogOpen}
+        onClose={() => setIsEmailDialogOpen(false)}
+        entityType="termination"
+        entityId={0} // Preview mode
+        entityData={form.getValues()}
+        defaultRecipients={getDefaultEmailRecipients()}
+        triggerEvent={isEdit ? "termination_updated" : "termination_created"}
+        onEmailSent={handleEmailSent}
+      />
 
       {/* Create Document Type Dialog */}
       <CreateDocTypeDialog isOpen={isDocTypeDialogOpen} onClose={() => setIsDocTypeDialogOpen(false)} onSave={handleSaveDocType} />

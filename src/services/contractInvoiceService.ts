@@ -55,7 +55,7 @@ export type {
  */
 class ContractInvoiceService extends BaseService {
   constructor() {
-    super("/Master/ContractInvoiceManagement");
+    super("/Master/contractInvoiceManagement");
   }
 
   // ========== Invoice Generation Methods ==========

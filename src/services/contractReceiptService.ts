@@ -64,7 +64,7 @@ export type {
 class ContractReceiptService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/ContractReceiptManagement");
+    super("/Master/contractReceiptManagement");
   }
 
   // ========== Receipt CRUD Methods ==========

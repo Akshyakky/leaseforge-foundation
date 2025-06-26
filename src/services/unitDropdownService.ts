@@ -57,7 +57,7 @@ export interface UnitClassForDropdown {
 class UnitDropdownService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/unitdropdown");
+    super("/Master/unitDropdown");
   }
 
   /**

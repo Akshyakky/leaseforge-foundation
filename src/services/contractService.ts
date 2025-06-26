@@ -21,7 +21,7 @@ export type { Contract, ContractUnit, ContractAdditionalCharge, ContractAttachme
 class ContractService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/contractmanagement");
+    super("/Master/contractManagement");
   }
 
   /**

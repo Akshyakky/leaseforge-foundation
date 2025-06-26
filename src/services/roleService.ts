@@ -16,7 +16,7 @@ export interface Role {
 class RoleService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/userrole");
+    super("/Master/userRole");
   }
 
   /**

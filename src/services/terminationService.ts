@@ -31,7 +31,7 @@ export type {
 class TerminationService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/contracttermination");
+    super("/Master/contractTermination");
   }
 
   /**

@@ -41,6 +41,11 @@ export interface Contract extends BaseContract {
   UnitCount?: number;
   ChargeCount?: number;
   AttachmentCount?: number;
+
+  EmailNotificationSent: boolean;
+  EmailNotificationPending: boolean;
+  EmailNotificationFailed: boolean;
+  LastEmailSentDate: string;
 }
 
 export interface ContractUnit extends BaseContract {

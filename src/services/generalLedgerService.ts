@@ -45,7 +45,7 @@ import {
 class GeneralLedgerService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/generalledger");
+    super("/Master/generalLedger");
   }
 
   /**

@@ -42,7 +42,7 @@ export interface Charge {
 class AdditionalChargesService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/additionalcharges");
+    super("/Master/additionalCharges");
   }
 
   /**

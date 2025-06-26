@@ -8,7 +8,7 @@ import { ApiResponse, CostCenter1, CostCenter2, CostCenter3, CostCenter4, CostCe
 class CostCenterService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/costcenter");
+    super("/Master/costCenter");
   }
 
   /**

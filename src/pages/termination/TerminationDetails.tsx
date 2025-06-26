@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationDetails.tsx -
+// src/pages/termination/TerminationDetails.tsx - Enhanced with Email Integration
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { terminationService, ContractTermination, TerminationDeduction, TerminationAttachment } from "@/services/terminationService";
@@ -32,6 +32,12 @@ import {
   RotateCcw,
   Lock,
   Shield,
+  Mail,
+  Send,
+  History,
+  Settings,
+  MessageSquare,
+  BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -44,16 +50,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 // Import PDF components
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+
 // Import attachment components
 import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
+
+// Import Email components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
+
 import { useAppSelector } from "@/lib/hooks";
 
 const TerminationDetails: React.FC = () => {
@@ -92,6 +105,11 @@ const TerminationDetails: React.FC = () => {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [initialAttachmentId, setInitialAttachmentId] = useState<number | undefined>(undefined);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
+  const [showEmailHistory, setShowEmailHistory] = useState(false);
+
   // Termination status options
   const terminationStatusOptions = ["Draft", "Pending", "Approved", "Completed", "Cancelled"];
 
@@ -101,6 +119,12 @@ const TerminationDetails: React.FC = () => {
   // Check if termination can be edited
   const canEditTermination = termination && termination.ApprovalStatus !== "Approved";
   const isApproved = termination?.ApprovalStatus === "Approved";
+
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "termination",
+    entityId: termination?.TerminationID || 0,
+  });
 
   useEffect(() => {
     const fetchTerminationDetails = async () => {
@@ -132,6 +156,13 @@ const TerminationDetails: React.FC = () => {
 
     fetchTerminationDetails();
   }, [id, navigate]);
+
+  // Load email templates when termination is loaded
+  useEffect(() => {
+    if (termination) {
+      emailIntegration.loadEmailTemplates("Termination");
+    }
+  }, [termination, emailIntegration]);
 
   // PDF Generation Handlers
   const handleGenerateTerminationSlip = async () => {
@@ -172,7 +203,45 @@ const TerminationDetails: React.FC = () => {
     }
   };
 
-  // Approval handlers
+  // Email handlers
+  const handleSendEmail = (triggerEvent?: string) => {
+    setEmailTriggerEvent(triggerEvent);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+    }
+  };
+
+  const getDefaultEmailRecipients = () => {
+    if (!termination) return [];
+
+    const recipients = [];
+
+    // Add primary customer
+    if (termination.CustomerEmail) {
+      recipients.push({
+        email: termination.CustomerEmail,
+        name: termination.CustomerFullName,
+        type: "to" as const,
+      });
+    }
+
+    // Add joint customer if available
+    // if (termination.JointCustomerEmail) {
+    //   recipients.push({
+    //     email: termination.JointCustomerEmail,
+    //     name: termination.JointCustomerName || "Joint Customer",
+    //     type: "to" as const,
+    //   });
+    // }
+
+    return recipients;
+  };
+
+  // Enhanced approval handlers with email notifications
   const openApprovalDialog = (action: "approve" | "reject" | "reset") => {
     setApprovalAction(action);
     setApprovalComments("");
@@ -224,6 +293,19 @@ const TerminationDetails: React.FC = () => {
         const data = await terminationService.getTerminationById(termination.TerminationID);
         if (data.termination) {
           setTermination(data.termination);
+
+          // Send automated email notification
+          const triggerEvent = approvalAction === "approve" ? "termination_approved" : approvalAction === "reject" ? "termination_rejected" : undefined;
+
+          if (triggerEvent) {
+            const terminationVariables = emailIntegration.generateTerminationVariables(data.termination, {
+              customerEmail: data.termination.CustomerEmail,
+              approvalComments: approvalAction === "approve" ? approvalComments : undefined,
+              rejectionReason: approvalAction === "reject" ? rejectionReason : undefined,
+            });
+
+            await emailIntegration.sendAutomatedEmail(triggerEvent, terminationVariables, getDefaultEmailRecipients());
+          }
         }
 
         const actionText = approvalAction === "approve" ? "approved" : approvalAction === "reject" ? "rejected" : "reset";
@@ -237,6 +319,90 @@ const TerminationDetails: React.FC = () => {
     } finally {
       setApprovalLoading(false);
       closeApprovalDialog();
+    }
+  };
+
+  // Enhanced status change with email notifications
+  const handleStatusChange = async () => {
+    if (!termination || !selectedStatus) return;
+
+    try {
+      const response = await terminationService.changeTerminationStatus(termination.TerminationID, selectedStatus);
+
+      if (response.Status === 1) {
+        const updatedTermination = {
+          ...termination,
+          TerminationStatus: selectedStatus,
+        };
+        setTermination(updatedTermination);
+
+        // Send automated email notification for certain status changes
+        const emailTriggers: Record<string, string> = {
+          Approved: "termination_approved",
+          Completed: "termination_completed",
+          Cancelled: "termination_cancelled",
+        };
+
+        const triggerEvent = emailTriggers[selectedStatus];
+        if (triggerEvent) {
+          const terminationVariables = emailIntegration.generateTerminationVariables(updatedTermination, {
+            customerEmail: updatedTermination.CustomerEmail,
+            statusChangeReason: `Termination status changed to ${selectedStatus}`,
+          });
+
+          await emailIntegration.sendAutomatedEmail(triggerEvent, terminationVariables, getDefaultEmailRecipients());
+        }
+
+        toast.success(`Termination status changed to ${selectedStatus}`);
+      } else {
+        toast.error(response.Message || "Failed to change termination status");
+      }
+    } catch (error) {
+      console.error("Error changing termination status:", error);
+      toast.error("Failed to change termination status");
+    } finally {
+      closeStatusChangeDialog();
+    }
+  };
+
+  // Enhanced refund processing with email notifications
+  const handleProcessRefund = async () => {
+    if (!termination || !refundDate || !refundReference) {
+      toast.error("Please provide refund date and reference");
+      return;
+    }
+
+    try {
+      const response = await terminationService.processRefund(termination.TerminationID, refundDate, refundReference);
+
+      if (response.Status === 1) {
+        const updatedTermination = {
+          ...termination,
+          IsRefundProcessed: true,
+          RefundDate: refundDate,
+          RefundReference: refundReference,
+        };
+        setTermination(updatedTermination);
+
+        // Send refund processed notification
+        const terminationVariables = emailIntegration.generateTerminationVariables(updatedTermination, {
+          customerEmail: updatedTermination.CustomerEmail,
+          refundAmount: updatedTermination.RefundAmount,
+          refundDate: refundDate,
+          refundReference: refundReference,
+        });
+
+        await emailIntegration.sendAutomatedEmail("refund_processed", terminationVariables, getDefaultEmailRecipients());
+
+        toast.success("Refund processed successfully");
+      } else {
+        toast.error(response.Message || "Failed to process refund");
+      }
+    } catch (error) {
+      console.error("Error processing refund:", error);
+      toast.error("Failed to process refund");
+    } finally {
+      closeRefundDialog();
     }
   };
 
@@ -308,29 +474,6 @@ const TerminationDetails: React.FC = () => {
     setSelectedStatus("");
   };
 
-  const handleStatusChange = async () => {
-    if (!termination || !selectedStatus) return;
-
-    try {
-      const response = await terminationService.changeTerminationStatus(termination.TerminationID, selectedStatus);
-
-      if (response.Status === 1) {
-        setTermination({
-          ...termination,
-          TerminationStatus: selectedStatus,
-        });
-        toast.success(`Termination status changed to ${selectedStatus}`);
-      } else {
-        toast.error(response.Message || "Failed to change termination status");
-      }
-    } catch (error) {
-      console.error("Error changing termination status:", error);
-      toast.error("Failed to change termination status");
-    } finally {
-      closeStatusChangeDialog();
-    }
-  };
-
   const openRefundDialog = () => {
     if (!termination) return;
     setRefundDate(new Date());
@@ -340,34 +483,6 @@ const TerminationDetails: React.FC = () => {
 
   const closeRefundDialog = () => {
     setIsRefundDialogOpen(false);
-  };
-
-  const handleProcessRefund = async () => {
-    if (!termination || !refundDate || !refundReference) {
-      toast.error("Please provide refund date and reference");
-      return;
-    }
-
-    try {
-      const response = await terminationService.processRefund(termination.TerminationID, refundDate, refundReference);
-
-      if (response.Status === 1) {
-        setTermination({
-          ...termination,
-          IsRefundProcessed: true,
-          RefundDate: refundDate,
-          RefundReference: refundReference,
-        });
-        toast.success("Refund processed successfully");
-      } else {
-        toast.error(response.Message || "Failed to process refund");
-      }
-    } catch (error) {
-      console.error("Error processing refund:", error);
-      toast.error("Failed to process refund");
-    } finally {
-      closeRefundDialog();
-    }
   };
 
   const openCalculationDialog = () => {
@@ -520,14 +635,55 @@ const TerminationDetails: React.FC = () => {
             </div>
           </div>
           <div className="flex space-x-2">
+            {/* Email Actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Email Communications</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleSendEmail()}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Custom Email
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleSendEmail("termination_notification")}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Termination Notification
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSendEmail("refund_notification")}>
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  Refund Notification
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSendEmail("document_request")}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Document Request
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSendEmail("move_out_reminder")}>
+                  <BellRing className="mr-2 h-4 w-4" />
+                  Move Out Reminder
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowEmailHistory(true)}>
+                  <History className="mr-2 h-4 w-4" />
+                  Email History
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* PDF Generation Actions */}
             <div className="flex space-x-2 mr-2">
               <PdfActionButtons
                 onDownload={handleGenerateTerminationSlip}
                 onPreview={handlePreviewTerminationSlip}
                 isLoading={terminationPdfReport.isLoading}
-                downloadLabel="Download Slip"
-                previewLabel="Preview Slip"
+                downloadLabel="Download Termination Slip"
+                previewLabel="Preview Termination Slip"
                 variant="outline"
                 size="default"
               />
@@ -712,6 +868,7 @@ const TerminationDetails: React.FC = () => {
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Customer</h3>
                       <p className="text-base font-medium">{termination.CustomerFullName}</p>
+                      {termination.CustomerEmail && <p className="text-sm text-muted-foreground">{termination.CustomerEmail}</p>}
                     </div>
 
                     {termination.RequiresApproval && (
@@ -1078,6 +1235,20 @@ const TerminationDetails: React.FC = () => {
           </TabsContent>
         </Tabs>
 
+        {/* Email Send Dialog */}
+        {termination && (
+          <EmailSendDialog
+            isOpen={isEmailDialogOpen}
+            onClose={() => setIsEmailDialogOpen(false)}
+            entityType="termination"
+            entityId={termination.TerminationID}
+            entityData={termination}
+            defaultRecipients={getDefaultEmailRecipients()}
+            triggerEvent={emailTriggerEvent}
+            onEmailSent={handleEmailSent}
+          />
+        )}
+
         {/* PDF Preview Modal */}
         <PdfPreviewModal
           isOpen={showPdfPreview}
@@ -1097,9 +1268,9 @@ const TerminationDetails: React.FC = () => {
               <DialogTitle>{approvalAction === "approve" ? "Approve Termination" : approvalAction === "reject" ? "Reject Termination" : "Reset Approval Status"}</DialogTitle>
               <DialogDescription>
                 {approvalAction === "approve"
-                  ? "Approve this termination to allow processing. Note: Once approved, the termination will be protected from modifications."
+                  ? "Approve this termination to allow processing. Note: Once approved, the termination will be protected from modifications and email notifications will be sent automatically."
                   : approvalAction === "reject"
-                  ? "Reject this termination with a reason."
+                  ? "Reject this termination with a reason. Email notifications will be sent automatically."
                   : "Reset the approval status to pending."}
               </DialogDescription>
             </DialogHeader>
@@ -1152,7 +1323,7 @@ const TerminationDetails: React.FC = () => {
                     {approvalAction === "approve" && <CheckCircle className="mr-2 h-4 w-4" />}
                     {approvalAction === "reject" && <XCircle className="mr-2 h-4 w-4" />}
                     {approvalAction === "reset" && <RotateCcw className="mr-2 h-4 w-4" />}
-                    {approvalAction === "approve" ? "Approve" : approvalAction === "reject" ? "Reject" : "Reset"}
+                    {approvalAction === "approve" ? "Approve & Send Email" : approvalAction === "reject" ? "Reject & Send Email" : "Reset"}
                   </>
                 )}
               </Button>
@@ -1178,7 +1349,7 @@ const TerminationDetails: React.FC = () => {
           onClose={closeStatusChangeDialog}
           onConfirm={handleStatusChange}
           title="Change Termination Status"
-          description={`Are you sure you want to change the status of termination "${termination.TerminationNo}" to "${selectedStatus}"?`}
+          description={`Are you sure you want to change the status of termination "${termination.TerminationNo}" to "${selectedStatus}"? Email notifications will be sent automatically for certain status changes.`}
           cancelText="Cancel"
           confirmText="Change Status"
           type="warning"
@@ -1201,10 +1372,14 @@ const TerminationDetails: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700">Refund Reference</label>
                 <Input placeholder="Enter refund reference" value={refundReference} onChange={(e) => setRefundReference(e.target.value)} />
               </div>
+              <Alert>
+                <Mail className="h-4 w-4" />
+                <AlertDescription>Refund processed notifications will be sent automatically to all relevant parties.</AlertDescription>
+              </Alert>
             </div>
           }
           cancelText="Cancel"
-          confirmText="Process Refund"
+          confirmText="Process Refund & Send Email"
           type="warning"
           confirmDisabled={!refundDate || !refundReference}
         />

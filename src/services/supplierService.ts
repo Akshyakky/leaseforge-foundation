@@ -24,7 +24,7 @@ import {
 class SupplierService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/suppliermanagement");
+    super("/Master/supplierManagement");
   }
 
   /**

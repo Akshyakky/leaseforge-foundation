@@ -130,7 +130,7 @@ export interface AllDropdownData {
 class UnitRelatedService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/unitrelated");
+    super("/Master/unitRelated");
   }
 
   /**

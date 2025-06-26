@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationList.tsx - Enhanced with Approval Features and Edit Restrictions
+// src/pages/termination/TerminationList.tsx - Enhanced with Email Integration
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,16 @@ import {
   RotateCcw,
   Lock,
   AlertTriangle,
+  Mail,
+  Send,
+  History,
+  BellRing,
+  MailCheck,
+  MailX,
+  MessageSquare,
+  CalendarClock,
+  KeyRound,
+  MoveRight,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -63,6 +73,10 @@ import { useAppSelector } from "@/lib/hooks";
 import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
 
+// Email Components
+import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
+import { useEmailIntegration } from "@/hooks/useEmailIntegration";
+
 // Types and interfaces
 interface TerminationFilter {
   searchTerm: string;
@@ -72,6 +86,7 @@ interface TerminationFilter {
   selectedPropertyId: string;
   dateFrom?: Date;
   dateTo?: Date;
+  emailStatus?: string; // New filter for email status
 }
 
 interface SortConfig {
@@ -94,7 +109,47 @@ interface TerminationListStats {
   approvalRejected: number;
   approvedProtected: number;
   pendingRefunds: number;
+  // Email-related stats
+  emailNotificationsSent: number;
+  pendingEmailReminders: number;
+  movingOutSoon: number;
+  keyReturnPending: number;
 }
+
+// Email reminder types
+interface EmailReminderConfig {
+  triggerEvent: string;
+  triggerName: string;
+  description: string;
+  defaultEnabled: boolean;
+}
+
+const TERMINATION_EMAIL_REMINDERS: EmailReminderConfig[] = [
+  {
+    triggerEvent: "move_out_reminder_7",
+    triggerName: "Move Out in 7 Days",
+    description: "Send reminder 7 days before move out date",
+    defaultEnabled: true,
+  },
+  {
+    triggerEvent: "move_out_reminder_3",
+    triggerName: "Move Out in 3 Days",
+    description: "Send reminder 3 days before move out date",
+    defaultEnabled: true,
+  },
+  {
+    triggerEvent: "key_return_reminder",
+    triggerName: "Key Return Reminder",
+    description: "Send reminder for pending key returns",
+    defaultEnabled: true,
+  },
+  {
+    triggerEvent: "refund_status_update",
+    triggerName: "Refund Status Update",
+    description: "Send updates about refund processing status",
+    defaultEnabled: false,
+  },
+];
 
 const TerminationList: React.FC = () => {
   const navigate = useNavigate();
@@ -124,6 +179,7 @@ const TerminationList: React.FC = () => {
     selectedPropertyId: searchParams.get("property") || "",
     dateFrom: searchParams.get("from") ? new Date(searchParams.get("from")!) : undefined,
     dateTo: searchParams.get("to") ? new Date(searchParams.get("to")!) : undefined,
+    emailStatus: searchParams.get("emailStatus") || "",
   });
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: "asc" });
@@ -137,16 +193,38 @@ const TerminationList: React.FC = () => {
   const [bulkApprovalAction, setBulkApprovalAction] = useState<"approve" | "reject" | null>(null);
   const [bulkApprovalLoading, setBulkApprovalLoading] = useState(false);
 
+  // Email integration states
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailDialogTermination, setEmailDialogTermination] = useState<ContractTermination | null>(null);
+  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
+  const [isBulkEmailing, setIsBulkEmailing] = useState(false);
+  const [showEmailRemindersDialog, setShowEmailRemindersDialog] = useState(false);
+
   // Termination status and approval options
   const terminationStatusOptions = ["Draft", "Pending", "Approved", "Completed", "Cancelled"];
   const approvalStatusOptions = ["Pending", "Approved", "Rejected"];
+  const emailStatusOptions = [
+    { label: "All", value: "" },
+    { label: "Email Sent", value: "sent" },
+    { label: "No Email Sent", value: "not_sent" },
+    { label: "Email Pending", value: "pending" },
+    { label: "Email Failed", value: "failed" },
+  ];
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
 
+  // Initialize email integration hook
+  const emailIntegration = useEmailIntegration({
+    entityType: "termination",
+    entityId: 0, // Will be set when needed
+  });
+
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
+    // Load email templates for termination category
+    emailIntegration.loadEmailTemplates("Termination");
   }, []);
 
   // Update URL params when filters change
@@ -157,6 +235,7 @@ const TerminationList: React.FC = () => {
     if (filters.selectedStatus) params.set("status", filters.selectedStatus);
     if (filters.selectedApprovalStatus) params.set("approval", filters.selectedApprovalStatus);
     if (filters.selectedPropertyId) params.set("property", filters.selectedPropertyId);
+    if (filters.emailStatus) params.set("emailStatus", filters.emailStatus);
     if (filters.dateFrom) params.set("from", filters.dateFrom.toISOString().split("T")[0]);
     if (filters.dateTo) params.set("to", filters.dateTo.toISOString().split("T")[0]);
 
@@ -210,7 +289,6 @@ const TerminationList: React.FC = () => {
       setProperties(propertiesData);
     } catch (error) {
       console.error("Error fetching properties:", error);
-      // Don't show error toast for properties as it's not critical
       console.warn("Properties filter will not be available");
     }
   };
@@ -258,6 +336,24 @@ const TerminationList: React.FC = () => {
     // Apply approval status filter
     if (filters.selectedApprovalStatus) {
       filtered = filtered.filter((termination) => termination.ApprovalStatus === filters.selectedApprovalStatus);
+    }
+
+    // Apply email status filter
+    if (filters.emailStatus) {
+      switch (filters.emailStatus) {
+        case "sent":
+          filtered = filtered.filter((termination) => termination.EmailNotificationSent === true);
+          break;
+        case "not_sent":
+          filtered = filtered.filter((termination) => termination.EmailNotificationSent !== true);
+          break;
+        case "pending":
+          filtered = filtered.filter((termination) => termination.EmailNotificationPending === true);
+          break;
+        case "failed":
+          filtered = filtered.filter((termination) => termination.EmailNotificationFailed === true);
+          break;
+      }
     }
 
     // Apply property filter (if available)
@@ -326,6 +422,7 @@ const TerminationList: React.FC = () => {
       selectedStatus: "",
       selectedApprovalStatus: "",
       selectedPropertyId: "",
+      emailStatus: "",
       dateFrom: undefined,
       dateTo: undefined,
     });
@@ -343,6 +440,220 @@ const TerminationList: React.FC = () => {
   // Check if termination can be edited
   const canEditTermination = (termination: ContractTermination) => {
     return termination.ApprovalStatus !== "Approved";
+  };
+
+  // Email helper functions
+  const getDefaultEmailRecipients = (termination: ContractTermination) => {
+    const recipients = [];
+
+    if (termination.CustomerEmail) {
+      recipients.push({
+        email: termination.CustomerEmail,
+        name: termination.CustomerFullName,
+        type: "to" as const,
+      });
+    }
+
+    // if (termination.JointCustomerEmail) {
+    //   recipients.push({
+    //     email: termination.JointCustomerEmail,
+    //     name: termination.JointCustomerName || "Joint Customer",
+    //     type: "to" as const,
+    //   });
+    // }
+
+    return recipients;
+  };
+
+  // Email action handlers
+  const handleSendEmail = (termination: ContractTermination, triggerEvent?: string) => {
+    setEmailDialogTermination(termination);
+    setEmailTriggerEvent(triggerEvent);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleEmailSent = async (result: any) => {
+    if (result.success) {
+      toast.success("Email sent successfully");
+      // Optionally update the termination's email status
+      if (emailDialogTermination) {
+        setTerminations(
+          terminations.map((t) =>
+            t.TerminationID === emailDialogTermination.TerminationID ? { ...t, EmailNotificationSent: true, LastEmailSentDate: new Date().toISOString() } : t
+          )
+        );
+      }
+    }
+  };
+
+  // Bulk email operations
+  const handleBulkEmail = async (triggerEvent: string) => {
+    if (selectedTerminations.size === 0) {
+      toast.error("Please select terminations to send emails");
+      return;
+    }
+
+    setIsBulkEmailing(true);
+
+    try {
+      const terminationsToEmail = Array.from(selectedTerminations)
+        .map((terminationId) => terminations.find((t) => t.TerminationID === terminationId))
+        .filter(Boolean) as ContractTermination[];
+
+      const emailPromises = terminationsToEmail.map(async (termination) => {
+        const recipients = getDefaultEmailRecipients(termination);
+        if (recipients.length === 0) {
+          return { termination, success: false, error: "No email recipients found" };
+        }
+
+        try {
+          const terminationVariables = emailIntegration.generateTerminationVariables(termination, {
+            customerEmail: recipients[0]?.email,
+          });
+
+          const result = await emailIntegration.sendAutomatedEmail(triggerEvent, terminationVariables, recipients);
+
+          return { termination, success: result.success, result };
+        } catch (error) {
+          return { termination, success: false, error: error.message };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successCount = results.filter((r) => r.success).length;
+      const failureCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} emails sent successfully`);
+
+        // Update terminations with email sent status
+        setTerminations(
+          terminations.map((termination) => {
+            const result = results.find((r) => r.termination.TerminationID === termination.TerminationID);
+            if (result && result.success) {
+              return { ...termination, EmailNotificationSent: true, LastEmailSentDate: new Date().toISOString() };
+            }
+            return termination;
+          })
+        );
+      }
+
+      if (failureCount > 0) {
+        toast.warning(`${failureCount} emails failed to send`);
+      }
+
+      setSelectedTerminations(new Set());
+    } catch (error) {
+      console.error("Bulk email error:", error);
+      toast.error("Failed to send bulk emails");
+    } finally {
+      setIsBulkEmailing(false);
+    }
+  };
+
+  // Automated reminder handlers
+  const handleSendMoveOutReminders = async () => {
+    try {
+      // Find terminations with move out dates in the next 7 days
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+      const movingOutSoon = terminations.filter((termination) => {
+        if (termination.TerminationStatus !== "Approved") return false;
+
+        const moveOutDate = termination.MoveOutDate ? new Date(termination.MoveOutDate) : null;
+        return moveOutDate && moveOutDate <= sevenDaysFromNow && moveOutDate > new Date();
+      });
+
+      if (movingOutSoon.length === 0) {
+        toast.info("No terminations have move out dates in the next 7 days");
+        return;
+      }
+
+      const emailPromises = movingOutSoon.map(async (termination) => {
+        const recipients = getDefaultEmailRecipients(termination);
+        if (recipients.length === 0) return { termination, success: false };
+
+        try {
+          const terminationVariables = emailIntegration.generateTerminationVariables(termination, {
+            customerEmail: recipients[0]?.email,
+            moveOutDate: termination.MoveOutDate,
+            daysUntilMoveOut: Math.ceil((new Date(termination.MoveOutDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
+          });
+
+          const result = await emailIntegration.sendAutomatedEmail("move_out_reminder_7", terminationVariables, recipients);
+
+          return { termination, success: result.success };
+        } catch (error) {
+          return { termination, success: false };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successCount = results.filter((r) => r.success).length;
+
+      if (successCount > 0) {
+        toast.success(`Move out reminders sent for ${successCount} terminations`);
+      } else {
+        toast.error("Failed to send move out reminders");
+      }
+    } catch (error) {
+      console.error("Error sending move out reminders:", error);
+      toast.error("Failed to send move out reminders");
+    }
+  };
+
+  const handleSendKeyReturnReminders = async () => {
+    try {
+      // Find terminations with pending key returns
+      const keyReturnPending = terminations.filter((termination) => {
+        const moveOutDate = termination.MoveOutDate ? new Date(termination.MoveOutDate) : null;
+        const keyReturnDate = termination.KeyReturnDate ? new Date(termination.KeyReturnDate) : null;
+
+        return (
+          termination.TerminationStatus === "Approved" &&
+          moveOutDate &&
+          moveOutDate < new Date() && // Move out date has passed
+          (!keyReturnDate || keyReturnDate > new Date()) // Key not yet returned
+        );
+      });
+
+      if (keyReturnPending.length === 0) {
+        toast.info("No pending key returns found");
+        return;
+      }
+
+      const emailPromises = keyReturnPending.map(async (termination) => {
+        const recipients = getDefaultEmailRecipients(termination);
+        if (recipients.length === 0) return { termination, success: false };
+
+        try {
+          const terminationVariables = emailIntegration.generateTerminationVariables(termination, {
+            customerEmail: recipients[0]?.email,
+            moveOutDate: termination.MoveOutDate,
+            propertyName: termination.PropertyName,
+          });
+
+          const result = await emailIntegration.sendAutomatedEmail("key_return_reminder", terminationVariables, recipients);
+
+          return { termination, success: result.success };
+        } catch (error) {
+          return { termination, success: false };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successCount = results.filter((r) => r.success).length;
+
+      if (successCount > 0) {
+        toast.success(`Key return reminders sent for ${successCount} terminations`);
+      } else {
+        toast.error("Failed to send key return reminders");
+      }
+    } catch (error) {
+      console.error("Error sending key return reminders:", error);
+      toast.error("Failed to send key return reminders");
+    }
   };
 
   // Navigation handlers
@@ -603,11 +914,11 @@ const TerminationList: React.FC = () => {
     }
   };
 
+  // PDF generation helpers
   const filterEmptyParameters = (params: any) => {
     const filtered: any = {};
 
     Object.entries(params).forEach(([key, value]) => {
-      // Include parameter only if it's not null, not undefined, not empty string, and not 0
       if (value !== null && value !== undefined && value !== "" && value !== 0) {
         filtered[key] = value;
       }
@@ -625,9 +936,9 @@ const TerminationList: React.FC = () => {
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+      FilterEmailStatus: filters.emailStatus || "",
     };
 
-    // Filter out empty parameters
     const filteredParameters = filterEmptyParameters(parameters);
 
     const response = await terminationListPdf.generateReport("termination-list", filteredParameters, {
@@ -651,9 +962,9 @@ const TerminationList: React.FC = () => {
       FilterFromDate: filters.dateFrom,
       FilterToDate: filters.dateTo,
       FilterPropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : null,
+      FilterEmailStatus: filters.emailStatus || "",
     };
 
-    // Filter out empty parameters
     const filteredParameters = filterEmptyParameters(parameters);
 
     setShowPdfPreview(true);
@@ -709,6 +1020,60 @@ const TerminationList: React.FC = () => {
     );
   };
 
+  // Render email status indicator
+  const renderEmailStatusIndicator = (termination: ContractTermination) => {
+    if (termination.EmailNotificationSent) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <MailCheck className="h-4 w-4 text-green-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification sent</p>
+            {termination.LastEmailSentDate && <p className="text-xs">Last sent: {format(new Date(termination.LastEmailSentDate), "MMM dd, yyyy")}</p>}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    if (termination.EmailNotificationFailed) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <MailX className="h-4 w-4 text-red-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification failed</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    if (termination.EmailNotificationPending) {
+      return (
+        <Tooltip>
+          <TooltipTrigger>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Email notification pending</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <Mail className="h-4 w-4 text-gray-400" />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>No email sent</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   // Format date for display
   const formatDate = (date?: string | Date) => {
     if (!date) return "N/A";
@@ -747,6 +1112,22 @@ const TerminationList: React.FC = () => {
       approvalRejected: filtered.filter((t) => t.ApprovalStatus === "Rejected").length,
       approvedProtected: filtered.filter((t) => t.ApprovalStatus === "Approved").length,
       pendingRefunds: filtered.filter((t) => t.RefundAmount > 0 && !t.IsRefundProcessed).length,
+      // Email-related stats
+      emailNotificationsSent: filtered.filter((t) => t.EmailNotificationSent === true).length,
+      pendingEmailReminders: filtered.filter((t) => t.EmailNotificationPending === true).length,
+      movingOutSoon: filtered.filter((t) => {
+        if (t.TerminationStatus !== "Approved") return false;
+        const moveOutDate = t.MoveOutDate ? new Date(t.MoveOutDate) : null;
+        if (!moveOutDate) return false;
+        const sevenDaysFromNow = new Date();
+        sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+        return moveOutDate <= sevenDaysFromNow && moveOutDate > new Date();
+      }).length,
+      keyReturnPending: filtered.filter((t) => {
+        const moveOutDate = t.MoveOutDate ? new Date(t.MoveOutDate) : null;
+        const keyReturnDate = t.KeyReturnDate ? new Date(t.KeyReturnDate) : null;
+        return t.TerminationStatus === "Approved" && moveOutDate && moveOutDate < new Date() && (!keyReturnDate || keyReturnDate > new Date());
+      }).length,
     };
   }, [filteredTerminations]);
 
@@ -757,6 +1138,7 @@ const TerminationList: React.FC = () => {
     filters.selectedStatus ||
     filters.selectedApprovalStatus ||
     filters.selectedPropertyId ||
+    filters.emailStatus ||
     filters.dateFrom ||
     filters.dateTo;
 
@@ -775,15 +1157,47 @@ const TerminationList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Termination Management</h1>
-            <p className="text-muted-foreground">Manage rental contract terminations and security deposit processing</p>
+            <p className="text-muted-foreground">Manage rental contract terminations and security deposit processing with automated email communications</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Move Out Reminders */}
+            {stats.movingOutSoon > 0 && (
+              <Button variant="outline" onClick={handleSendMoveOutReminders} className="bg-orange-50 border-orange-200 text-orange-800">
+                <MoveRight className="mr-2 h-4 w-4" />
+                {stats.movingOutSoon} Moving Out Soon
+              </Button>
+            )}
+
+            {/* Key Return Reminders */}
+            {stats.keyReturnPending > 0 && (
+              <Button variant="outline" onClick={handleSendKeyReturnReminders} className="bg-red-50 border-red-200 text-red-800">
+                <KeyRound className="mr-2 h-4 w-4" />
+                {stats.keyReturnPending} Key Returns Pending
+              </Button>
+            )}
+
+            {/* Email Notifications Summary */}
+            {stats.emailNotificationsSent > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" className="bg-blue-50 border-blue-200 text-blue-800">
+                    <MailCheck className="mr-2 h-4 w-4" />
+                    {stats.emailNotificationsSent} Emails Sent
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{stats.emailNotificationsSent} terminations have email notifications sent</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {isManager && stats.approvalPending > 0 && (
               <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
             )}
+
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -797,6 +1211,7 @@ const TerminationList: React.FC = () => {
                 </TooltipContent>
               </Tooltip>
             )}
+
             <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Refresh
@@ -871,6 +1286,37 @@ const TerminationList: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Email-specific stats */}
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <MailCheck className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">Emails Sent</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-600">{stats.emailNotificationsSent}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <MoveRight className="h-4 w-4 text-orange-600" />
+                <span className="text-sm text-muted-foreground">Moving Out Soon</span>
+              </div>
+              <div className="text-2xl font-bold text-orange-600">{stats.movingOutSoon}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-red-600" />
+                <span className="text-sm text-muted-foreground">Key Returns Due</span>
+              </div>
+              <div className="text-2xl font-bold text-red-600">{stats.keyReturnPending}</div>
+            </CardContent>
+          </Card>
+
           {isManager && (
             <>
               <Card className="hover:shadow-md transition-shadow">
@@ -900,16 +1346,6 @@ const TerminationList: React.FC = () => {
                     <span className="text-sm text-muted-foreground">Protected</span>
                   </div>
                   <div className="text-2xl font-bold text-green-600">{stats.approvedProtected}</div>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
-                    <span className="text-sm text-muted-foreground">Rejected</span>
-                  </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
                 </CardContent>
               </Card>
             </>
@@ -954,9 +1390,51 @@ const TerminationList: React.FC = () => {
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredTerminations.length} of ${terminations.length} terminations` : `Showing all ${terminations.length} terminations`}
                   {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved terminations are protected from modifications</span>}
+                  {stats.emailNotificationsSent > 0 && <span className="ml-2 text-blue-600">• {stats.emailNotificationsSent} have email notifications sent</span>}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
+                {/* Email Actions */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" disabled={emailIntegration.isLoading}>
+                      {emailIntegration.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                      Email Actions
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Automated Reminders</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={handleSendMoveOutReminders} disabled={stats.movingOutSoon === 0}>
+                      <MoveRight className="mr-2 h-4 w-4" />
+                      Send Move Out Reminders ({stats.movingOutSoon})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSendKeyReturnReminders} disabled={stats.keyReturnPending === 0}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Send Key Return Reminders ({stats.keyReturnPending})
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Bulk Email Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => handleBulkEmail("termination_notification")} disabled={selectedTerminations.size === 0 || isBulkEmailing}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Termination Notifications ({selectedTerminations.size})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkEmail("refund_notification")} disabled={selectedTerminations.size === 0 || isBulkEmailing}>
+                      <DollarSign className="mr-2 h-4 w-4" />
+                      Send Refund Notifications ({selectedTerminations.size})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkEmail("move_out_reminder")} disabled={selectedTerminations.size === 0 || isBulkEmailing}>
+                      <CalendarClock className="mr-2 h-4 w-4" />
+                      Send Move Out Reminders ({selectedTerminations.size})
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowEmailRemindersDialog(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure Email Reminders
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* PDF Generation */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -994,6 +1472,21 @@ const TerminationList: React.FC = () => {
                           Set as {status}
                         </DropdownMenuItem>
                       ))}
+
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Email Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleBulkEmail("termination_notification")} disabled={isBulkEmailing}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Termination Notifications
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkEmail("refund_notification")} disabled={isBulkEmailing}>
+                        <DollarSign className="mr-2 h-4 w-4" />
+                        Send Refund Notifications
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkEmail("move_out_reminder")} disabled={isBulkEmailing}>
+                        <CalendarClock className="mr-2 h-4 w-4" />
+                        Send Move Out Reminders
+                      </DropdownMenuItem>
 
                       {isManager && (
                         <>
@@ -1037,7 +1530,7 @@ const TerminationList: React.FC = () => {
 
               {/* Advanced Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 p-4 bg-muted/50 rounded-lg">
                   <Select value={filters.selectedCustomerId || "all"} onValueChange={(value) => handleFilterChange("selectedCustomerId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Filter by customer" />
@@ -1075,6 +1568,19 @@ const TerminationList: React.FC = () => {
                       {approvalStatusOptions.map((status) => (
                         <SelectItem key={status} value={status}>
                           {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filters.emailStatus || "all"} onValueChange={(value) => handleFilterChange("emailStatus", value === "all" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Email Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailStatusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value || "all"}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1132,6 +1638,11 @@ const TerminationList: React.FC = () => {
                   {filters.selectedApprovalStatus && (
                     <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("selectedApprovalStatus", "")}>
                       Approval: {filters.selectedApprovalStatus} <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  )}
+                  {filters.emailStatus && (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => handleFilterChange("emailStatus", "")}>
+                      Email: {emailStatusOptions.find((o) => o.value === filters.emailStatus)?.label} <X className="ml-1 h-3 w-3" />
                     </Badge>
                   )}
                   {filters.dateFrom && (
@@ -1270,6 +1781,7 @@ const TerminationList: React.FC = () => {
                           )}
                         </div>
                       </TableHead>
+                      <TableHead>Email</TableHead>
                       <TableHead>Created By</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -1323,6 +1835,7 @@ const TerminationList: React.FC = () => {
                                 <Users className="h-4 w-4 mr-2 text-muted-foreground" />
                                 <div className="text-sm">{termination.CustomerFullName}</div>
                               </div>
+                              {termination.CustomerEmail && <div className="text-xs text-muted-foreground ml-6">{termination.CustomerEmail}</div>}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1346,6 +1859,13 @@ const TerminationList: React.FC = () => {
                                 <span className="text-muted-foreground">Effective:</span>
                                 <span className="font-medium">{formatDate(termination.EffectiveDate)}</span>
                               </div>
+                              {termination.MoveOutDate && (
+                                <div className="flex items-center gap-1">
+                                  <MoveRight className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-muted-foreground">Move Out:</span>
+                                  <span>{formatDate(termination.MoveOutDate)}</span>
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1393,6 +1913,9 @@ const TerminationList: React.FC = () => {
                             </div>
                           </TableCell>
                           <TableCell>
+                            <div className="flex items-center gap-2">{renderEmailStatusIndicator(termination)}</div>
+                          </TableCell>
+                          <TableCell>
                             <div className="text-sm">
                               {termination.CreatedBy && <div>{termination.CreatedBy}</div>}
                               {termination.CreatedOn && <div className="text-muted-foreground">{formatDate(termination.CreatedOn)}</div>}
@@ -1431,6 +1954,29 @@ const TerminationList: React.FC = () => {
                                     </TooltipContent>
                                   </Tooltip>
                                 )}
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Email Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => handleSendEmail(termination)}>
+                                  <Mail className="mr-2 h-4 w-4" />
+                                  Send Custom Email
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(termination, "termination_notification")}>
+                                  <Send className="mr-2 h-4 w-4" />
+                                  Termination Notification
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(termination, "move_out_reminder")}>
+                                  <CalendarClock className="mr-2 h-4 w-4" />
+                                  Move Out Reminder
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(termination, "refund_notification")}>
+                                  <DollarSign className="mr-2 h-4 w-4" />
+                                  Refund Notification
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleSendEmail(termination, "key_return_reminder")}>
+                                  <KeyRound className="mr-2 h-4 w-4" />
+                                  Key Return Reminder
+                                </DropdownMenuItem>
 
                                 {isManager && termination.RequiresApproval && (
                                   <>
@@ -1533,6 +2079,20 @@ const TerminationList: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Email Send Dialog */}
+        {emailDialogTermination && (
+          <EmailSendDialog
+            isOpen={isEmailDialogOpen}
+            onClose={() => setIsEmailDialogOpen(false)}
+            entityType="termination"
+            entityId={emailDialogTermination.TerminationID}
+            entityData={emailDialogTermination}
+            defaultRecipients={getDefaultEmailRecipients(emailDialogTermination)}
+            triggerEvent={emailTriggerEvent}
+            onEmailSent={handleEmailSent}
+          />
+        )}
 
         {/* PDF Preview Modal */}
         <PdfPreviewModal

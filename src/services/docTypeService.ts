@@ -16,7 +16,7 @@ export interface DocType {
 class DocTypeService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/doctype");
+    super("/Master/docType");
   }
 
   /**

@@ -43,7 +43,7 @@ import {
 class ContractService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/contractmanagement");
+    super("/Master/contractManagement");
   }
 
   /**

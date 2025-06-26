@@ -31,7 +31,7 @@ import {
  */
 class PaymentVoucherService extends BaseService {
   constructor() {
-    super("/Master/PaymentVoucher");
+    super("/Master/paymentVoucher");
   }
 
   /**

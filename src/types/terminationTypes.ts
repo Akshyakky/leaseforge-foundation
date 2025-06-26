@@ -50,12 +50,18 @@ export interface ContractTermination extends BaseTermination {
   // Joined fields
   ContractNo?: string;
   CustomerFullName?: string;
+  CustomerEmail?: string;
   CustomerID?: number;
   PropertyID?: number;
   PropertyName?: string;
   UnitNumbers?: string;
   DeductionCount?: number;
   AttachmentCount?: number;
+
+  EmailNotificationSent: boolean;
+  EmailNotificationPending: boolean;
+  EmailNotificationFailed: boolean;
+  LastEmailSentDate: string;
 }
 
 export interface TerminationDeduction extends BaseTermination {

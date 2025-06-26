@@ -20,7 +20,7 @@ import {
 class BankCategoryService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/bankcategory");
+    super("/Master/bankCategory");
   }
 
   /**

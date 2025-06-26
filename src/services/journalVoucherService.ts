@@ -33,7 +33,7 @@ import {
  */
 class JournalVoucherService extends BaseService {
   constructor() {
-    super("/Master/JournalVoucher");
+    super("/Master/journalVoucher");
   }
 
   /**

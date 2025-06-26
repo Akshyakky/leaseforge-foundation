@@ -27,7 +27,7 @@ import {
  */
 class PettyCashService extends BaseService {
   constructor() {
-    super("/Master/PettyCash");
+    super("/Master/pettyCash");
   }
 
   /**

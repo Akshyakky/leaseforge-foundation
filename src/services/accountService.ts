@@ -22,7 +22,7 @@ import {
 class AccountService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/accountmanagement");
+    super("/Master/accountManagement");
   }
 
   /**

@@ -35,7 +35,7 @@ import {
  */
 class LeaseRevenuePostingService extends BaseService {
   constructor() {
-    super("/Master/LeaseRevenuePosting");
+    super("/Master/leaseRevenuePosting");
   }
 
   /**

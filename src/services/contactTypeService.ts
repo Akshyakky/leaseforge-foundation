@@ -16,7 +16,7 @@ export interface ContactType {
 class ContactTypeService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/contacttype");
+    super("/Master/contactType");
   }
 
   /**

@@ -17,7 +17,7 @@ import {
 class FiscalYearService extends BaseService {
   constructor() {
     // Pass the endpoint to the base service
-    super("/Master/fiscalyear");
+    super("/Master/fiscalYear");
   }
 
   /**
