@@ -1,4 +1,4 @@
-// src/pages/contract/ContractForm.tsx - Enhanced with Email Integration
+// src/pages/contract/ContractForm.tsx - Enhanced with Email Integration and Advanced Unit Selection
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -129,6 +129,40 @@ const contractSchema = z.object({
 });
 
 type ContractFormValues = z.infer<typeof contractSchema>;
+
+// Unit Information Display Component
+const UnitInformationCard = ({ unitDetails }: { unitDetails: any }) => {
+  if (!unitDetails) return null;
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Building className="h-5 w-5 text-blue-600" />
+        <span className="font-medium text-blue-900">Unit Information</span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+          <span className="text-gray-600">Property:</span>
+          <div className="font-medium">{unitDetails.PropertyName}</div>
+        </div>
+        <div>
+          <span className="text-gray-600">Type:</span>
+          <div className="font-medium">{unitDetails.UnitTypeName}</div>
+        </div>
+        <div>
+          <span className="text-gray-600">Area:</span>
+          <div className="font-medium">{unitDetails.TotalAreaSqft ? `${unitDetails.TotalAreaSqft.toLocaleString()} sqft` : "Not specified"}</div>
+        </div>
+        <div>
+          <span className="text-gray-600">Status:</span>
+          <div className="font-medium">
+            <Badge variant={unitDetails.UnitStatus === "Available" ? "default" : "secondary"}>{unitDetails.UnitStatus}</Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Create document type dialog component
 const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: any) => void }) => {
@@ -335,6 +369,52 @@ const ContractForm: React.FC = () => {
     return recipients;
   };
 
+  // Helper function to validate unit availability for the selected period
+  // const validateUnitAvailability = async (unitId: string, fromDate: Date, toDate: Date, excludeContractId?: number) => {
+  //   try {
+  //     // This would typically call an API to check for overlapping contracts
+  //     const overlappingContracts = await contractService.checkUnitAvailability({
+  //       unitId: parseInt(unitId),
+  //       fromDate,
+  //       toDate,
+  //       excludeContractId,
+  //     });
+
+  //     if (overlappingContracts && overlappingContracts.length > 0) {
+  //       const conflictDetails = overlappingContracts
+  //         .map((contract) => `Contract ${contract.ContractNo} (${format(new Date(contract.FromDate), "dd MMM yyyy")} - ${format(new Date(contract.ToDate), "dd MMM yyyy")})`)
+  //         .join(", ");
+
+  //       toast.error(`Unit is not available for the selected period. Conflicts with: ${conflictDetails}`);
+  //       return false;
+  //     }
+
+  //     return true;
+  //   } catch (error) {
+  //     console.error("Error checking unit availability:", error);
+  //     toast.warning("Could not verify unit availability. Please check manually.");
+  //     return true; // Allow to proceed with warning
+  //   }
+  // };
+
+  // Enhanced unit display helper
+  const getEnhancedUnitDisplay = (unitId: string, index: number) => {
+    const unitDetails = getUnitDetails(unitId);
+    const fromDate = form.watch(`units.${index}.FromDate`);
+    const toDate = form.watch(`units.${index}.ToDate`);
+    const totalAmount = form.watch(`units.${index}.TotalAmount`);
+    const contractDays = form.watch(`units.${index}.ContractDays`);
+
+    return {
+      title: unitDetails ? `${unitDetails.UnitNo} - ${unitDetails.PropertyName}` : `Unit ${index + 1}`,
+      subtitle: unitDetails ? `${unitDetails.UnitTypeName} • ${unitDetails.UnitCategoryName}` : "",
+      period: fromDate && toDate ? `${formatDate(fromDate)} - ${formatDate(toDate)}` : "Period not set",
+      duration: contractDays ? `${contractDays} days` : "",
+      amount: totalAmount ? totalAmount.toLocaleString() : "0",
+      status: unitDetails?.UnitStatus || "Unknown",
+    };
+  };
+
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
@@ -444,74 +524,122 @@ const ContractForm: React.FC = () => {
     }
   };
 
-  // Auto-calculation effects (keeping existing logic)
+  // Enhanced Unit Selection Logic
+  useEffect(() => {
+    const handleEnhancedUnitChange = async (unitId: string, index: number) => {
+      if (!unitId || unitId === "0") {
+        // Clear unit-related fields when no unit is selected
+        form.setValue(`units.${index}.RentPerMonth`, 0);
+        form.setValue(`units.${index}.RentPerYear`, 0);
+        form.setValue(`units.${index}.NoOfInstallments`, 12);
+        return;
+      }
+
+      try {
+        // Find unit details from existing data or fetch from API
+        let unitDetails = units.find((u) => u.UnitID.toString() === unitId);
+
+        if (!unitDetails) {
+          // Fetch unit details if not in current list
+          const { unit } = await unitService.getUnitById(parseInt(unitId));
+          unitDetails = unit;
+        }
+
+        if (unitDetails) {
+          // Get current values to preserve user changes
+          const currentValues = form.getValues(`units.${index}`);
+
+          // Create updated unit data object
+          const updatedUnitData = {
+            ...currentValues,
+            UnitID: unitId,
+          };
+
+          // Auto-populate rental information from unit master data
+          if (unitDetails.PerMonth && unitDetails.PerMonth > 0) {
+            updatedUnitData.RentPerMonth = unitDetails.PerMonth;
+
+            // Calculate yearly rent based on installments
+            const installments = unitDetails.NoOfInstallmentLease || 12;
+            updatedUnitData.NoOfInstallments = installments;
+            updatedUnitData.RentPerYear = parseFloat((unitDetails.PerMonth * installments).toFixed(2));
+          } else if (unitDetails.PerYear && unitDetails.PerYear > 0) {
+            updatedUnitData.RentPerYear = unitDetails.PerYear;
+
+            // Calculate monthly rent based on installments
+            const installments = unitDetails.NoOfInstallmentLease || 12;
+            updatedUnitData.NoOfInstallments = installments;
+            updatedUnitData.RentPerMonth = parseFloat((unitDetails.PerYear / installments).toFixed(2));
+          }
+
+          // Set default contract period if not already set
+          if (!currentValues.FromDate || !currentValues.ToDate) {
+            const today = new Date();
+            const oneYearLater = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+
+            updatedUnitData.FromDate = today;
+            updatedUnitData.ToDate = oneYearLater;
+
+            // Calculate contract duration
+            updatedUnitData.ContractDays = differenceInDays(oneYearLater, today);
+            updatedUnitData.ContractMonths = differenceInMonths(oneYearLater, today);
+            updatedUnitData.ContractYears = differenceInYears(oneYearLater, today);
+          }
+
+          // Apply all updates at once to prevent multiple re-renders
+          Object.entries(updatedUnitData).forEach(([key, value]) => {
+            if (key !== "UnitID") {
+              // UnitID is already set
+              form.setValue(`units.${index}.${key}` as any, value, { shouldValidate: false });
+            }
+          });
+
+          // Trigger tax calculation if applicable
+          const taxId = form.getValues(`units.${index}.TaxID`);
+          if (taxId && taxId !== "0") {
+            const selectedTax = taxes.find((tax) => tax.TaxID.toString() === taxId);
+            if (selectedTax && updatedUnitData.RentPerYear) {
+              const taxAmount = parseFloat(((updatedUnitData.RentPerYear * selectedTax.TaxRate) / 100).toFixed(2));
+              form.setValue(`units.${index}.TaxAmount`, taxAmount, { shouldValidate: false });
+              form.setValue(`units.${index}.TotalAmount`, parseFloat((updatedUnitData.RentPerYear + taxAmount).toFixed(2)), { shouldValidate: false });
+            }
+          } else {
+            // No tax applied
+            form.setValue(`units.${index}.TaxAmount`, 0, { shouldValidate: false });
+            form.setValue(`units.${index}.TotalAmount`, updatedUnitData.RentPerYear || 0, { shouldValidate: false });
+          }
+
+          // Show success notification
+          toast.success(`Unit details loaded: ${unitDetails.UnitNo} - ${unitDetails.PropertyName}`);
+        } else {
+          toast.error("Unit details not found");
+        }
+      } catch (error) {
+        console.error("Error fetching unit details:", error);
+        toast.error("Failed to load unit details. Please try again.");
+      }
+    };
+
+    const subscription = form.watch((value, { name, type }) => {
+      if (name && name.includes(".UnitID") && type === "change") {
+        const index = parseInt(name.split(".")[1]);
+        const unitId = form.getValues(`units.${index}.UnitID`);
+
+        if (unitId && unitId !== "0") {
+          handleEnhancedUnitChange(unitId, index);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, units, taxes]);
+
+  // Enhanced contract duration calculations with validation
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
-      if (!name) return;
+      if (!name || type !== "change") return;
 
-      const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-
-      const getTaxDetails = (taxId: string) => {
-        if (!taxId || taxId === "0") return null;
-        return taxes.find((tax) => tax.TaxID.toString() === taxId);
-      };
-
-      // Auto-calculation logic for units and charges (keeping existing logic)
-      if (name.includes("RentPerMonth") && name.includes("units.")) {
-        const index = parseInt(name.split(".")[1]);
-        const units = form.getValues("units");
-
-        if (units && units[index]) {
-          const monthlyRent = units[index].RentPerMonth || 0;
-          const installments = units[index].NoOfInstallments || 12;
-          const yearlyRent = roundToTwo(monthlyRent * installments);
-
-          form.setValue(`units.${index}.RentPerYear`, yearlyRent);
-
-          const taxId = units[index].TaxID;
-          if (taxId && taxId !== "0") {
-            const selectedTax = getTaxDetails(taxId);
-            if (selectedTax) {
-              const taxAmount = roundToTwo((yearlyRent * selectedTax.TaxRate) / 100);
-              form.setValue(`units.${index}.TaxAmount`, taxAmount);
-              form.setValue(`units.${index}.TotalAmount`, roundToTwo(yearlyRent + taxAmount));
-            }
-          } else {
-            form.setValue(`units.${index}.TaxAmount`, 0);
-            form.setValue(`units.${index}.TotalAmount`, yearlyRent);
-          }
-        }
-      }
-
-      // 2. Auto-calculate number of installments based on yearly/monthly rent
-      if (name.includes("NoOfInstallments") && name.includes("units.")) {
-        const index = parseInt(name.split(".")[1]);
-        const units = form.getValues("units");
-
-        if (units && units[index]) {
-          const monthlyRent = units[index].RentPerMonth || 0;
-          const installments = units[index].NoOfInstallments || 12;
-          const yearlyRent = roundToTwo(monthlyRent * installments);
-
-          form.setValue(`units.${index}.RentPerYear`, yearlyRent);
-
-          // Trigger tax recalculation
-          const taxId = units[index].TaxID;
-          if (taxId && taxId !== "0") {
-            const selectedTax = getTaxDetails(taxId);
-            if (selectedTax) {
-              const taxAmount = roundToTwo((yearlyRent * selectedTax.TaxRate) / 100);
-              form.setValue(`units.${index}.TaxAmount`, taxAmount);
-              form.setValue(`units.${index}.TotalAmount`, roundToTwo(yearlyRent + taxAmount));
-            }
-          } else {
-            form.setValue(`units.${index}.TaxAmount`, 0);
-            form.setValue(`units.${index}.TotalAmount`, yearlyRent);
-          }
-        }
-      }
-
-      // 3. Auto-calculate contract duration
+      // Handle contract duration calculations
       if ((name.includes("FromDate") || name.includes("ToDate")) && name.includes("units.")) {
         const index = parseInt(name.split(".")[1]);
         const units = form.getValues("units");
@@ -520,19 +648,127 @@ const ContractForm: React.FC = () => {
           const fromDate = units[index].FromDate;
           const toDate = units[index].ToDate;
 
-          if (fromDate && toDate && toDate >= fromDate) {
+          if (fromDate && toDate) {
+            // Validate date range
+            if (toDate <= fromDate) {
+              toast.error("End date must be after start date");
+              return;
+            }
+
+            // Calculate duration
             const totalDays = differenceInDays(toDate, fromDate);
             const totalMonths = differenceInMonths(toDate, fromDate);
             const totalYears = differenceInYears(toDate, fromDate);
 
-            form.setValue(`units.${index}.ContractDays`, totalDays);
-            form.setValue(`units.${index}.ContractMonths`, totalMonths);
-            form.setValue(`units.${index}.ContractYears`, totalYears);
+            // Update duration fields
+            form.setValue(`units.${index}.ContractDays`, totalDays, { shouldValidate: false });
+            form.setValue(`units.${index}.ContractMonths`, totalMonths, { shouldValidate: false });
+            form.setValue(`units.${index}.ContractYears`, totalYears, { shouldValidate: false });
+
+            // Provide user feedback for contract duration
+            if (totalDays > 0) {
+              let durationText = "";
+              if (totalYears > 0) {
+                durationText += `${totalYears} year${totalYears > 1 ? "s" : ""}`;
+              }
+              if (totalMonths % 12 > 0) {
+                if (durationText) durationText += ", ";
+                durationText += `${totalMonths % 12} month${totalMonths % 12 > 1 ? "s" : ""}`;
+              }
+              if (totalDays % 30 > 0 && totalYears === 0) {
+                if (durationText) durationText += ", ";
+                durationText += `${totalDays % 30} day${totalDays % 30 > 1 ? "s" : ""}`;
+              }
+
+              console.log(`Contract duration calculated: ${durationText} (${totalDays} total days)`);
+            }
+          }
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Enhanced rent calculation with better validation
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      if (!name || type !== "change") return;
+
+      const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+      const getTaxDetails = (taxId: string) => {
+        if (!taxId || taxId === "0") return null;
+        return taxes.find((tax) => tax.TaxID.toString() === taxId);
+      };
+
+      // Handle monthly rent changes
+      if (name.includes("RentPerMonth") && name.includes("units.")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const monthlyRent = units[index].RentPerMonth || 0;
+          const installments = units[index].NoOfInstallments || 12;
+
+          if (monthlyRent > 0) {
+            const yearlyRent = roundToTwo(monthlyRent * installments);
+            form.setValue(`units.${index}.RentPerYear`, yearlyRent, { shouldValidate: false });
+
+            // Recalculate tax and total
+            const taxId = units[index].TaxID;
+            if (taxId && taxId !== "0") {
+              const selectedTax = getTaxDetails(taxId);
+              if (selectedTax) {
+                const taxAmount = roundToTwo((yearlyRent * selectedTax.TaxRate) / 100);
+                form.setValue(`units.${index}.TaxAmount`, taxAmount, { shouldValidate: false });
+                form.setValue(`units.${index}.TotalAmount`, roundToTwo(yearlyRent + taxAmount), { shouldValidate: false });
+              }
+            } else {
+              form.setValue(`units.${index}.TaxAmount`, 0, { shouldValidate: false });
+              form.setValue(`units.${index}.TotalAmount`, yearlyRent, { shouldValidate: false });
+            }
           }
         }
       }
 
-      // 4. Handle tax changes for units
+      // Handle installment changes
+      if (name.includes("NoOfInstallments") && name.includes("units.")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("units");
+
+        if (units && units[index]) {
+          const monthlyRent = units[index].RentPerMonth || 0;
+          const installments = units[index].NoOfInstallments || 12;
+
+          // Validate installments
+          if (installments < 1 || installments > 52) {
+            toast.error("Number of installments should be between 1 and 52");
+            return;
+          }
+
+          if (monthlyRent > 0) {
+            const yearlyRent = roundToTwo(monthlyRent * installments);
+            form.setValue(`units.${index}.RentPerYear`, yearlyRent, { shouldValidate: false });
+
+            // Recalculate tax and total
+            const taxId = units[index].TaxID;
+            if (taxId && taxId !== "0") {
+              const selectedTax = getTaxDetails(taxId);
+              if (selectedTax) {
+                const taxAmount = roundToTwo((yearlyRent * selectedTax.TaxRate) / 100);
+                form.setValue(`units.${index}.TaxAmount`, taxAmount, { shouldValidate: false });
+                form.setValue(`units.${index}.TotalAmount`, roundToTwo(yearlyRent + taxAmount), { shouldValidate: false });
+              }
+            } else {
+              form.setValue(`units.${index}.TaxAmount`, 0, { shouldValidate: false });
+              form.setValue(`units.${index}.TotalAmount`, yearlyRent, { shouldValidate: false });
+            }
+          }
+        }
+      }
+
+      // Handle tax changes for units
       if (name.includes("TaxID") && name.includes("units.")) {
         const index = parseInt(name.split(".")[1]);
         const units = form.getValues("units");
@@ -558,7 +794,7 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // 5. Handle direct yearly rent changes for units
+      // Handle direct yearly rent changes for units
       if (name.includes("RentPerYear") && name.includes("units.") && !name.includes("RentPerMonth")) {
         const index = parseInt(name.split(".")[1]);
         const units = form.getValues("units");
@@ -581,7 +817,7 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // 6. Handle tax changes for additional charges
+      // Handle tax changes for additional charges
       if (name.includes("TaxID") && name.includes("additionalCharges.")) {
         const index = parseInt(name.split(".")[1]);
         const charges = form.getValues("additionalCharges");
@@ -608,7 +844,7 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // 7. Handle amount changes for additional charges
+      // Handle amount changes for additional charges
       if (name.includes("Amount") && name.includes("additionalCharges.") && !name.includes("TaxAmount") && !name.includes("TotalAmount")) {
         const index = parseInt(name.split(".")[1]);
         const charges = form.getValues("additionalCharges");
@@ -634,7 +870,7 @@ const ContractForm: React.FC = () => {
         }
       }
 
-      // 8. Handle additional charge selection (AdditionalChargesID changes)
+      // Handle additional charge selection (AdditionalChargesID changes)
       if (name.includes("AdditionalChargesID") && name.includes("additionalCharges.")) {
         const index = parseInt(name.split(".")[1]);
         const charges = form.getValues("additionalCharges");
@@ -667,47 +903,6 @@ const ContractForm: React.FC = () => {
     return () => subscription.unsubscribe();
   }, [form, taxes]);
 
-  useEffect(() => {
-    const handleUnitChange = async (unitId: string, index: number) => {
-      if (unitId) {
-        try {
-          let unitDetails = units.find((u) => u.UnitID.toString() === unitId);
-
-          if (!unitDetails) {
-            const { unit } = await unitService.getUnitById(parseInt(unitId));
-            unitDetails = unit;
-          }
-
-          if (unitDetails) {
-            if (unitDetails.PerMonth) {
-              form.setValue(`units.${index}.RentPerMonth`, unitDetails.PerMonth);
-            }
-            if (unitDetails.PerYear) {
-              form.setValue(`units.${index}.RentPerYear`, unitDetails.PerYear);
-            }
-            if (unitDetails.NoOfInstallmentLease) {
-              form.setValue(`units.${index}.NoOfInstallments`, unitDetails.NoOfInstallmentLease);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching unit details:", error);
-        }
-      }
-    };
-
-    const subscription = form.watch((value, { name }) => {
-      if (name && name.includes(".UnitID") && value) {
-        const index = parseInt(name.split(".")[1]);
-        const unitId = form.getValues(`units.${index}.UnitID`);
-        if (unitId) {
-          handleUnitChange(unitId, index);
-        }
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [form, units]);
-
   // Add new items
   const addUnit = () => {
     if (!canEditContract) {
@@ -731,6 +926,7 @@ const ContractForm: React.FC = () => {
       ContractDays: totalDays,
       ContractMonths: totalMonths,
       ContractYears: totalYears,
+      NoOfInstallments: 12,
     });
   };
 
@@ -1249,7 +1445,7 @@ const ContractForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Contract Units - keeping existing implementation with edit restrictions */}
+          {/* Contract Units with Enhanced Display */}
           <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -1282,6 +1478,7 @@ const ContractForm: React.FC = () => {
                   {unitsFieldArray.fields.map((field, index) => {
                     const unitId = form.watch(`units.${index}.UnitID`);
                     const unitDetails = getUnitDetails(unitId);
+                    const displayInfo = getEnhancedUnitDisplay(unitId, index);
 
                     return (
                       <AccordionItem key={field.id} value={`unit-${index}`} className="border rounded-lg mb-4">
@@ -1290,26 +1487,21 @@ const ContractForm: React.FC = () => {
                             <div className="flex items-center gap-3">
                               <Building className="h-5 w-5 text-muted-foreground" />
                               <div className="text-left">
-                                <div className="font-medium">{unitDetails ? `${unitDetails.UnitNo} - ${unitDetails.PropertyName}` : `Unit ${index + 1}`}</div>
-                                <div className="text-sm text-muted-foreground">{unitDetails && `${unitDetails.UnitTypeName} • ${unitDetails.UnitCategoryName}`}</div>
+                                <div className="font-medium">{displayInfo.title}</div>
+                                <div className="text-sm text-muted-foreground">{displayInfo.subtitle}</div>
                               </div>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <div className="text-muted-foreground">
-                                {form.watch(`units.${index}.FromDate`) && form.watch(`units.${index}.ToDate`) ? (
-                                  <span>
-                                    {formatDate(form.watch(`units.${index}.FromDate`))} - {formatDate(form.watch(`units.${index}.ToDate`))}
-                                  </span>
-                                ) : (
-                                  "Period not set"
-                                )}
+                                <div>{displayInfo.period}</div>
+                                {displayInfo.duration && <div className="text-xs">{displayInfo.duration}</div>}
                               </div>
-                              <div className="font-medium">{form.watch(`units.${index}.TotalAmount`) ? form.watch(`units.${index}.TotalAmount`).toLocaleString() : "0"}</div>
+                              <div className="font-medium">{displayInfo.amount}</div>
+                              {unitDetails && <Badge variant={unitDetails.UnitStatus === "Available" ? "default" : "secondary"}>{displayInfo.status}</Badge>}
                             </div>
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-4 pb-4">
-                          {/* Unit form content with disabled state for approved contracts */}
                           <div className="space-y-6">
                             <div className="flex justify-end">
                               <Button type="button" variant="destructive" size="sm" onClick={() => unitsFieldArray.remove(index)} disabled={!canEditContract}>
@@ -1331,6 +1523,9 @@ const ContractForm: React.FC = () => {
                               required
                               disabled={!canEditContract}
                             />
+
+                            {/* Unit Information Card */}
+                            {unitDetails && <UnitInformationCard unitDetails={unitDetails} />}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               <FormField
@@ -1382,9 +1577,16 @@ const ContractForm: React.FC = () => {
                             />
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <FormField form={form} name={`units.${index}.ContractDays`} label="Contract Days" type="number" disabled description="Auto-calculated" />
-                              <FormField form={form} name={`units.${index}.ContractMonths`} label="Contract Months" type="number" disabled description="Auto-calculated" />
-                              <FormField form={form} name={`units.${index}.ContractYears`} label="Contract Years" type="number" disabled description="Auto-calculated" />
+                              <FormField form={form} name={`units.${index}.ContractDays`} label="Contract Days" type="number" disabled description="Auto-calculated from dates" />
+                              <FormField
+                                form={form}
+                                name={`units.${index}.ContractMonths`}
+                                label="Contract Months"
+                                type="number"
+                                disabled
+                                description="Auto-calculated from dates"
+                              />
+                              <FormField form={form} name={`units.${index}.ContractYears`} label="Contract Years" type="number" disabled description="Auto-calculated from dates" />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1396,6 +1598,7 @@ const ContractForm: React.FC = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 required
+                                description="Auto-populated from unit master data"
                                 disabled={!canEditContract}
                               />
                               <FormField
@@ -1406,7 +1609,7 @@ const ContractForm: React.FC = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 required
-                                description="Auto-calculated from monthly rent"
+                                description="Auto-calculated from monthly rent × installments"
                                 disabled={!canEditContract}
                               />
                             </div>
@@ -1417,7 +1620,7 @@ const ContractForm: React.FC = () => {
                               label="Number of Installments"
                               type="number"
                               placeholder="12"
-                              description="Payment frequency per year"
+                              description="Payment frequency per year (1-52)"
                               disabled={!canEditContract}
                             />
 
@@ -1514,7 +1717,6 @@ const ContractForm: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Additional charges content with similar disabled state handling */}
               {chargesFieldArray.fields.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="mx-auto h-8 w-8 mb-4 text-muted-foreground/50" />
@@ -1795,7 +1997,7 @@ const ContractForm: React.FC = () => {
         isOpen={isEmailDialogOpen}
         onClose={() => setIsEmailDialogOpen(false)}
         entityType="contract"
-        entityId={0} // Preview mode
+        entityId={0}
         entityData={form.getValues()}
         defaultRecipients={getDefaultEmailRecipients()}
         triggerEvent={isEdit ? "contract_updated" : "contract_created"}
@@ -1835,7 +2037,7 @@ const ContractForm: React.FC = () => {
           onClose={() => setGalleryOpen(false)}
           attachments={attachmentList.map((attachment, index) => ({
             ...attachment,
-            PostingAttachmentID: index, // Use index as ID for gallery compatibility
+            PostingAttachmentID: index,
             fileUrl: attachment.file?.url,
             FileContentType: attachment.file?.type,
             FileSize: attachment.file?.size,

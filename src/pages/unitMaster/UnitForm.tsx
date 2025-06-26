@@ -1,4 +1,4 @@
-// src/pages/UnitMaster/UnitForm.tsx - Enhanced with Clone Mode Support
+// src/pages/UnitMaster/UnitForm.tsx - Enhanced with Clone Mode Support and Fixed Lease Calculations
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
 import { Unit, UnitContact } from "../../services/unitService";
@@ -511,45 +511,69 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     form.setValue("TotalAreaSqft", totalArea > 0 ? totalArea : undefined);
   }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft"), form]);
 
-  // Synchronize rent calculations
+  // FIXED: Enhanced Lease Information Calculations
   useEffect(() => {
-    const monthlyRent = form.watch("PerMonth");
-    const yearlyRent = form.watch("PerYear");
-    const installments = form.watch("NoOfInstallmentLease");
+    const subscription = form.watch((value, { name, type }) => {
+      if (type !== "change") return;
 
-    const hasMonthly = monthlyRent !== undefined && monthlyRent !== null && monthlyRent !== 0;
-    const hasYearly = yearlyRent !== undefined && yearlyRent !== null && yearlyRent !== 0;
-    const hasInstallments = installments !== undefined && installments !== null && installments !== 0;
+      const monthlyRent = value.PerMonth || 0;
+      const yearlyRent = value.PerYear || 0;
+      const installments = value.NoOfInstallmentLease || 0;
 
-    if (hasMonthly && hasYearly && !hasInstallments) {
-      if (monthlyRent > 0) {
-        const calculatedInstallments = Math.round(yearlyRent / monthlyRent);
-        form.setValue("NoOfInstallmentLease", calculatedInstallments);
+      // Prevent circular updates by tracking which field was changed
+      switch (name) {
+        case "PerMonth":
+          // When monthly rent changes, calculate yearly rent if installments exist
+          if (monthlyRent > 0 && installments > 0) {
+            const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
+            form.setValue("PerYear", calculatedYearly, { shouldValidate: false });
+          } else if (monthlyRent > 0 && installments === 0) {
+            // Default to 12 installments if not specified
+            form.setValue("NoOfInstallmentLease", 12, { shouldValidate: false });
+            form.setValue("PerYear", parseFloat((monthlyRent * 12).toFixed(2)), { shouldValidate: false });
+          } else if (monthlyRent === 0) {
+            // Clear related fields when monthly rent is cleared
+            form.setValue("PerYear", undefined, { shouldValidate: false });
+          }
+          break;
+
+        case "PerYear":
+          // When yearly rent changes, calculate monthly rent if installments exist
+          if (yearlyRent > 0 && installments > 0) {
+            const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
+            form.setValue("PerMonth", calculatedMonthly, { shouldValidate: false });
+          } else if (yearlyRent > 0 && installments === 0) {
+            // Default to 12 installments if not specified
+            form.setValue("NoOfInstallmentLease", 12, { shouldValidate: false });
+            form.setValue("PerMonth", parseFloat((yearlyRent / 12).toFixed(2)), { shouldValidate: false });
+          } else if (yearlyRent === 0) {
+            // Clear related fields when yearly rent is cleared
+            form.setValue("PerMonth", undefined, { shouldValidate: false });
+          }
+          break;
+
+        case "NoOfInstallmentLease":
+          // When installments change, recalculate based on which rent field has a value
+          if (installments > 0) {
+            if (monthlyRent > 0) {
+              // If monthly rent exists, calculate yearly rent
+              const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
+              form.setValue("PerYear", calculatedYearly, { shouldValidate: false });
+            } else if (yearlyRent > 0) {
+              // If yearly rent exists, calculate monthly rent
+              const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
+              form.setValue("PerMonth", calculatedMonthly, { shouldValidate: false });
+            }
+          }
+          break;
+
+        default:
+          break;
       }
-    }
+    });
 
-    if (hasMonthly && hasInstallments && !hasYearly) {
-      const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
-      form.setValue("PerYear", calculatedYearly);
-    }
-
-    if (hasYearly && hasInstallments && !hasMonthly) {
-      if (installments > 0) {
-        const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
-        form.setValue("PerMonth", calculatedMonthly);
-      }
-    }
-
-    if (hasMonthly && hasYearly && hasInstallments) {
-      const calculatedYearly = monthlyRent * installments;
-      const epsilon = 0.01;
-
-      if (Math.abs(calculatedYearly - yearlyRent) > epsilon) {
-        const newYearly = parseFloat((monthlyRent * installments).toFixed(2));
-        form.setValue("PerYear", newYearly);
-      }
-    }
-  }, [form.watch("PerMonth"), form.watch("PerYear"), form.watch("NoOfInstallmentLease")]);
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const handleContactsChange = (updatedContacts: UnitContact[]) => {
     setContacts(updatedContacts as ContactRow[]);
@@ -1290,6 +1314,16 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
                       )}
                     />
                   </div>
+
+                  <Alert className="mt-4 border-blue-200 bg-blue-50">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      <strong>Lease Calculation Logic:</strong>
+                      <br />• Monthly Rent × Number of Installments = Yearly Rent
+                      <br />• Entering any two values will automatically calculate the third
+                      <br />• Default installments will be set to 12 if not specified
+                    </AlertDescription>
+                  </Alert>
                 </CardContent>
               </Card>
 
