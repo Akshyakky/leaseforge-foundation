@@ -55,7 +55,7 @@ const formSchema = z
     },
     {
       message: "Passwords don't match",
-      path: ["confirmPassword"],
+      path: ["ConfirmPassword"],
     }
   );
 

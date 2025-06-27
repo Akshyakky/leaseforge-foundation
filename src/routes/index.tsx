@@ -35,6 +35,8 @@ import journalVoucherRoutes from "./journalVoucherRoutes";
 import bankRoutes from "./bankRoutes";
 import leaseRevenuePostingRoutes from "./leaseRevenuePostingRoutes";
 import emailRoutes from "./emailRoutes";
+import countryRoutes from "./countryRoutes";
+import cityRoutes from "./cityRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -78,6 +80,10 @@ const AppRoutes = () => {
           {additionalChargesRoutes}
           {/* Currency routes */}
           {currencyRoutes}
+          {/* Country Management routes */}
+          {countryRoutes}
+          {/* City Management routes */}
+          {cityRoutes}
           {/* Settings routes */}
           {settingsRoutes}
           {/* Deduction Charges routes */}
