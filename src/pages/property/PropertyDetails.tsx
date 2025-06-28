@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { propertyService, Property, PropertyAttachment } from "@/services/propertyService";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,43 @@ const PropertyDetails: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Helper function to convert base64 string to data URL for image display
+  const getImageDataUrl = (attachment: PropertyAttachment): string | null => {
+    // If FilePath exists (legacy), use it directly
+    if (attachment.FilePath) {
+      return attachment.FilePath;
+    }
+
+    // If FileContent exists as base64 string, convert to data URL
+    if (attachment.FileContent && typeof attachment.FileContent === "string") {
+      const mimeType = attachment.FileContentType || "image/jpeg";
+      return `data:${mimeType};base64,${attachment.FileContent}`;
+    }
+
+    return null;
+  };
+
+  // Helper function to convert base64 string to blob for download
+  const base64ToBlob = (base64String: string, mimeType: string): Blob => {
+    const byteCharacters = atob(base64String);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
+  // Memoized processed attachments with data URLs
+  const processedAttachments = useMemo(() => {
+    return attachments.map((attachment) => ({
+      ...attachment,
+      displayUrl: getImageDataUrl(attachment),
+    }));
+  }, [attachments]);
 
   useEffect(() => {
     const fetchPropertyDetails = async () => {
@@ -111,18 +148,46 @@ const PropertyDetails: React.FC = () => {
   };
 
   const getImageAttachments = () => {
-    return attachments.filter((att) => att.AttachmentType === "Image" || att.FileContentType?.startsWith("image/") || att.DocumentName?.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i));
+    return processedAttachments.filter(
+      (att) => att.AttachmentType === "Image" || att.FileContentType?.startsWith("image/") || att.DocumentName?.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)
+    );
   };
 
   const getDocumentAttachments = () => {
-    return attachments.filter((att) => att.AttachmentType !== "Image" && !att.FileContentType?.startsWith("image/") && !att.DocumentName?.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i));
+    return processedAttachments.filter(
+      (att) => att.AttachmentType !== "Image" && !att.FileContentType?.startsWith("image/") && !att.DocumentName?.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)
+    );
   };
 
   const handleDownloadAttachment = async (attachment: PropertyAttachment) => {
     try {
-      // This would typically involve a download service call
-      // For now, we'll just show a message
-      toast.info("Download feature would be implemented here");
+      let blob: Blob;
+      let fileName = attachment.DocumentName || "download";
+
+      if (attachment.FileContent && typeof attachment.FileContent === "string") {
+        // Convert base64 to blob
+        const mimeType = attachment.FileContentType || "application/octet-stream";
+        blob = base64ToBlob(attachment.FileContent, mimeType);
+      } else if (attachment.FilePath) {
+        // For legacy file path approach, fetch the file
+        const response = await fetch(attachment.FilePath);
+        blob = await response.blob();
+      } else {
+        toast.error("No file content available for download");
+        return;
+      }
+
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Download started successfully");
     } catch (error) {
       console.error("Error downloading attachment:", error);
       toast.error("Failed to download attachment");
@@ -297,7 +362,7 @@ const PropertyDetails: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <DetailRow label="Total Attachments" value={property.TotalAttachmentCount ? property.TotalAttachmentCount?.toString() : "0"} />
-                  <DetailRow label="Images" value={property.ImageCount ? property.ImageCount?.toString() : "0"} />
+                  <DetailRow label="Images" value={property.ImageCount ? property.ImageCount.toString() : "0"} />
                 </div>
               </CardContent>
             </Card>
@@ -392,12 +457,16 @@ const PropertyDetails: React.FC = () => {
                   {imageAttachments.map((attachment) => (
                     <div key={attachment.PropertyAttachmentID} className="relative group">
                       <div className="aspect-square bg-muted rounded-lg overflow-hidden border">
-                        {attachment.FilePath ? (
+                        {attachment.displayUrl ? (
                           <img
-                            src={attachment.FilePath}
+                            src={attachment.displayUrl}
                             alt={attachment.ImageAltText || attachment.DocumentName}
                             className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                            onClick={() => setSelectedImage(attachment.FilePath || null)}
+                            onClick={() => setSelectedImage(attachment.displayUrl || null)}
+                            onError={(e) => {
+                              console.error("Image failed to load:", attachment.DocumentName);
+                              e.currentTarget.style.display = "none";
+                            }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -416,8 +485,8 @@ const PropertyDetails: React.FC = () => {
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-xs text-muted-foreground">{formatFileSize(attachment.FileSize)}</span>
                           <div className="flex space-x-1">
-                            {attachment.FilePath && (
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setSelectedImage(attachment.FilePath || null)}>
+                            {attachment.displayUrl && (
+                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setSelectedImage(attachment.displayUrl || null)}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             )}
@@ -501,7 +570,15 @@ const PropertyDetails: React.FC = () => {
           </DialogHeader>
           {selectedImage && (
             <div className="flex justify-center">
-              <img src={selectedImage} alt="Property Image" className="max-w-full max-h-[70vh] object-contain" />
+              <img
+                src={selectedImage}
+                alt="Property Image"
+                className="max-w-full max-h-[70vh] object-contain"
+                onError={(e) => {
+                  console.error("Preview image failed to load");
+                  toast.error("Failed to load image preview");
+                }}
+              />
             </div>
           )}
         </DialogContent>
@@ -521,7 +598,7 @@ const PropertyDetails: React.FC = () => {
   );
 };
 
-// Helper component for displaying property details
+// Helper component for displaying property details (unchanged)
 interface DetailRowProps {
   label: string;
   value?: string | null;
@@ -538,7 +615,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ label, value }) => {
   );
 };
 
-// Card component for displaying property details
+// Card component for displaying property details (unchanged)
 interface DetailCardProps {
   title: string;
   value: string;

@@ -198,10 +198,23 @@ const PropertyForm: React.FC = () => {
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (e) => {
+        let base64Content = "";
+
+        if (e.target?.result) {
+          if (typeof e.target.result === "string") {
+            // If using readAsDataURL, extract base64 part
+            base64Content = e.target.result.split(",")[1];
+          } else {
+            // If using readAsArrayBuffer, convert to base64
+            const arrayBuffer = e.target.result as ArrayBuffer;
+            base64Content = arrayBufferToBase64(arrayBuffer);
+          }
+        }
+
         const newAttachment: AttachmentFormData = {
           DocumentName: file.name,
           DocTypeID: 0, // Will be selected by user
-          FileContent: e.target?.result as ArrayBuffer,
+          FileContent: base64Content, // Now storing as base64 string
           FileContentType: file.type,
           FileSize: file.size,
           AttachmentType: file.type.startsWith("image/") ? "Image" : "Document",
@@ -215,15 +228,49 @@ const PropertyForm: React.FC = () => {
         setAttachments((prev) => [...prev, newAttachment]);
       };
 
-      if (file.type.startsWith("image/")) {
-        reader.readAsArrayBuffer(file);
-      } else {
-        reader.readAsArrayBuffer(file);
-      }
+      reader.onerror = (error) => {
+        console.error("Error reading file:", error);
+        toast.error(`Failed to read file: ${file.name}`);
+      };
+
+      // Read file as data URL to get base64 content
+      reader.readAsDataURL(file);
     });
 
     // Reset input
     event.target.value = "";
+  };
+
+  // Helper function to convert ArrayBuffer to base64 string
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  };
+
+  // Alternative helper function using more modern approach
+  const arrayBufferToBase64Modern = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    return btoa(binary);
+  };
+
+  // For very large files, you might want to use this chunk-based approach
+  const arrayBufferToBase64Chunked = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000; // 32KB chunks
+    let binary = "";
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+
+    return btoa(binary);
   };
 
   // Handle attachment update

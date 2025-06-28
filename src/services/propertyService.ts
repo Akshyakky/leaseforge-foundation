@@ -47,7 +47,7 @@ export interface PropertyAttachment {
   DocTypeID: number;
   DocumentName: string;
   FilePath?: string;
-  FileContent?: ArrayBuffer;
+  FileContent?: string;
   FileContentType?: string;
   FileSize?: number;
   AttachmentType?: string;
