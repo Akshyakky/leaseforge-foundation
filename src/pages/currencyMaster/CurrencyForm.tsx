@@ -6,22 +6,44 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, DollarSign } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, DollarSign, AlertTriangle } from "lucide-react";
 import { currencyService, Currency } from "@/services/currencyService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useAppSelector } from "@/lib/hooks";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Create the schema for currency form validation
-const currencySchema = z.object({
-  CurrencyCode: z.string().min(1, "Currency code is required").max(10, "Currency code cannot exceed 10 characters"),
-  CurrencyName: z.string().min(2, "Currency name is required").max(50, "Currency name cannot exceed 50 characters"),
-  ConversionRate: z.coerce.number().min(0.0001, "Conversion rate must be greater than 0").max(9999, "Conversion rate is too high"),
-  IsDefault: z.boolean().default(false),
-});
+// Enhanced schema with custom validation for duplicates
+const createCurrencySchema = (existingCurrencies: Currency[], currentCurrencyId?: number) => {
+  return z.object({
+    CurrencyCode: z
+      .string()
+      .min(1, "Currency code is required")
+      .max(10, "Currency code cannot exceed 10 characters")
+      .refine((code) => {
+        const normalizedCode = code.toUpperCase().trim();
+        return !existingCurrencies.some((currency) => currency.CurrencyCode.toUpperCase() === normalizedCode && currency.CurrencyID !== currentCurrencyId);
+      }, "Currency code already exists"),
+    CurrencyName: z
+      .string()
+      .min(2, "Currency name is required")
+      .max(50, "Currency name cannot exceed 50 characters")
+      .refine((name) => {
+        const normalizedName = name.toLowerCase().trim();
+        return !existingCurrencies.some((currency) => currency.CurrencyName.toLowerCase() === normalizedName && currency.CurrencyID !== currentCurrencyId);
+      }, "Currency name already exists"),
+    ConversionRate: z.coerce.number().min(0.0001, "Conversion rate must be greater than 0").max(9999, "Conversion rate is too high"),
+    IsDefault: z.boolean().default(false),
+  });
+};
 
-type CurrencyFormValues = z.infer<typeof currencySchema>;
+type CurrencyFormValues = {
+  CurrencyCode: string;
+  CurrencyName: string;
+  ConversionRate: number;
+  IsDefault: boolean;
+};
 
 const CurrencyForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,41 +53,43 @@ const CurrencyForm: React.FC = () => {
 
   // State variables
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(isEdit);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [hasDefaultCurrency, setHasDefaultCurrency] = useState(false);
+  const [existingCurrencies, setExistingCurrencies] = useState<Currency[]>([]);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<{
+    code?: string;
+    name?: string;
+  }>({});
 
-  // Initialize form
+  // Initialize form with dynamic schema
   const form = useForm<CurrencyFormValues>({
-    resolver: zodResolver(currencySchema),
+    resolver: zodResolver(createCurrencySchema(existingCurrencies, currency?.CurrencyID)),
     defaultValues: {
       CurrencyCode: "",
       CurrencyName: "",
       ConversionRate: 1,
       IsDefault: false,
     },
+    mode: "onChange", // Enable real-time validation
   });
 
-  // Check if a default currency exists
+  // Load existing currencies and check for duplicates
   useEffect(() => {
-    const checkDefaultCurrency = async () => {
+    const loadInitialData = async () => {
       try {
+        setInitialLoading(true);
+
+        // Load all existing currencies for duplicate checking
+        const allCurrencies = await currencyService.getAllCurrencies();
+        setExistingCurrencies(allCurrencies);
+
+        // Check if a default currency exists
         const defaultCurrency = await currencyService.getDefaultCurrency();
         setHasDefaultCurrency(!!defaultCurrency);
-      } catch (error) {
-        console.error("Error checking default currency:", error);
-      }
-    };
 
-    checkDefaultCurrency();
-  }, []);
-
-  // Initialize form with existing currency data if editing
-  useEffect(() => {
-    const initializeForm = async () => {
-      if (isEdit && id) {
-        try {
-          setInitialLoading(true);
+        // If editing, load the specific currency
+        if (isEdit && id) {
           const currencyData = await currencyService.getCurrencyById(parseInt(id));
 
           if (currencyData) {
@@ -79,26 +103,80 @@ const CurrencyForm: React.FC = () => {
           } else {
             toast.error("Currency not found");
             navigate("/currencies");
+            return;
           }
-        } catch (error) {
-          console.error("Error fetching currency:", error);
-          toast.error("Failed to load currency data");
-          navigate("/currencies");
-        } finally {
-          setInitialLoading(false);
         }
-      } else {
+
+        // Update form resolver with loaded currencies
+        form.trigger(); // Trigger validation with new data
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        toast.error("Failed to load currency data");
+        if (isEdit) {
+          navigate("/currencies");
+        }
+      } finally {
         setInitialLoading(false);
       }
     };
 
-    initializeForm();
+    loadInitialData();
   }, [id, isEdit, navigate, form]);
+
+  // Real-time duplicate checking
+  const checkForDuplicates = (code: string, name: string) => {
+    const warnings: { code?: string; name?: string } = {};
+
+    if (code.trim()) {
+      const normalizedCode = code.toUpperCase().trim();
+      const duplicateCode = existingCurrencies.find((curr) => curr.CurrencyCode.toUpperCase() === normalizedCode && curr.CurrencyID !== currency?.CurrencyID);
+
+      if (duplicateCode) {
+        warnings.code = `Currency code "${code}" is already used by ${duplicateCode.CurrencyName}`;
+      }
+    }
+
+    if (name.trim()) {
+      const normalizedName = name.toLowerCase().trim();
+      const duplicateName = existingCurrencies.find((curr) => curr.CurrencyName.toLowerCase() === normalizedName && curr.CurrencyID !== currency?.CurrencyID);
+
+      if (duplicateName) {
+        warnings.name = `Currency name "${name}" already exists with code ${duplicateName.CurrencyCode}`;
+      }
+    }
+
+    setDuplicateWarnings(warnings);
+  };
+
+  // Watch form values for real-time duplicate checking
+  const watchedCode = form.watch("CurrencyCode");
+  const watchedName = form.watch("CurrencyName");
+
+  useEffect(() => {
+    if (existingCurrencies.length > 0) {
+      checkForDuplicates(watchedCode || "", watchedName || "");
+    }
+  }, [watchedCode, watchedName, existingCurrencies, currency?.CurrencyID]);
+
+  // Update form resolver when existing currencies change
+  useEffect(() => {
+    if (existingCurrencies.length > 0) {
+      const newResolver = zodResolver(createCurrencySchema(existingCurrencies, currency?.CurrencyID));
+      form.trigger(); // Re-validate with new resolver
+    }
+  }, [existingCurrencies, currency?.CurrencyID, form]);
 
   // Handle form submission
   const onSubmit = async (data: CurrencyFormValues) => {
     if (!user) {
       toast.error("User information not available");
+      return;
+    }
+
+    // Final duplicate check before submission
+    const hasDuplicates = Object.keys(duplicateWarnings).length > 0;
+    if (hasDuplicates) {
+      toast.error("Please resolve duplicate currency issues before saving");
       return;
     }
 
@@ -109,8 +187,8 @@ const CurrencyForm: React.FC = () => {
         // Update existing currency
         const success = await currencyService.updateCurrency({
           CurrencyID: currency.CurrencyID,
-          CurrencyCode: data.CurrencyCode,
-          CurrencyName: data.CurrencyName,
+          CurrencyCode: data.CurrencyCode.trim(),
+          CurrencyName: data.CurrencyName.trim(),
           ConversionRate: data.ConversionRate,
           IsDefault: data.IsDefault,
         });
@@ -124,10 +202,10 @@ const CurrencyForm: React.FC = () => {
       } else {
         // Create new currency
         const newCurrencyId = await currencyService.createCurrency({
-          CurrencyCode: data.CurrencyCode,
-          CurrencyName: data.CurrencyName,
+          CurrencyCode: data.CurrencyCode.trim(),
+          CurrencyName: data.CurrencyName.trim(),
           ConversionRate: data.ConversionRate,
-          IsDefault: !hasDefaultCurrency || data.IsDefault, // If no default currency exists, this one becomes default
+          IsDefault: !hasDefaultCurrency || data.IsDefault,
         });
 
         if (newCurrencyId) {
@@ -162,6 +240,7 @@ const CurrencyForm: React.FC = () => {
         IsDefault: false,
       });
     }
+    setDuplicateWarnings({});
   };
 
   // Cancel and go back
@@ -176,6 +255,10 @@ const CurrencyForm: React.FC = () => {
       </div>
     );
   }
+
+  const hasValidationErrors = Object.keys(form.formState.errors).length > 0;
+  const hasDuplicateIssues = Object.keys(duplicateWarnings).length > 0;
+  const canSubmit = !hasValidationErrors && !hasDuplicateIssues && !loading;
 
   return (
     <div className="space-y-6">
@@ -196,6 +279,20 @@ const CurrencyForm: React.FC = () => {
               </CardHeader>
 
               <CardContent className="space-y-6">
+                {/* Duplicate warnings */}
+                {hasDuplicateIssues && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <div className="space-y-1">
+                        <p className="font-medium">Duplicate Currency Detected:</p>
+                        {duplicateWarnings.code && <p>• {duplicateWarnings.code}</p>}
+                        {duplicateWarnings.name && <p>• {duplicateWarnings.name}</p>}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     form={form}
@@ -205,6 +302,7 @@ const CurrencyForm: React.FC = () => {
                     required
                     maxLength={10}
                     description="A unique code identifier for the currency"
+                    className={duplicateWarnings.code ? "border-red-500" : ""}
                   />
                   <FormField
                     form={form}
@@ -214,6 +312,7 @@ const CurrencyForm: React.FC = () => {
                     required
                     maxLength={50}
                     description="Full name of the currency"
+                    className={duplicateWarnings.name ? "border-red-500" : ""}
                   />
                 </div>
 
@@ -239,11 +338,7 @@ const CurrencyForm: React.FC = () => {
                           {hasDefaultCurrency && !currency?.IsDefault ? "Warning: This will change the default currency" : "Use this as the base currency for all conversions"}
                         </p>
                       </div>
-                      <Switch
-                        checked={form.watch("IsDefault")}
-                        onCheckedChange={(checked) => form.setValue("IsDefault", checked)}
-                        disabled={isEdit && currency?.IsDefault} // Can't unset default status of current default
-                      />
+                      <Switch checked={form.watch("IsDefault")} onCheckedChange={(checked) => form.setValue("IsDefault", checked)} disabled={isEdit && currency?.IsDefault} />
                     </div>
                   </div>
                 </div>
@@ -259,7 +354,7 @@ const CurrencyForm: React.FC = () => {
                     Reset
                   </Button>
                 </div>
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={!canSubmit}>
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
