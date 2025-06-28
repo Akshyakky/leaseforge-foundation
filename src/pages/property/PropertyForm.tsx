@@ -6,7 +6,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, Upload, X, FileImage, Paperclip, Star, Eye, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, Upload, X, FileImage, Paperclip, Star, Eye, Trash2, Settings } from "lucide-react";
 import { propertyService, Property, PropertyAttachment, CreatePropertyRequest, UpdatePropertyRequest, NewPropertyAttachment } from "@/services/propertyService";
 import { docTypeService, DocType } from "@/services/docTypeService";
 import { FormField } from "@/components/forms/FormField";
@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 
-// Create the schema for property form validation
+// Enhanced schema with attachment categories
 const propertySchema = z.object({
   PropertyNo: z.string().optional(),
   PropertyName: z.string().min(2, "Property name is required"),
@@ -50,11 +50,70 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
+// Enhanced attachment interface with categories
 interface AttachmentFormData extends Omit<PropertyAttachment, "PropertyID"> {
   file?: File;
   preview?: string;
   isNew?: boolean;
+  AttachmentType?: "Image" | "Document" | "Blueprint" | "Certificate" | "Video" | "Other";
+  AttachmentCategory?: "Primary" | "Gallery" | "Floor Plan" | "Legal" | "Marketing" | "Construction" | "Other";
 }
+
+// Smart categorization based on file type
+const getSmartAttachmentInfo = (
+  file: File
+): {
+  type: AttachmentFormData["AttachmentType"];
+  category: AttachmentFormData["AttachmentCategory"];
+  suggestedDocTypes: number[];
+} => {
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
+  const fileExtension = fileName.split(".").pop() || "";
+
+  // Image files
+  if (fileType.startsWith("image/")) {
+    if (fileName.includes("floor") || fileName.includes("plan") || fileName.includes("layout")) {
+      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [1, 2] }; // Adjust IDs based on your doc types
+    }
+    if (fileName.includes("main") || fileName.includes("cover") || fileName.includes("primary")) {
+      return { type: "Image", category: "Primary", suggestedDocTypes: [1] };
+    }
+    return { type: "Image", category: "Gallery", suggestedDocTypes: [1, 2] };
+  }
+
+  // Video files
+  if (fileType.startsWith("video/")) {
+    return { type: "Video", category: "Marketing", suggestedDocTypes: [3] };
+  }
+
+  // PDF files
+  if (fileType === "application/pdf" || fileExtension === "pdf") {
+    if (fileName.includes("certificate") || fileName.includes("cert")) {
+      return { type: "Certificate", category: "Legal", suggestedDocTypes: [4, 5] };
+    }
+    if (fileName.includes("title") || fileName.includes("deed") || fileName.includes("legal")) {
+      return { type: "Document", category: "Legal", suggestedDocTypes: [4, 5, 6] };
+    }
+    if (fileName.includes("plan") || fileName.includes("blueprint") || fileName.includes("drawing")) {
+      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [7, 8] };
+    }
+    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10] };
+  }
+
+  // Office documents
+  if (fileType.includes("word") || fileType.includes("excel") || fileType.includes("powerpoint") || ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(fileExtension)) {
+    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10, 11] };
+  }
+
+  // CAD files
+  if (["dwg", "dxf", "autocad"].includes(fileExtension)) {
+    return { type: "Blueprint", category: "Construction", suggestedDocTypes: [7, 8] };
+  }
+
+  // Default fallback
+  return { type: "Other", category: "Other", suggestedDocTypes: [12] };
+};
 
 const PropertyForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -146,6 +205,8 @@ const PropertyForm: React.FC = () => {
             setAttachments(
               propertyData.attachments.map((att) => ({
                 ...att,
+                AttachmentType: (att.AttachmentType as AttachmentFormData["AttachmentType"]) || "Other",
+                AttachmentCategory: (att.AttachmentCategory as AttachmentFormData["AttachmentCategory"]) || "Other",
                 isNew: false,
               }))
             );
@@ -191,7 +252,7 @@ const PropertyForm: React.FC = () => {
     fetchCities();
   }, [selectedCountryId]);
 
-  // Handle file upload
+  // Enhanced file upload with smart categorization
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
 
@@ -202,22 +263,30 @@ const PropertyForm: React.FC = () => {
 
         if (e.target?.result) {
           if (typeof e.target.result === "string") {
-            // If using readAsDataURL, extract base64 part
             base64Content = e.target.result.split(",")[1];
           } else {
-            // If using readAsArrayBuffer, convert to base64
             const arrayBuffer = e.target.result as ArrayBuffer;
             base64Content = arrayBufferToBase64(arrayBuffer);
           }
         }
 
+        // Get smart attachment info
+        const smartInfo = getSmartAttachmentInfo(file);
+
+        // Find the best matching doc type
+        const suggestedDocType =
+          smartInfo.suggestedDocTypes.find((id) => docTypes.some((dt) => dt.DocTypeID === id)) ||
+          smartInfo.suggestedDocTypes[0] ||
+          (docTypes.length > 0 ? docTypes[0].DocTypeID : 0);
+
         const newAttachment: AttachmentFormData = {
           DocumentName: file.name,
-          DocTypeID: 0, // Will be selected by user
-          FileContent: base64Content, // Now storing as base64 string
+          DocTypeID: suggestedDocType, // Auto-assign suggested doc type
+          FileContent: base64Content,
           FileContentType: file.type,
           FileSize: file.size,
-          AttachmentType: file.type.startsWith("image/") ? "Image" : "Document",
+          AttachmentType: smartInfo.type,
+          AttachmentCategory: smartInfo.category,
           IsMainImage: false,
           IsPublic: true,
           file: file,
@@ -226,6 +295,9 @@ const PropertyForm: React.FC = () => {
         };
 
         setAttachments((prev) => [...prev, newAttachment]);
+
+        // Show helpful toast about auto-categorization
+        toast.success(`${file.name} categorized as ${smartInfo.type} - ${smartInfo.category}`);
       };
 
       reader.onerror = (error) => {
@@ -233,7 +305,6 @@ const PropertyForm: React.FC = () => {
         toast.error(`Failed to read file: ${file.name}`);
       };
 
-      // Read file as data URL to get base64 content
       reader.readAsDataURL(file);
     });
 
@@ -252,25 +323,9 @@ const PropertyForm: React.FC = () => {
     return btoa(binary);
   };
 
-  // Alternative helper function using more modern approach
-  const arrayBufferToBase64Modern = (buffer: ArrayBuffer): string => {
-    const bytes = new Uint8Array(buffer);
-    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-    return btoa(binary);
-  };
-
-  // For very large files, you might want to use this chunk-based approach
-  const arrayBufferToBase64Chunked = (buffer: ArrayBuffer): string => {
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000; // 32KB chunks
-    let binary = "";
-
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-
-    return btoa(binary);
+  // Quick update attachment inline
+  const updateAttachmentInline = (index: number, field: keyof AttachmentFormData, value: any) => {
+    setAttachments((prev) => prev.map((att, i) => (i === index ? { ...att, [field]: value } : att)));
   };
 
   // Handle attachment update
@@ -297,10 +352,34 @@ const PropertyForm: React.FC = () => {
     );
   };
 
+  // Get filtered doc types based on attachment type
+  const getFilteredDocTypes = (attachmentType: AttachmentFormData["AttachmentType"]) => {
+    // This would be based on your actual doc type structure
+    // Return doc types that are relevant to the attachment type
+    return docTypes.filter((dt) => {
+      // Implement filtering logic based on your doc type structure
+      // For now, return all doc types
+      return true;
+    });
+  };
+
+  // Bulk actions for attachments
+  const bulkSetDocType = (docTypeId: number, attachmentType?: AttachmentFormData["AttachmentType"]) => {
+    setAttachments((prev) => prev.map((att) => (!attachmentType || att.AttachmentType === attachmentType ? { ...att, DocTypeID: docTypeId } : att)));
+  };
+
   // Handle form submission
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user) {
       toast.error("User information not available");
+      return;
+    }
+
+    // Validate that all attachments have doc types
+    const attachmentsWithoutType = attachments.filter((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0));
+    if (attachmentsWithoutType.length > 0) {
+      toast.error(`Please select document types for ${attachmentsWithoutType.length} attachment(s)`);
+      setActiveTab("images"); // Switch to images tab to show the issue
       return;
     }
 
@@ -330,7 +409,7 @@ const PropertyForm: React.FC = () => {
         Remark: data.Remark,
       };
 
-      // Prepare attachments data (exclude existing ones that haven't changed)
+      // Prepare attachments data
       const attachmentsData: NewPropertyAttachment[] = attachments
         .filter((att) => att.isNew && att.DocTypeID > 0)
         .map((att) => ({
@@ -339,7 +418,8 @@ const PropertyForm: React.FC = () => {
           FileContent: att.FileContent,
           FileContentType: att.FileContentType,
           FileSize: att.FileSize,
-          AttachmentType: att.AttachmentType,
+          AttachmentType: att.AttachmentType || "Other",
+          AttachmentCategory: att.AttachmentCategory || "Other",
           IsMainImage: att.IsMainImage,
           ImageCaption: att.ImageCaption,
           ImageAltText: att.ImageAltText,
@@ -394,7 +474,7 @@ const PropertyForm: React.FC = () => {
   // Handle country change
   const handleCountryChange = (value: string) => {
     form.setValue("CountryID", value);
-    form.setValue("CityID", ""); // Reset city when country changes
+    form.setValue("CityID", "");
     setSelectedCountryId(value);
   };
 
@@ -451,8 +531,9 @@ const PropertyForm: React.FC = () => {
     );
   }
 
-  const imageAttachments = attachments.filter((att) => att.AttachmentType === "Image" || att.FileContentType?.startsWith("image/"));
-  const documentAttachments = attachments.filter((att) => att.AttachmentType !== "Image" && !att.FileContentType?.startsWith("image/"));
+  const imageAttachments = attachments.filter((att) => att.AttachmentType === "Image" || att.AttachmentType === "Blueprint" || att.FileContentType?.startsWith("image/"));
+
+  const documentAttachments = attachments.filter((att) => !["Image", "Blueprint"].includes(att.AttachmentType || "") && !att.FileContentType?.startsWith("image/"));
 
   return (
     <div className="space-y-6">
@@ -477,11 +558,22 @@ const PropertyForm: React.FC = () => {
                   <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="basic">Basic Information</TabsTrigger>
                     <TabsTrigger value="details">Property Details</TabsTrigger>
-                    <TabsTrigger value="images">Images ({imageAttachments.length})</TabsTrigger>
-                    <TabsTrigger value="documents">Documents ({documentAttachments.length})</TabsTrigger>
+                    <TabsTrigger value="images" className="relative">
+                      Images & Plans ({imageAttachments.length})
+                      {imageAttachments.some((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0)) && (
+                        <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="documents" className="relative">
+                      Documents ({documentAttachments.length})
+                      {documentAttachments.some((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0)) && (
+                        <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
+                {/* Basic Information Tab - Same as before */}
                 <TabsContent value="basic" className="p-6 pt-4 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
@@ -560,6 +652,7 @@ const PropertyForm: React.FC = () => {
                   </div>
                 </TabsContent>
 
+                {/* Property Details Tab - Same as before */}
                 <TabsContent value="details" className="p-6 pt-4 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <FormField form={form} name="PlotSize" label="Plot Size (sq ft)" type="number" placeholder="0.00" />
@@ -586,11 +679,12 @@ const PropertyForm: React.FC = () => {
                   </div>
                 </TabsContent>
 
+                {/* Enhanced Images Tab */}
                 <TabsContent value="images" className="p-6 pt-4 space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Property Images</h3>
-                      <div>
+                      <h3 className="text-lg font-medium">Images & Visual Content</h3>
+                      <div className="flex space-x-2">
                         <Input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" id="image-upload" />
                         <Label htmlFor="image-upload">
                           <Button type="button" variant="outline" className="cursor-pointer" asChild>
@@ -603,50 +697,111 @@ const PropertyForm: React.FC = () => {
                       </div>
                     </div>
 
+                    {imageAttachments.length > 0 && (
+                      <div className="bg-muted/20 rounded-lg p-4 space-y-3">
+                        <h4 className="text-sm font-medium">Quick Actions</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Select onValueChange={(value) => bulkSetDocType(parseInt(value), "Image")}>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Set all images type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {docTypes
+                                .filter((dt) => dt.Description.toLowerCase().includes("image") || dt.Description.toLowerCase().includes("photo"))
+                                .map((docType) => (
+                                  <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                    {docType.Description}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Select onValueChange={(value) => bulkSetDocType(parseInt(value), "Blueprint")}>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Set all plans type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {docTypes
+                                .filter((dt) => dt.Description.toLowerCase().includes("plan") || dt.Description.toLowerCase().includes("blueprint"))
+                                .map((docType) => (
+                                  <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                    {docType.Description}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
                     {imageAttachments.length === 0 ? (
                       <div className="text-center py-10 text-muted-foreground">
                         <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No images uploaded yet. Click "Upload Images" to add some.</p>
+                        <p>No images uploaded yet. Files will be automatically categorized when uploaded.</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {imageAttachments.map((attachment, index) => (
-                          <div key={index} className="relative group border rounded-lg overflow-hidden">
-                            <div className="aspect-square bg-muted">
-                              {attachment.preview || attachment.FilePath ? (
-                                <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <FileImage className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                              )}
+                          <div key={index} className="border rounded-lg overflow-hidden space-y-3 p-3">
+                            <div className="relative group">
+                              <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                                {attachment.preview || attachment.FilePath ? (
+                                  <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <FileImage className="h-8 w-8 text-muted-foreground" />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="absolute top-2 right-2 flex space-x-1">
+                                {attachment.IsMainImage && (
+                                  <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                                    <Star className="h-3 w-3" />
+                                  </Badge>
+                                )}
+                                <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
+                                  <Settings className="h-3 w-3" />
+                                </Button>
+                                <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(index)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
 
-                            <div className="absolute top-2 right-2 flex space-x-1">
-                              {attachment.IsMainImage && (
-                                <Badge className="bg-yellow-500 hover:bg-yellow-600">
-                                  <Star className="h-3 w-3" />
-                                </Badge>
-                              )}
-                              <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(index)}>
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium truncate">{attachment.DocumentName}</p>
 
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2">
-                              <p className="text-xs truncate">{attachment.DocumentName}</p>
-                              {attachment.DocTypeID > 0 ? (
-                                <Badge variant="secondary" className="text-xs mt-1">
-                                  {docTypes.find((dt) => dt.DocTypeID === attachment.DocTypeID)?.Description || "Unknown"}
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant={attachment.AttachmentType === "Image" ? "default" : "secondary"} className="text-xs">
+                                  {attachment.AttachmentType}
                                 </Badge>
-                              ) : (
-                                <Badge variant="destructive" className="text-xs mt-1">
-                                  Select Type
+                                <Badge variant="outline" className="text-xs">
+                                  {attachment.AttachmentCategory}
                                 </Badge>
-                              )}
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-xs">Document Type</Label>
+                                <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
+                                  <SelectTrigger className={`h-8 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
+                                      <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                        {docType.Description}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500">Document type is required</p>}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <Button type="button" size="sm" variant="outline" onClick={() => setMainImage(index)} disabled={attachment.IsMainImage}>
+                                  {attachment.IsMainImage ? "Main Image" : "Set as Main"}
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -655,10 +810,11 @@ const PropertyForm: React.FC = () => {
                   </div>
                 </TabsContent>
 
+                {/* Enhanced Documents Tab */}
                 <TabsContent value="documents" className="p-6 pt-4 space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Property Documents</h3>
+                      <h3 className="text-lg font-medium">Documents & Files</h3>
                       <div>
                         <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" multiple onChange={handleFileUpload} className="hidden" id="document-upload" />
                         <Label htmlFor="document-upload">
@@ -672,32 +828,74 @@ const PropertyForm: React.FC = () => {
                       </div>
                     </div>
 
+                    {documentAttachments.length > 0 && (
+                      <div className="bg-muted/20 rounded-lg p-4 space-y-3">
+                        <h4 className="text-sm font-medium">Quick Actions</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Select onValueChange={(value) => bulkSetDocType(parseInt(value), "Document")}>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Set all documents type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {docTypes
+                                .filter((dt) => dt.Description.toLowerCase().includes("document") || dt.Description.toLowerCase().includes("certificate"))
+                                .map((docType) => (
+                                  <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                    {docType.Description}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
                     {documentAttachments.length === 0 ? (
                       <div className="text-center py-10 text-muted-foreground">
                         <Paperclip className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No documents uploaded yet. Click "Upload Documents" to add some.</p>
+                        <p>No documents uploaded yet. Files will be automatically categorized when uploaded.</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         {documentAttachments.map((attachment, index) => (
                           <div key={index} className="border rounded-lg p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-3">
                                 <div className="flex items-center space-x-2">
                                   <Paperclip className="h-4 w-4 text-muted-foreground" />
                                   <span className="font-medium">{attachment.DocumentName}</span>
-                                  {attachment.DocTypeID > 0 ? (
-                                    <Badge variant="outline">{docTypes.find((dt) => dt.DocTypeID === attachment.DocTypeID)?.Description || "Unknown"}</Badge>
-                                  ) : (
-                                    <Badge variant="destructive">Select Type</Badge>
-                                  )}
+                                  <Badge variant={attachment.AttachmentType === "Certificate" ? "default" : "secondary"} className="text-xs">
+                                    {attachment.AttachmentType}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {attachment.AttachmentCategory}
+                                  </Badge>
                                 </div>
-                                <div className="mt-1 text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
+
+                                <div className="text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
+
+                                <div className="max-w-xs">
+                                  <Label className="text-xs">Document Type</Label>
+                                  <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
+                                    <SelectTrigger className={`h-8 mt-1 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
+                                        <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                          {docType.Description}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500 mt-1">Document type is required</p>}
+                                </div>
                               </div>
+
                               <div className="flex space-x-2">
                                 <Button type="button" size="sm" variant="outline" onClick={() => openAttachmentDialog(attachment)}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Edit
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Details
                                 </Button>
                                 <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => deleteAttachment(index)}>
                                   <Trash2 className="h-4 w-4" />
@@ -741,7 +939,7 @@ const PropertyForm: React.FC = () => {
         </form>
       </Form>
 
-      {/* Attachment Details Dialog */}
+      {/* Enhanced Attachment Details Dialog */}
       <Dialog open={isAttachmentDialogOpen} onOpenChange={closeAttachmentDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -766,7 +964,7 @@ const PropertyForm: React.FC = () => {
   );
 };
 
-// Attachment Details Form Component
+// Enhanced Attachment Details Form Component
 interface AttachmentDetailsFormProps {
   attachment: AttachmentFormData;
   docTypes: DocType[];
@@ -778,6 +976,8 @@ interface AttachmentDetailsFormProps {
 const AttachmentDetailsForm: React.FC<AttachmentDetailsFormProps> = ({ attachment, docTypes, onSave, onCancel, onSetMainImage }) => {
   const [formData, setFormData] = useState({
     DocTypeID: attachment.DocTypeID || 0,
+    AttachmentType: attachment.AttachmentType || "Other",
+    AttachmentCategory: attachment.AttachmentCategory || "Other",
     ImageCaption: attachment.ImageCaption || "",
     ImageAltText: attachment.ImageAltText || "",
     DocIssueDate: attachment.DocIssueDate || undefined,
@@ -790,10 +990,50 @@ const AttachmentDetailsForm: React.FC<AttachmentDetailsFormProps> = ({ attachmen
     onSave(formData);
   };
 
-  const isImage = attachment.AttachmentType === "Image" || attachment.FileContentType?.startsWith("image/");
+  const isImage = ["Image", "Blueprint"].includes(formData.AttachmentType) || attachment.FileContentType?.startsWith("image/");
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="attachmentType">Attachment Type</Label>
+          <Select value={formData.AttachmentType} onValueChange={(value: AttachmentFormData["AttachmentType"]) => setFormData((prev) => ({ ...prev, AttachmentType: value }))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Image">Image</SelectItem>
+              <SelectItem value="Document">Document</SelectItem>
+              <SelectItem value="Blueprint">Blueprint</SelectItem>
+              <SelectItem value="Certificate">Certificate</SelectItem>
+              <SelectItem value="Video">Video</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="attachmentCategory">Category</Label>
+          <Select
+            value={formData.AttachmentCategory}
+            onValueChange={(value: AttachmentFormData["AttachmentCategory"]) => setFormData((prev) => ({ ...prev, AttachmentCategory: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Primary">Primary</SelectItem>
+              <SelectItem value="Gallery">Gallery</SelectItem>
+              <SelectItem value="Floor Plan">Floor Plan</SelectItem>
+              <SelectItem value="Legal">Legal</SelectItem>
+              <SelectItem value="Marketing">Marketing</SelectItem>
+              <SelectItem value="Construction">Construction</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div>
         <Label htmlFor="docType">Document Type *</Label>
         <Select value={formData.DocTypeID.toString()} onValueChange={(value) => setFormData((prev) => ({ ...prev, DocTypeID: parseInt(value) }))}>
