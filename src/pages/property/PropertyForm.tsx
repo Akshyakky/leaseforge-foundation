@@ -6,8 +6,9 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw } from "lucide-react";
-import { propertyService, Property } from "@/services/propertyService";
+import { ArrowLeft, Loader2, Save, RotateCcw, Upload, X, FileImage, Paperclip, Star, Eye, Trash2 } from "lucide-react";
+import { propertyService, Property, PropertyAttachment, CreatePropertyRequest, UpdatePropertyRequest, NewPropertyAttachment } from "@/services/propertyService";
+import { docTypeService, DocType } from "@/services/docTypeService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +17,13 @@ import { useAppSelector } from "@/lib/hooks";
 import { countryService } from "@/services/countryService";
 import { cityService } from "@/services/cityService";
 import { unitRelatedService } from "@/services/unitRelatedService";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 // Create the schema for property form validation
 const propertySchema = z.object({
@@ -42,6 +50,12 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
+interface AttachmentFormData extends Omit<PropertyAttachment, "PropertyID"> {
+  file?: File;
+  preview?: string;
+  isNew?: boolean;
+}
+
 const PropertyForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
@@ -58,7 +72,14 @@ const PropertyForm: React.FC = () => {
   const [countries, setCountries] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
+
+  // Attachment management
+  const [attachments, setAttachments] = useState<AttachmentFormData[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [selectedAttachment, setSelectedAttachment] = useState<AttachmentFormData | null>(null);
+  const [isAttachmentDialogOpen, setIsAttachmentDialogOpen] = useState(false);
 
   // Initialize form
   const form = useForm<PropertyFormValues>({
@@ -91,39 +112,48 @@ const PropertyForm: React.FC = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [countriesData, communitiesData] = await Promise.all([
+        const [countriesData, communitiesData, docTypesData] = await Promise.all([
           countryService.getCountriesForDropdown(),
-          // Fetch communities data from the API
           unitRelatedService.getCommunitiesForDropdown(),
+          docTypeService.getAllDocTypes(),
         ]);
 
         setCountries(countriesData);
         setCommunities(communitiesData);
+        setDocTypes(docTypesData);
 
         // If editing, fetch the property data
         if (isEdit && id) {
           const propertyData = await propertyService.getPropertyById(parseInt(id));
 
           if (propertyData) {
-            setProperty(propertyData);
+            setProperty(propertyData.property);
 
             // Format dates for form
             const formattedData = {
-              ...propertyData,
-              ProjectStartDate: propertyData.ProjectStartDate ? new Date(propertyData.ProjectStartDate) : null,
-              ProjectCompletionDate: propertyData.ProjectCompletionDate ? new Date(propertyData.ProjectCompletionDate) : null,
-              CountryID: propertyData.CountryID?.toString() || "",
-              CityID: propertyData.CityID?.toString() || "",
-              CommunityID: propertyData.CommunityID?.toString() || "",
+              ...propertyData.property,
+              ProjectStartDate: propertyData.property.ProjectStartDate ? new Date(propertyData.property.ProjectStartDate) : null,
+              ProjectCompletionDate: propertyData.property.ProjectCompletionDate ? new Date(propertyData.property.ProjectCompletionDate) : null,
+              CountryID: propertyData.property.CountryID?.toString() || "",
+              CityID: propertyData.property.CityID?.toString() || "",
+              CommunityID: propertyData.property.CommunityID?.toString() || "",
             };
 
             // Set form values
             form.reset(formattedData as any);
 
+            // Set attachments
+            setAttachments(
+              propertyData.attachments.map((att) => ({
+                ...att,
+                isNew: false,
+              }))
+            );
+
             // If country is set, fetch cities
-            if (propertyData.CountryID) {
-              setSelectedCountryId(propertyData.CountryID.toString());
-              const citiesData = await cityService.getCitiesByCountry(propertyData.CountryID);
+            if (propertyData.property.CountryID) {
+              setSelectedCountryId(propertyData.property.CountryID.toString());
+              const citiesData = await cityService.getCitiesByCountry(propertyData.property.CountryID);
               setCities(citiesData);
             }
           } else {
@@ -161,6 +191,65 @@ const PropertyForm: React.FC = () => {
     fetchCities();
   }, [selectedCountryId]);
 
+  // Handle file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const newAttachment: AttachmentFormData = {
+          DocumentName: file.name,
+          DocTypeID: 0, // Will be selected by user
+          FileContent: e.target?.result as ArrayBuffer,
+          FileContentType: file.type,
+          FileSize: file.size,
+          AttachmentType: file.type.startsWith("image/") ? "Image" : "Document",
+          IsMainImage: false,
+          IsPublic: true,
+          file: file,
+          preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+          isNew: true,
+        };
+
+        setAttachments((prev) => [...prev, newAttachment]);
+      };
+
+      if (file.type.startsWith("image/")) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    });
+
+    // Reset input
+    event.target.value = "";
+  };
+
+  // Handle attachment update
+  const updateAttachment = (index: number, updates: Partial<AttachmentFormData>) => {
+    setAttachments((prev) => prev.map((att, i) => (i === index ? { ...att, ...updates } : att)));
+  };
+
+  // Handle attachment deletion
+  const deleteAttachment = (index: number) => {
+    const attachment = attachments[index];
+    if (attachment.preview) {
+      URL.revokeObjectURL(attachment.preview);
+    }
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Set main image
+  const setMainImage = (index: number) => {
+    setAttachments((prev) =>
+      prev.map((att, i) => ({
+        ...att,
+        IsMainImage: i === index,
+      }))
+    );
+  };
+
   // Handle form submission
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user) {
@@ -194,12 +283,36 @@ const PropertyForm: React.FC = () => {
         Remark: data.Remark,
       };
 
+      // Prepare attachments data (exclude existing ones that haven't changed)
+      const attachmentsData: NewPropertyAttachment[] = attachments
+        .filter((att) => att.isNew && att.DocTypeID > 0)
+        .map((att) => ({
+          DocTypeID: att.DocTypeID,
+          DocumentName: att.DocumentName,
+          FileContent: att.FileContent,
+          FileContentType: att.FileContentType,
+          FileSize: att.FileSize,
+          AttachmentType: att.AttachmentType,
+          IsMainImage: att.IsMainImage,
+          ImageCaption: att.ImageCaption,
+          ImageAltText: att.ImageAltText,
+          DocIssueDate: att.DocIssueDate,
+          DocExpiryDate: att.DocExpiryDate,
+          IsPublic: att.IsPublic,
+          Remarks: att.Remarks,
+        }));
+
       if (isEdit && property) {
         // Update existing property
-        const success = await propertyService.updateProperty({
-          ...propertyData,
-          PropertyID: property.PropertyID,
-        });
+        const request: UpdatePropertyRequest = {
+          property: {
+            ...propertyData,
+            PropertyID: property.PropertyID,
+          },
+          attachments: attachmentsData,
+        };
+
+        const success = await propertyService.updateProperty(request);
 
         if (success) {
           toast.success("Property updated successfully");
@@ -209,7 +322,12 @@ const PropertyForm: React.FC = () => {
         }
       } else {
         // Create new property
-        const newPropertyId = await propertyService.createProperty(propertyData);
+        const request: CreatePropertyRequest = {
+          property: propertyData,
+          attachments: attachmentsData,
+        };
+
+        const newPropertyId = await propertyService.createProperty(request);
 
         if (newPropertyId) {
           toast.success("Property created successfully");
@@ -246,12 +364,36 @@ const PropertyForm: React.FC = () => {
       } as any);
     } else {
       form.reset();
+      setAttachments([]);
     }
   };
 
   // Cancel and go back
   const handleCancel = () => {
     navigate("/properties");
+  };
+
+  // Open attachment dialog
+  const openAttachmentDialog = (attachment: AttachmentFormData) => {
+    setSelectedAttachment(attachment);
+    setIsAttachmentDialogOpen(true);
+  };
+
+  // Close attachment dialog
+  const closeAttachmentDialog = () => {
+    setSelectedAttachment(null);
+    setIsAttachmentDialogOpen(false);
+  };
+
+  // Save attachment details
+  const saveAttachmentDetails = (details: Partial<AttachmentFormData>) => {
+    if (!selectedAttachment) return;
+
+    const index = attachments.findIndex((att) => att === selectedAttachment);
+    if (index >= 0) {
+      updateAttachment(index, details);
+    }
+    closeAttachmentDialog();
   };
 
   if (initialLoading) {
@@ -261,6 +403,9 @@ const PropertyForm: React.FC = () => {
       </div>
     );
   }
+
+  const imageAttachments = attachments.filter((att) => att.AttachmentType === "Image" || att.FileContentType?.startsWith("image/"));
+  const documentAttachments = attachments.filter((att) => att.AttachmentType !== "Image" && !att.FileContentType?.startsWith("image/"));
 
   return (
     <div className="space-y-6">
@@ -282,9 +427,11 @@ const PropertyForm: React.FC = () => {
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="pt-2">
                 <div className="px-6">
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="basic">Basic Information</TabsTrigger>
                     <TabsTrigger value="details">Property Details</TabsTrigger>
+                    <TabsTrigger value="images">Images ({imageAttachments.length})</TabsTrigger>
+                    <TabsTrigger value="documents">Documents ({documentAttachments.length})</TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -391,6 +538,131 @@ const PropertyForm: React.FC = () => {
                     <FormField form={form} name="Remark" label="Remarks" placeholder="Add any additional information about the property" type="textarea" />
                   </div>
                 </TabsContent>
+
+                <TabsContent value="images" className="p-6 pt-4 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Property Images</h3>
+                      <div>
+                        <Input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" id="image-upload" />
+                        <Label htmlFor="image-upload">
+                          <Button type="button" variant="outline" className="cursor-pointer" asChild>
+                            <span>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload Images
+                            </span>
+                          </Button>
+                        </Label>
+                      </div>
+                    </div>
+
+                    {imageAttachments.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No images uploaded yet. Click "Upload Images" to add some.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {imageAttachments.map((attachment, index) => (
+                          <div key={index} className="relative group border rounded-lg overflow-hidden">
+                            <div className="aspect-square bg-muted">
+                              {attachment.preview || attachment.FilePath ? (
+                                <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <FileImage className="h-8 w-8 text-muted-foreground" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="absolute top-2 right-2 flex space-x-1">
+                              {attachment.IsMainImage && (
+                                <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                                  <Star className="h-3 w-3" />
+                                </Badge>
+                              )}
+                              <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(index)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2">
+                              <p className="text-xs truncate">{attachment.DocumentName}</p>
+                              {attachment.DocTypeID > 0 ? (
+                                <Badge variant="secondary" className="text-xs mt-1">
+                                  {docTypes.find((dt) => dt.DocTypeID === attachment.DocTypeID)?.Description || "Unknown"}
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-xs mt-1">
+                                  Select Type
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="documents" className="p-6 pt-4 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Property Documents</h3>
+                      <div>
+                        <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" multiple onChange={handleFileUpload} className="hidden" id="document-upload" />
+                        <Label htmlFor="document-upload">
+                          <Button type="button" variant="outline" className="cursor-pointer" asChild>
+                            <span>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload Documents
+                            </span>
+                          </Button>
+                        </Label>
+                      </div>
+                    </div>
+
+                    {documentAttachments.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <Paperclip className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No documents uploaded yet. Click "Upload Documents" to add some.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {documentAttachments.map((attachment, index) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-medium">{attachment.DocumentName}</span>
+                                  {attachment.DocTypeID > 0 ? (
+                                    <Badge variant="outline">{docTypes.find((dt) => dt.DocTypeID === attachment.DocTypeID)?.Description || "Unknown"}</Badge>
+                                  ) : (
+                                    <Badge variant="destructive">Select Type</Badge>
+                                  )}
+                                </div>
+                                <div className="mt-1 text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => openAttachmentDialog(attachment)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Edit
+                                </Button>
+                                <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => deleteAttachment(index)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
               </Tabs>
 
               <CardFooter className="flex justify-between border-t p-6">
@@ -421,6 +693,164 @@ const PropertyForm: React.FC = () => {
           </div>
         </form>
       </Form>
+
+      {/* Attachment Details Dialog */}
+      <Dialog open={isAttachmentDialogOpen} onOpenChange={closeAttachmentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Attachment Details</DialogTitle>
+          </DialogHeader>
+          {selectedAttachment && (
+            <AttachmentDetailsForm
+              attachment={selectedAttachment}
+              docTypes={docTypes}
+              onSave={saveAttachmentDetails}
+              onCancel={closeAttachmentDialog}
+              onSetMainImage={() => {
+                const index = attachments.findIndex((att) => att === selectedAttachment);
+                if (index >= 0) setMainImage(index);
+                closeAttachmentDialog();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Attachment Details Form Component
+interface AttachmentDetailsFormProps {
+  attachment: AttachmentFormData;
+  docTypes: DocType[];
+  onSave: (details: Partial<AttachmentFormData>) => void;
+  onCancel: () => void;
+  onSetMainImage: () => void;
+}
+
+const AttachmentDetailsForm: React.FC<AttachmentDetailsFormProps> = ({ attachment, docTypes, onSave, onCancel, onSetMainImage }) => {
+  const [formData, setFormData] = useState({
+    DocTypeID: attachment.DocTypeID || 0,
+    ImageCaption: attachment.ImageCaption || "",
+    ImageAltText: attachment.ImageAltText || "",
+    DocIssueDate: attachment.DocIssueDate || undefined,
+    DocExpiryDate: attachment.DocExpiryDate || undefined,
+    IsPublic: attachment.IsPublic !== false,
+    Remarks: attachment.Remarks || "",
+  });
+
+  const handleSave = () => {
+    onSave(formData);
+  };
+
+  const isImage = attachment.AttachmentType === "Image" || attachment.FileContentType?.startsWith("image/");
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="docType">Document Type *</Label>
+        <Select value={formData.DocTypeID.toString()} onValueChange={(value) => setFormData((prev) => ({ ...prev, DocTypeID: parseInt(value) }))}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select document type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">Select Type</SelectItem>
+            {docTypes.map((docType) => (
+              <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                {docType.Description}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isImage && (
+        <>
+          <div>
+            <Label htmlFor="caption">Image Caption</Label>
+            <Input
+              id="caption"
+              value={formData.ImageCaption}
+              onChange={(e) => setFormData((prev) => ({ ...prev, ImageCaption: e.target.value }))}
+              placeholder="Enter image caption"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="altText">Alt Text</Label>
+            <Input
+              id="altText"
+              value={formData.ImageAltText}
+              onChange={(e) => setFormData((prev) => ({ ...prev, ImageAltText: e.target.value }))}
+              placeholder="Enter alt text for accessibility"
+            />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button type="button" variant="outline" onClick={onSetMainImage}>
+              <Star className="mr-2 h-4 w-4" />
+              Set as Main Image
+            </Button>
+          </div>
+        </>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="issueDate">Issue Date</Label>
+          <Input
+            id="issueDate"
+            type="date"
+            value={formData.DocIssueDate ? new Date(formData.DocIssueDate).toISOString().split("T")[0] : ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                DocIssueDate: e.target.value ? new Date(e.target.value) : undefined,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="expiryDate">Expiry Date</Label>
+          <Input
+            id="expiryDate"
+            type="date"
+            value={formData.DocExpiryDate ? new Date(formData.DocExpiryDate).toISOString().split("T")[0] : ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                DocExpiryDate: e.target.value ? new Date(e.target.value) : undefined,
+              }))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox id="isPublic" checked={formData.IsPublic} onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, IsPublic: checked as boolean }))} />
+        <Label htmlFor="isPublic">Make this attachment publicly visible</Label>
+      </div>
+
+      <div>
+        <Label htmlFor="remarks">Remarks</Label>
+        <Textarea
+          id="remarks"
+          value={formData.Remarks}
+          onChange={(e) => setFormData((prev) => ({ ...prev, Remarks: e.target.value }))}
+          placeholder="Enter any additional remarks"
+          rows={3}
+        />
+      </div>
+
+      <div className="flex justify-end space-x-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleSave} disabled={formData.DocTypeID === 0}>
+          Save Details
+        </Button>
+      </div>
     </div>
   );
 };

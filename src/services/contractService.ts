@@ -29,7 +29,7 @@ class ContractService extends BaseService {
    * @param file - The file to convert
    * @returns Promise with base64 string
    */
-  private async fileToBase64(file: File): Promise<string> {
+  public async fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);

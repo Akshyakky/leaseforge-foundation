@@ -71,6 +71,9 @@ export interface PropertyAttachment {
   UpdatedOn?: string;
 }
 
+// Type for new attachments without PropertyID
+export type NewPropertyAttachment = Omit<PropertyAttachment, "PropertyID">;
+
 export interface PropertyWithAttachments {
   property: Property;
   attachments: PropertyAttachment[];
@@ -84,12 +87,12 @@ export interface PropertySearchFilters {
 
 export interface CreatePropertyRequest {
   property: Partial<Property>;
-  attachments?: PropertyAttachment[];
+  attachments?: NewPropertyAttachment[];
 }
 
 export interface UpdatePropertyRequest {
   property: Partial<Property>;
-  attachments?: PropertyAttachment[];
+  attachments?: NewPropertyAttachment[];
 }
 
 /**
@@ -130,10 +133,10 @@ class PropertyService extends BaseService {
 
     const response = await this.execute<{ property: Property[]; attachments: PropertyAttachment[] }>(request);
 
-    if (response.success && response.data?.property && response.data.property.length > 0) {
+    if (response.success && response.table1 && response.table1.length > 0) {
       return {
-        property: response.data.property[0],
-        attachments: response.data.attachments || [],
+        property: response.table1[0],
+        attachments: response.table2 || [],
       };
     }
 

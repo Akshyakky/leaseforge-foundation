@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Building, Plus, MapPin, Calendar } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Building, Plus, MapPin, Calendar, FileImage, Paperclip } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { propertyService, Property } from "@/services/propertyService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -42,12 +42,37 @@ const PropertyList: React.FC = () => {
     fetchFilterData();
   }, []);
 
-  // Fetch all properties
+  // Fetch all properties with image counts
   const fetchProperties = async (search?: string, filters?: any) => {
     try {
       setLoading(true);
-      const propertiesData = await propertyService.searchProperties(search, filters);
-      setProperties(propertiesData);
+      const propertiesData = await propertyService.getPropertiesWithImageCounts();
+
+      // Apply client-side filtering if search or filters are provided
+      let filteredProperties = propertiesData;
+
+      if (search && search.length >= 2) {
+        filteredProperties = filteredProperties.filter(
+          (property) =>
+            property.PropertyName.toLowerCase().includes(search.toLowerCase()) ||
+            property.PropertyNo?.toLowerCase().includes(search.toLowerCase()) ||
+            property.Location?.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      if (filters?.countryId) {
+        filteredProperties = filteredProperties.filter((property) => property.CountryID === filters.countryId);
+      }
+
+      if (filters?.cityId) {
+        filteredProperties = filteredProperties.filter((property) => property.CityID === filters.cityId);
+      }
+
+      if (filters?.communityId) {
+        filteredProperties = filteredProperties.filter((property) => property.CommunityID === filters.communityId);
+      }
+
+      setProperties(filteredProperties);
     } catch (error) {
       console.error("Error fetching properties:", error);
       toast.error("Failed to load properties");
@@ -191,6 +216,37 @@ const PropertyList: React.FC = () => {
     }
   };
 
+  // Format attachment counts for display
+  const formatAttachmentInfo = (property: Property) => {
+    const imageCount = property.ImageCount || 0;
+    const attachmentCount = property.AttachmentCount || 0;
+    const totalCount = property.TotalAttachmentCount || 0;
+
+    if (totalCount === 0) {
+      return { text: "No attachments", icon: null, variant: "outline" as const };
+    }
+
+    if (imageCount > 0 && attachmentCount > 0) {
+      return {
+        text: `${imageCount} images, ${attachmentCount} docs`,
+        icon: <FileImage className="h-3 w-3 mr-1" />,
+        variant: "default" as const,
+      };
+    } else if (imageCount > 0) {
+      return {
+        text: `${imageCount} image${imageCount > 1 ? "s" : ""}`,
+        icon: <FileImage className="h-3 w-3 mr-1" />,
+        variant: "default" as const,
+      };
+    } else {
+      return {
+        text: `${attachmentCount} document${attachmentCount > 1 ? "s" : ""}`,
+        icon: <Paperclip className="h-3 w-3 mr-1" />,
+        variant: "secondary" as const,
+      };
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -276,69 +332,85 @@ const PropertyList: React.FC = () => {
                     <TableHead>Project Dates</TableHead>
                     <TableHead>Plot Details</TableHead>
                     <TableHead>Units</TableHead>
+                    <TableHead>Attachments</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {properties.map((property) => (
-                    <TableRow key={property.PropertyID}>
-                      <TableCell>
-                        <div className="font-medium">{property.PropertyName}</div>
-                        <div className="text-sm text-muted-foreground">{property.PropertyNo || "No property number"}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col space-y-1">
-                          {property.Location && (
-                            <div className="text-sm flex items-center">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              {property.Location}
+                  {properties.map((property) => {
+                    const attachmentInfo = formatAttachmentInfo(property);
+                    return (
+                      <TableRow key={property.PropertyID}>
+                        <TableCell>
+                          <div className="font-medium">{property.PropertyName}</div>
+                          <div className="text-sm text-muted-foreground">{property.PropertyNo || "No property number"}</div>
+                          {property.MainImageName && (
+                            <div className="text-xs text-blue-600 mt-1 flex items-center">
+                              <FileImage className="h-3 w-3 mr-1" />
+                              Main image: {property.MainImageName}
                             </div>
                           )}
-                          <div className="text-sm">{[property.CityName, property.CountryName].filter(Boolean).join(", ") || "Location not specified"}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col space-y-1 text-sm">
-                          <div className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Start: {formatDate(property.ProjectStartDate)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col space-y-1">
+                            {property.Location && (
+                              <div className="text-sm flex items-center">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {property.Location}
+                              </div>
+                            )}
+                            <div className="text-sm">{[property.CityName, property.CountryName].filter(Boolean).join(", ") || "Location not specified"}</div>
                           </div>
-                          <div className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Completion: {formatDate(property.ProjectCompletionDate)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col space-y-1 text-sm">
+                            <div className="flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Start: {formatDate(property.ProjectStartDate)}
+                            </div>
+                            <div className="flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Completion: {formatDate(property.ProjectCompletionDate)}
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col space-y-1 text-sm">
-                          {property.PlotNo && <div>Plot: {property.PlotNo}</div>}
-                          {property.PlotSize && <div>Size: {property.PlotSize.toLocaleString()} sq.ft</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">
-                          {property.TotalUnit ? `${property.TotalUnit} ${property.TotalUnit === 1 ? "Unit" : "Units"}` : "No units"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewProperty(property.PropertyID)}>View details</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditProperty(property.PropertyID)}>Edit</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(property)}>
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col space-y-1 text-sm">
+                            {property.PlotNo && <div>Plot: {property.PlotNo}</div>}
+                            {property.PlotSize && <div>Size: {property.PlotSize.toLocaleString()} sq.ft</div>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-normal">
+                            {property.TotalUnit ? `${property.TotalUnit} ${property.TotalUnit === 1 ? "Unit" : "Units"}` : "No units"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={attachmentInfo.variant} className="font-normal">
+                            {attachmentInfo.icon}
+                            {attachmentInfo.text}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleViewProperty(property.PropertyID)}>View details</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditProperty(property.PropertyID)}>Edit</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(property)}>
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -353,7 +425,7 @@ const PropertyList: React.FC = () => {
         title="Delete Property"
         description={
           selectedProperty
-            ? `Are you sure you want to delete "${selectedProperty.PropertyName}"? This will also delete all associated data. This action cannot be undone.`
+            ? `Are you sure you want to delete "${selectedProperty.PropertyName}"? This will also delete all associated data and attachments. This action cannot be undone.`
             : "Are you sure you want to delete this property?"
         }
         cancelText="Cancel"
