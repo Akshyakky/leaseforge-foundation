@@ -1,11 +1,12 @@
-// src/pages/UnitMaster/UnitForm.tsx - Enhanced with Clone Mode Support and Fixed Lease Calculations
+// src/pages/UnitMaster/UnitForm.tsx - Enhanced with Attachments Support
 import { useState, useEffect } from "react";
 import { UnitFormProps, ContactRow } from "./types";
-import { Unit, UnitContact } from "../../services/unitService";
+import { Unit, UnitContact, UnitAttachment } from "../../services/unitService";
 import { Property } from "../../services/propertyService";
+import { DocType } from "../../services/docTypeService";
 import { DEFAULT_FORM_VALUES, UNIT_STATUS_OPTIONS, UNIT_TABS } from "./constants";
 import { UnitContacts } from "./UnitContacts";
-import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2, Copy } from "lucide-react";
+import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2, Copy, Upload, X, FileImage, Paperclip, Star, Eye, Trash2, Settings } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,17 +14,27 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
 import { unitDropdownService } from "../../services/unitDropdownService";
 import { propertyService } from "../../services/propertyService";
 import { unitService } from "../../services/unitService";
+import { docTypeService } from "../../services/docTypeService";
 import { cityService, countryService } from "@/services";
+
+// Enhanced UNIT_TABS to include attachments
+const ENHANCED_UNIT_TABS = {
+  ...UNIT_TABS,
+  ATTACHMENTS: "attachments",
+};
 
 // Define the form validation schema
 const unitFormSchema = z.object({
@@ -69,6 +80,15 @@ const unitFormSchema = z.object({
 
 type UnitFormValues = z.infer<typeof unitFormSchema>;
 
+// Enhanced attachment interface with form data
+interface AttachmentFormData extends Omit<UnitAttachment, "UnitID" | "UnitAttachmentID"> {
+  file?: File;
+  preview?: string;
+  isNew?: boolean;
+  AttachmentType?: "Image" | "Document" | "Blueprint" | "Certificate" | "Video" | "Other";
+  AttachmentCategory?: "Primary" | "Gallery" | "Floor Plan" | "Legal" | "Marketing" | "Construction" | "Other";
+}
+
 // Property Summary Interface
 interface PropertySummary {
   property: Property | null;
@@ -78,6 +98,62 @@ interface PropertySummary {
   occupiedUnits: number;
   nextSuggestedUnitNo: string;
 }
+
+// Smart categorization based on file type
+const getSmartAttachmentInfo = (
+  file: File
+): {
+  type: AttachmentFormData["AttachmentType"];
+  category: AttachmentFormData["AttachmentCategory"];
+  suggestedDocTypes: number[];
+} => {
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
+  const fileExtension = fileName.split(".").pop() || "";
+
+  // Image files
+  if (fileType.startsWith("image/")) {
+    if (fileName.includes("floor") || fileName.includes("plan") || fileName.includes("layout")) {
+      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [1, 2] };
+    }
+    if (fileName.includes("main") || fileName.includes("cover") || fileName.includes("primary")) {
+      return { type: "Image", category: "Primary", suggestedDocTypes: [1] };
+    }
+    return { type: "Image", category: "Gallery", suggestedDocTypes: [1, 2] };
+  }
+
+  // Video files
+  if (fileType.startsWith("video/")) {
+    return { type: "Video", category: "Marketing", suggestedDocTypes: [3] };
+  }
+
+  // PDF files
+  if (fileType === "application/pdf" || fileExtension === "pdf") {
+    if (fileName.includes("certificate") || fileName.includes("cert")) {
+      return { type: "Certificate", category: "Legal", suggestedDocTypes: [4, 5] };
+    }
+    if (fileName.includes("title") || fileName.includes("deed") || fileName.includes("legal")) {
+      return { type: "Document", category: "Legal", suggestedDocTypes: [4, 5, 6] };
+    }
+    if (fileName.includes("plan") || fileName.includes("blueprint") || fileName.includes("drawing")) {
+      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [7, 8] };
+    }
+    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10] };
+  }
+
+  // Office documents
+  if (fileType.includes("word") || fileType.includes("excel") || fileType.includes("powerpoint") || ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(fileExtension)) {
+    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10, 11] };
+  }
+
+  // CAD files
+  if (["dwg", "dxf", "autocad"].includes(fileExtension)) {
+    return { type: "Blueprint", category: "Construction", suggestedDocTypes: [7, 8] };
+  }
+
+  // Default fallback
+  return { type: "Other", category: "Other", suggestedDocTypes: [12] };
+};
 
 // Property Information Display Component
 const PropertyInfoDisplay: React.FC<{ propertySummary: PropertySummary | null }> = ({ propertySummary }) => {
@@ -127,7 +203,6 @@ const PropertyInfoDisplay: React.FC<{ propertySummary: PropertySummary | null }>
             <div className="font-semibold text-green-600">{availableUnits}</div>
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <div className="text-sm font-medium text-gray-600 mb-2">Location Details</div>
@@ -257,12 +332,16 @@ const createClonedUnitData = (sourceUnit: Unit): Partial<Unit> => {
 };
 
 export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSave, onCancel }) => {
-  const [activeTab, setActiveTab] = useState(UNIT_TABS.GENERAL);
+  const [activeTab, setActiveTab] = useState(ENHANCED_UNIT_TABS.GENERAL);
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentFormData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPropertyLoading, setIsPropertyLoading] = useState(false);
   const [cities, setCities] = useState<{ CityID: number; CityName: string }[]>([]);
   const [propertySummary, setPropertySummary] = useState<PropertySummary | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<AttachmentFormData | null>(null);
+  const [isAttachmentDialogOpen, setIsAttachmentDialogOpen] = useState(false);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
   const [dropdownData, setDropdownData] = useState({
     properties: [],
     unitTypes: [],
@@ -281,13 +360,10 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
   // Prepare default values for the form
   const getDefaultValues = (): UnitFormValues => {
     if (mode.isClone && sourceUnit) {
-      // Use cloned data for clone mode
       return createClonedUnitData(sourceUnit) as UnitFormValues;
     } else if (mode.isEdit && unit) {
-      // Use existing unit data for edit mode
       return { ...DEFAULT_FORM_VALUES, ...unit } as UnitFormValues;
     } else {
-      // Use default values for create mode
       return DEFAULT_FORM_VALUES as UnitFormValues;
     }
   };
@@ -309,24 +385,41 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     form.reset(formValues);
   }, [unit, sourceUnit, mode.isEdit, mode.isCreate, mode.isClone, form]);
 
-  // Load dropdown data
+  // Load dropdown data and initialize attachments
   useEffect(() => {
-    const loadDropdownData = async () => {
+    const loadInitialData = async () => {
       try {
         setIsLoading(true);
-        const allDropdowns = await unitDropdownService.getAllDropdownData();
-        const countries = await countryService.getCountriesForDropdown();
+        const [allDropdowns, countries, docTypesData] = await Promise.all([
+          unitDropdownService.getAllDropdownData(),
+          countryService.getCountriesForDropdown(),
+          docTypeService.getAllDocTypes(),
+        ]);
 
         setDropdownData({
           ...allDropdowns,
           countries,
           cities: [],
         });
+        setDocTypes(docTypesData);
+
+        // Load existing attachments if editing
+        if (mode.isEdit && unit?.UnitID) {
+          const existingAttachments = await unitService.getUnitAttachments(unit.UnitID);
+          setAttachments(
+            existingAttachments.map((att) => ({
+              ...att,
+              AttachmentType: (att.AttachmentType as AttachmentFormData["AttachmentType"]) || "Other",
+              AttachmentCategory: (att.AttachmentCategory as AttachmentFormData["AttachmentCategory"]) || "Other",
+              isNew: false,
+            }))
+          );
+        }
       } catch (error) {
-        console.error("Error loading dropdown data:", error);
+        console.error("Error loading initial data:", error);
         toast({
           title: "Error",
-          description: "Failed to load dropdown data. Please try again later.",
+          description: "Failed to load form data. Please try again later.",
           variant: "destructive",
         });
       } finally {
@@ -334,8 +427,127 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
       }
     };
 
-    loadDropdownData();
-  }, []);
+    loadInitialData();
+  }, [mode.isEdit, unit]);
+
+  // Enhanced file upload with smart categorization
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        let base64Content = "";
+
+        if (e.target?.result) {
+          if (typeof e.target.result === "string") {
+            base64Content = e.target.result.split(",")[1];
+          } else {
+            const arrayBuffer = e.target.result as ArrayBuffer;
+            base64Content = arrayBufferToBase64(arrayBuffer);
+          }
+        }
+
+        // Get smart attachment info
+        const smartInfo = getSmartAttachmentInfo(file);
+
+        // Find the best matching doc type
+        const suggestedDocType =
+          smartInfo.suggestedDocTypes.find((id) => docTypes.some((dt) => dt.DocTypeID === id)) ||
+          smartInfo.suggestedDocTypes[0] ||
+          (docTypes.length > 0 ? docTypes[0].DocTypeID : 0);
+
+        const newAttachment: AttachmentFormData = {
+          DocumentName: file.name,
+          DocTypeID: suggestedDocType,
+          FileContent: base64Content,
+          FileContentType: file.type,
+          FileSize: file.size,
+          AttachmentType: smartInfo.type,
+          AttachmentCategory: smartInfo.category,
+          IsMainImage: false,
+          IsPublic: true,
+          file: file,
+          preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+          isNew: true,
+        };
+
+        setAttachments((prev) => [...prev, newAttachment]);
+
+        toast({
+          title: "File uploaded",
+          description: `${file.name} categorized as ${smartInfo.type} - ${smartInfo.category}`,
+        });
+      };
+
+      reader.onerror = (error) => {
+        console.error("Error reading file:", error);
+        toast({
+          title: "Error",
+          description: `Failed to read file: ${file.name}`,
+          variant: "destructive",
+        });
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    // Reset input
+    event.target.value = "";
+  };
+
+  // Helper function to convert ArrayBuffer to base64 string
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  };
+
+  // Quick update attachment inline
+  const updateAttachmentInline = (index: number, field: keyof AttachmentFormData, value: any) => {
+    setAttachments((prev) => prev.map((att, i) => (i === index ? { ...att, [field]: value } : att)));
+  };
+
+  // Handle attachment update
+  const updateAttachment = (index: number, updates: Partial<AttachmentFormData>) => {
+    setAttachments((prev) => prev.map((att, i) => (i === index ? { ...att, ...updates } : att)));
+  };
+
+  // Handle attachment deletion
+  const deleteAttachment = (index: number) => {
+    const attachment = attachments[index];
+    if (attachment.preview) {
+      URL.revokeObjectURL(attachment.preview);
+    }
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Set main image
+  const setMainImage = (index: number) => {
+    setAttachments((prev) =>
+      prev.map((att, i) => ({
+        ...att,
+        IsMainImage: i === index,
+      }))
+    );
+  };
+
+  // Get filtered doc types based on attachment type
+  const getFilteredDocTypes = (attachmentType: AttachmentFormData["AttachmentType"]) => {
+    return docTypes.filter((dt) => {
+      // Implement filtering logic based on your doc type structure
+      return true;
+    });
+  };
+
+  // Bulk actions for attachments
+  const bulkSetDocType = (docTypeId: number, attachmentType?: AttachmentFormData["AttachmentType"]) => {
+    setAttachments((prev) => prev.map((att) => (!attachmentType || att.AttachmentType === attachmentType ? { ...att, DocTypeID: docTypeId } : att)));
+  };
 
   // Enhanced property selection handler
   const handlePropertyChange = async (propertyId: number) => {
@@ -345,52 +557,45 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
       setIsPropertyLoading(true);
 
       try {
-        // Fetch comprehensive property information
         const [propertyDetails, existingUnits, floors] = await Promise.all([
           propertyService.getPropertyById(propertyId),
           unitService.getUnitsByProperty(propertyId),
           unitDropdownService.getFloors(propertyId),
         ]);
 
-        // Update floors dropdown
         setDropdownData((prev) => ({
           ...prev,
           floors,
         }));
 
         if (propertyDetails) {
-          // Auto-populate location fields only if not in clone mode with different property
           if (!mode.isClone || (mode.isClone && sourceUnit && sourceUnit.PropertyID === propertyId)) {
-            if (propertyDetails.CountryID) {
-              form.setValue("CountryID", propertyDetails.CountryID);
+            if (propertyDetails.property.CountryID) {
+              form.setValue("CountryID", propertyDetails.property.CountryID);
 
-              // Load cities for the property's country
-              const cityResponse = await cityService.getCitiesByCountry(propertyDetails.CountryID);
+              const cityResponse = await cityService.getCitiesByCountry(propertyDetails.property.CountryID);
               setCities(cityResponse);
 
               setTimeout(() => {
-                if (propertyDetails.CityID) {
-                  form.setValue("CityID", propertyDetails.CityID);
+                if (propertyDetails.property.CityID) {
+                  form.setValue("CityID", propertyDetails.property.CityID);
                 }
               }, 100);
             }
 
-            if (propertyDetails.CommunityID) {
-              form.setValue("CommunityID", propertyDetails.CommunityID);
+            if (propertyDetails.property.CommunityID) {
+              form.setValue("CommunityID", propertyDetails.property.CommunityID);
             }
           }
 
-          // Calculate property statistics
           const totalUnits = existingUnits.length;
           const availableUnits = existingUnits.filter((unit) => unit.UnitStatus === "Available").length;
           const occupiedUnits = totalUnits - availableUnits;
 
-          // Generate suggested unit number
-          const nextSuggestedUnitNo = generateNextUnitNumber(existingUnits, propertyDetails);
+          const nextSuggestedUnitNo = generateNextUnitNumber(existingUnits, propertyDetails.property);
 
-          // Set property summary
           setPropertySummary({
-            property: propertyDetails,
+            property: propertyDetails.property,
             existingUnits,
             totalUnits,
             availableUnits,
@@ -398,7 +603,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
             nextSuggestedUnitNo,
           });
 
-          // Auto-suggest unit number for new units (including clones)
           if ((mode.isCreate || mode.isClone) && nextSuggestedUnitNo && !form.getValues("UnitNo")) {
             form.setValue("UnitNo", nextSuggestedUnitNo);
           }
@@ -414,7 +618,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         setIsPropertyLoading(false);
       }
     } else {
-      // Clear property-related data
       setDropdownData((prev) => ({ ...prev, floors: [] }));
       setPropertySummary(null);
       form.setValue("CountryID", 0);
@@ -430,7 +633,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
       return `${property.PropertyNo || "P"}-001`;
     }
 
-    // Extract numeric parts from existing unit numbers
     const numericParts = existingUnits
       .map((unit) => {
         const match = unit.UnitNo.match(/(\d+)$/);
@@ -495,8 +697,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     if (unit?.UnitID) {
       setContacts([]);
     } else if (mode.isClone && sourceUnit) {
-      // Optionally pre-populate contacts from source unit
-      // For now, we'll start with empty contacts for cloned units
       setContacts([]);
     }
   }, [unit, sourceUnit, mode.isClone]);
@@ -511,7 +711,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     form.setValue("TotalAreaSqft", totalArea > 0 ? totalArea : undefined);
   }, [form.watch("LivingAreaSqft"), form.watch("BalconyAreaSqft"), form.watch("TereaceAreaSqft"), form]);
 
-  // FIXED: Enhanced Lease Information Calculations
+  // Enhanced Lease Information Calculations
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (type !== "change") return;
@@ -520,47 +720,37 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
       const yearlyRent = value.PerYear || 0;
       const installments = value.NoOfInstallmentLease || 0;
 
-      // Prevent circular updates by tracking which field was changed
       switch (name) {
         case "PerMonth":
-          // When monthly rent changes, calculate yearly rent if installments exist
           if (monthlyRent > 0 && installments > 0) {
             const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
             form.setValue("PerYear", calculatedYearly, { shouldValidate: false });
           } else if (monthlyRent > 0 && installments === 0) {
-            // Default to 12 installments if not specified
             form.setValue("NoOfInstallmentLease", 12, { shouldValidate: false });
             form.setValue("PerYear", parseFloat((monthlyRent * 12).toFixed(2)), { shouldValidate: false });
           } else if (monthlyRent === 0) {
-            // Clear related fields when monthly rent is cleared
             form.setValue("PerYear", undefined, { shouldValidate: false });
           }
           break;
 
         case "PerYear":
-          // When yearly rent changes, calculate monthly rent if installments exist
           if (yearlyRent > 0 && installments > 0) {
             const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
             form.setValue("PerMonth", calculatedMonthly, { shouldValidate: false });
           } else if (yearlyRent > 0 && installments === 0) {
-            // Default to 12 installments if not specified
             form.setValue("NoOfInstallmentLease", 12, { shouldValidate: false });
             form.setValue("PerMonth", parseFloat((yearlyRent / 12).toFixed(2)), { shouldValidate: false });
           } else if (yearlyRent === 0) {
-            // Clear related fields when yearly rent is cleared
             form.setValue("PerMonth", undefined, { shouldValidate: false });
           }
           break;
 
         case "NoOfInstallmentLease":
-          // When installments change, recalculate based on which rent field has a value
           if (installments > 0) {
             if (monthlyRent > 0) {
-              // If monthly rent exists, calculate yearly rent
               const calculatedYearly = parseFloat((monthlyRent * installments).toFixed(2));
               form.setValue("PerYear", calculatedYearly, { shouldValidate: false });
             } else if (yearlyRent > 0) {
-              // If yearly rent exists, calculate monthly rent
               const calculatedMonthly = parseFloat((yearlyRent / installments).toFixed(2));
               form.setValue("PerMonth", calculatedMonthly, { shouldValidate: false });
             }
@@ -583,11 +773,67 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     const defaultValues = getDefaultValues();
     form.reset(defaultValues);
     setContacts([]);
+    setAttachments([]);
     setPropertySummary(null);
   };
 
-  const handleSubmit = (data: UnitFormValues) => {
-    onSave(data, contacts);
+  const handleSubmit = async (data: UnitFormValues) => {
+    // Validate that all new attachments have doc types
+    const attachmentsWithoutType = attachments.filter((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0));
+    if (attachmentsWithoutType.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: `Please select document types for ${attachmentsWithoutType.length} attachment(s)`,
+        variant: "destructive",
+      });
+      setActiveTab(ENHANCED_UNIT_TABS.ATTACHMENTS);
+      return;
+    }
+
+    // Prepare attachments data
+    const attachmentsData: Partial<UnitAttachment>[] = attachments
+      .filter((att) => att.isNew && att.DocTypeID && att.DocTypeID > 0)
+      .map((att) => ({
+        DocTypeID: att.DocTypeID,
+        DocumentName: att.DocumentName,
+        FileContent: att.FileContent,
+        FileContentType: att.FileContentType,
+        FileSize: att.FileSize,
+        AttachmentType: att.AttachmentType || "Other",
+        AttachmentCategory: att.AttachmentCategory || "Other",
+        IsMainImage: att.IsMainImage,
+        ImageCaption: att.ImageCaption,
+        ImageAltText: att.ImageAltText,
+        DocIssueDate: att.DocIssueDate,
+        DocExpiryDate: att.DocExpiryDate,
+        IsPublic: att.IsPublic,
+        Remarks: att.Remarks,
+      }));
+
+    await onSave(data, contacts);
+  };
+
+  // Open attachment dialog
+  const openAttachmentDialog = (attachment: AttachmentFormData) => {
+    setSelectedAttachment(attachment);
+    setIsAttachmentDialogOpen(true);
+  };
+
+  // Close attachment dialog
+  const closeAttachmentDialog = () => {
+    setSelectedAttachment(null);
+    setIsAttachmentDialogOpen(false);
+  };
+
+  // Save attachment details
+  const saveAttachmentDetails = (details: Partial<AttachmentFormData>) => {
+    if (!selectedAttachment) return;
+
+    const index = attachments.findIndex((att) => att === selectedAttachment);
+    if (index >= 0) {
+      updateAttachment(index, details);
+    }
+    closeAttachmentDialog();
   };
 
   const getFormTitle = (): string => {
@@ -607,6 +853,10 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
     return <div className="flex justify-center items-center h-64">Loading form data...</div>;
   }
 
+  const imageAttachments = attachments.filter((att) => att.AttachmentType === "Image" || att.AttachmentType === "Blueprint" || att.FileContentType?.startsWith("image/"));
+
+  const documentAttachments = attachments.filter((att) => !["Image", "Blueprint"].includes(att.AttachmentType || "") && !att.FileContentType?.startsWith("image/"));
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)}>
@@ -624,22 +874,30 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 mb-8">
-            <TabsTrigger value={UNIT_TABS.GENERAL}>
+          <TabsList className="grid w-full grid-cols-4 mb-8">
+            <TabsTrigger value={ENHANCED_UNIT_TABS.GENERAL}>
               <Home className="mr-2 h-4 w-4" />
               General Information
             </TabsTrigger>
-            <TabsTrigger value={UNIT_TABS.PRICING}>
+            <TabsTrigger value={ENHANCED_UNIT_TABS.PRICING}>
               <DollarSign className="mr-2 h-4 w-4" />
               Pricing & Payment
             </TabsTrigger>
-            <TabsTrigger value={UNIT_TABS.CONTACTS}>
+            <TabsTrigger value={ENHANCED_UNIT_TABS.ATTACHMENTS} className="relative">
+              <FileImage className="mr-2 h-4 w-4" />
+              Images & Documents ({attachments.length})
+              {attachments.some((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0)) && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value={ENHANCED_UNIT_TABS.CONTACTS}>
               <Users className="mr-2 h-4 w-4" />
               Contacts ({contacts.length})
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value={UNIT_TABS.GENERAL}>
+          {/* General Information Tab - Same as before */}
+          <TabsContent value={ENHANCED_UNIT_TABS.GENERAL}>
             <div className="space-y-8">
               <Card>
                 <CardContent className="pt-6">
@@ -1201,7 +1459,6 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
             </div>
           </TabsContent>
 
-          {/* Pricing Tab */}
           <TabsContent value={UNIT_TABS.PRICING}>
             <div className="space-y-8">
               <Card>
@@ -1377,8 +1634,216 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
               </Card>
             </div>
           </TabsContent>
+          {/* Enhanced Attachments Tab */}
+          <TabsContent value={ENHANCED_UNIT_TABS.ATTACHMENTS}>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Images Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <FileImage className="mr-2 h-5 w-5 text-muted-foreground" />
+                        Images & Plans ({imageAttachments.length})
+                      </span>
+                      <div>
+                        <Input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" id="image-upload" />
+                        <Label htmlFor="image-upload">
+                          <Button type="button" variant="outline" size="sm" className="cursor-pointer" asChild>
+                            <span>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload Images
+                            </span>
+                          </Button>
+                        </Label>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {imageAttachments.length > 0 && (
+                      <div className="bg-muted/20 rounded-lg p-4 space-y-3 mb-4">
+                        <h4 className="text-sm font-medium">Quick Actions</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Select onValueChange={(value) => bulkSetDocType(parseInt(value), "Image")}>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Set all images type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {docTypes
+                                .filter((dt) => dt.Description.toLowerCase().includes("image") || dt.Description.toLowerCase().includes("photo"))
+                                .map((docType) => (
+                                  <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                    {docType.Description}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
 
-          <TabsContent value={UNIT_TABS.CONTACTS}>
+                    {imageAttachments.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No images uploaded yet. Files will be automatically categorized when uploaded.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {imageAttachments.map((attachment, index) => (
+                          <div key={index} className="border rounded-lg overflow-hidden space-y-3 p-3">
+                            <div className="relative group">
+                              <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                                {attachment.preview || attachment.FilePath ? (
+                                  <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <FileImage className="h-8 w-8 text-muted-foreground" />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="absolute top-2 right-2 flex space-x-1">
+                                {attachment.IsMainImage && (
+                                  <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                                    <Star className="h-3 w-3" />
+                                  </Badge>
+                                )}
+                                <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
+                                  <Settings className="h-3 w-3" />
+                                </Button>
+                                <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(index)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium truncate">{attachment.DocumentName}</p>
+
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant={attachment.AttachmentType === "Image" ? "default" : "secondary"} className="text-xs">
+                                  {attachment.AttachmentType}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {attachment.AttachmentCategory}
+                                </Badge>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-xs">Document Type</Label>
+                                <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
+                                  <SelectTrigger className={`h-8 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
+                                      <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                        {docType.Description}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500">Document type is required</p>}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <Button type="button" size="sm" variant="outline" onClick={() => setMainImage(index)} disabled={attachment.IsMainImage}>
+                                  {attachment.IsMainImage ? "Main Image" : "Set as Main"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Documents Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Paperclip className="mr-2 h-5 w-5 text-muted-foreground" />
+                        Documents & Files ({documentAttachments.length})
+                      </span>
+                      <div>
+                        <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" multiple onChange={handleFileUpload} className="hidden" id="document-upload" />
+                        <Label htmlFor="document-upload">
+                          <Button type="button" variant="outline" size="sm" className="cursor-pointer" asChild>
+                            <span>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload Documents
+                            </span>
+                          </Button>
+                        </Label>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {documentAttachments.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <Paperclip className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No documents uploaded yet. Files will be automatically categorized when uploaded.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {documentAttachments.map((attachment, index) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-3">
+                                <div className="flex items-center space-x-2">
+                                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-medium">{attachment.DocumentName}</span>
+                                  <Badge variant={attachment.AttachmentType === "Certificate" ? "default" : "secondary"} className="text-xs">
+                                    {attachment.AttachmentType}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {attachment.AttachmentCategory}
+                                  </Badge>
+                                </div>
+
+                                <div className="text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
+
+                                <div className="max-w-xs">
+                                  <Label className="text-xs">Document Type</Label>
+                                  <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
+                                    <SelectTrigger className={`h-8 mt-1 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
+                                        <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                          {docType.Description}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500 mt-1">Document type is required</p>}
+                                </div>
+                              </div>
+
+                              <div className="flex space-x-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => openAttachmentDialog(attachment)}>
+                                  <Settings className="mr-2 h-4 w-4" />
+                                  Details
+                                </Button>
+                                <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => deleteAttachment(index)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value={ENHANCED_UNIT_TABS.CONTACTS}>
             <Card>
               <CardContent className="pt-6">
                 <UnitContacts unitId={unit?.UnitID || 0} contacts={contacts} onContactsChange={handleContactsChange} readOnly={mode.isView} />
@@ -1401,6 +1866,206 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
           </Button>
         </div>
       </form>
+
+      {/* Enhanced Attachment Details Dialog */}
+      <Dialog open={isAttachmentDialogOpen} onOpenChange={closeAttachmentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Attachment Details</DialogTitle>
+          </DialogHeader>
+          {selectedAttachment && (
+            <AttachmentDetailsForm
+              attachment={selectedAttachment}
+              docTypes={docTypes}
+              onSave={saveAttachmentDetails}
+              onCancel={closeAttachmentDialog}
+              onSetMainImage={() => {
+                const index = attachments.findIndex((att) => att === selectedAttachment);
+                if (index >= 0) setMainImage(index);
+                closeAttachmentDialog();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Form>
+  );
+};
+
+// Enhanced Attachment Details Form Component
+interface AttachmentDetailsFormProps {
+  attachment: AttachmentFormData;
+  docTypes: DocType[];
+  onSave: (details: Partial<AttachmentFormData>) => void;
+  onCancel: () => void;
+  onSetMainImage: () => void;
+}
+
+const AttachmentDetailsForm: React.FC<AttachmentDetailsFormProps> = ({ attachment, docTypes, onSave, onCancel, onSetMainImage }) => {
+  const [formData, setFormData] = useState({
+    DocTypeID: attachment.DocTypeID || 0,
+    AttachmentType: attachment.AttachmentType || "Other",
+    AttachmentCategory: attachment.AttachmentCategory || "Other",
+    ImageCaption: attachment.ImageCaption || "",
+    ImageAltText: attachment.ImageAltText || "",
+    DocIssueDate: attachment.DocIssueDate || undefined,
+    DocExpiryDate: attachment.DocExpiryDate || undefined,
+    IsPublic: attachment.IsPublic !== false,
+    Remarks: attachment.Remarks || "",
+  });
+
+  const handleSave = () => {
+    onSave(formData);
+  };
+
+  const isImage = ["Image", "Blueprint"].includes(formData.AttachmentType) || attachment.FileContentType?.startsWith("image/");
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="attachmentType">Attachment Type</Label>
+          <Select value={formData.AttachmentType} onValueChange={(value: AttachmentFormData["AttachmentType"]) => setFormData((prev) => ({ ...prev, AttachmentType: value }))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Image">Image</SelectItem>
+              <SelectItem value="Document">Document</SelectItem>
+              <SelectItem value="Blueprint">Blueprint</SelectItem>
+              <SelectItem value="Certificate">Certificate</SelectItem>
+              <SelectItem value="Video">Video</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="attachmentCategory">Category</Label>
+          <Select
+            value={formData.AttachmentCategory}
+            onValueChange={(value: AttachmentFormData["AttachmentCategory"]) => setFormData((prev) => ({ ...prev, AttachmentCategory: value }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Primary">Primary</SelectItem>
+              <SelectItem value="Gallery">Gallery</SelectItem>
+              <SelectItem value="Floor Plan">Floor Plan</SelectItem>
+              <SelectItem value="Legal">Legal</SelectItem>
+              <SelectItem value="Marketing">Marketing</SelectItem>
+              <SelectItem value="Construction">Construction</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="docType">Document Type *</Label>
+        <Select value={formData.DocTypeID.toString()} onValueChange={(value) => setFormData((prev) => ({ ...prev, DocTypeID: parseInt(value) }))}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select document type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">Select Type</SelectItem>
+            {docTypes.map((docType) => (
+              <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                {docType.Description}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isImage && (
+        <>
+          <div>
+            <Label htmlFor="caption">Image Caption</Label>
+            <Input
+              id="caption"
+              value={formData.ImageCaption}
+              onChange={(e) => setFormData((prev) => ({ ...prev, ImageCaption: e.target.value }))}
+              placeholder="Enter image caption"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="altText">Alt Text</Label>
+            <Input
+              id="altText"
+              value={formData.ImageAltText}
+              onChange={(e) => setFormData((prev) => ({ ...prev, ImageAltText: e.target.value }))}
+              placeholder="Enter alt text for accessibility"
+            />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button type="button" variant="outline" onClick={onSetMainImage}>
+              <Star className="mr-2 h-4 w-4" />
+              Set as Main Image
+            </Button>
+          </div>
+        </>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="issueDate">Issue Date</Label>
+          <Input
+            id="issueDate"
+            type="date"
+            value={formData.DocIssueDate ? new Date(formData.DocIssueDate).toISOString().split("T")[0] : ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                DocIssueDate: e.target.value ? new Date(e.target.value).toISOString() : undefined,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="expiryDate">Expiry Date</Label>
+          <Input
+            id="expiryDate"
+            type="date"
+            value={formData.DocExpiryDate ? new Date(formData.DocExpiryDate).toISOString().split("T")[0] : ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                DocExpiryDate: e.target.value ? new Date(e.target.value).toISOString() : undefined,
+              }))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox id="isPublic" checked={formData.IsPublic} onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, IsPublic: checked as boolean }))} />
+        <Label htmlFor="isPublic">Make this attachment publicly visible</Label>
+      </div>
+
+      <div>
+        <Label htmlFor="remarks">Remarks</Label>
+        <Textarea
+          id="remarks"
+          value={formData.Remarks}
+          onChange={(e) => setFormData((prev) => ({ ...prev, Remarks: e.target.value }))}
+          placeholder="Enter any additional remarks"
+          rows={3}
+        />
+      </div>
+
+      <div className="flex justify-end space-x-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleSave} disabled={formData.DocTypeID === 0}>
+          Save Details
+        </Button>
+      </div>
+    </div>
   );
 };
