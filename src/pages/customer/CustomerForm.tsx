@@ -181,12 +181,16 @@ const customerSchema = z
     CountryID: z.string().optional(),
     CityID: z.string().optional(),
     Address: z.string().optional(),
+    // Primary contact fields
+    PrimaryContactName: z.string().optional(),
+    PrimaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+    PrimaryPhone: z.string().optional(),
     TaxRegNo: z.string().optional(),
     CustomerIdentityNo: z.string().optional(),
     AccountCode: z.string().optional(),
     AccountName: z.string().optional(),
     Remark: z.string().optional(),
-    // NEW: GL-related fields
+    // GL-related fields
     CreateNewAccount: z.boolean().optional(),
     AccountTypeID: z.string().optional(),
     CurrencyID: z.string().optional(),
@@ -206,7 +210,7 @@ const customerSchema = z
     }
   );
 
-// Contact form schema
+// Contact form schema (for additional contacts)
 const contactSchema = z.object({
   ContactTypeID: z.string().min(1, "Contact type is required"),
   ContactName: z.string().min(2, "Contact name is required"),
@@ -257,7 +261,7 @@ const CustomerForm = () => {
   const [cities, setCities] = useState<City[]>([]);
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
-  // NEW: GL-related state
+  // GL-related state
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -285,12 +289,14 @@ const CustomerForm = () => {
       CountryID: "",
       CityID: "",
       Address: "",
+      PrimaryContactName: "",
+      PrimaryEmail: "",
+      PrimaryPhone: "",
       TaxRegNo: "",
       CustomerIdentityNo: "",
       AccountCode: "",
       AccountName: "",
       Remark: "",
-      // NEW: GL-related defaults
       CreateNewAccount: false,
       AccountTypeID: "",
       CurrencyID: "",
@@ -331,21 +337,11 @@ const CustomerForm = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [
-          typesData,
-          contactTypesData,
-          docTypesData,
-          countriesData,
-          // NEW: Fetch GL-related reference data
-          accountTypesData,
-          currenciesData,
-          companiesData,
-        ] = await Promise.all([
+        const [typesData, contactTypesData, docTypesData, countriesData, accountTypesData, currenciesData, companiesData] = await Promise.all([
           customerService.getCustomerTypes(),
           contactTypeService.getAllContactTypes(),
           docTypeService.getAllDocTypes(),
           countryService.getCountriesForDropdown(),
-          // NEW: Fetch GL reference data
           accountService.getAllAccountTypes(),
           currencyService.getCurrenciesForDropdown(),
           companyService.getCompaniesForDropdown(),
@@ -355,7 +351,6 @@ const CustomerForm = () => {
         setContactTypes(contactTypesData);
         setDocumentTypes(docTypesData);
         setCountries(countriesData);
-        // NEW: Set GL reference data
         setAccountTypes(accountTypesData);
         setCurrencies(currenciesData);
         setCompanies(companiesData);
@@ -369,6 +364,9 @@ const CustomerForm = () => {
             setContacts(customerData.contacts || []);
             setAttachments(customerData.attachments || []);
 
+            // Find primary contact (first contact or one marked as primary)
+            const primaryContact = customerData.contacts && customerData.contacts.length > 0 ? customerData.contacts[0] : null;
+
             // Set form values
             customerForm.reset({
               CustomerNo: customerData.customer.CustomerNo || "",
@@ -381,12 +379,15 @@ const CustomerForm = () => {
               CountryID: customerData.customer.CountryID?.toString() || "",
               CityID: customerData.customer.CityID?.toString() || "",
               Address: customerData.customer.Address || "",
+              // Set primary contact values from first contact
+              PrimaryContactName: primaryContact?.ContactName || "",
+              PrimaryEmail: primaryContact?.EmailID || "",
+              PrimaryPhone: primaryContact?.ContactNo || "",
               TaxRegNo: customerData.customer.TaxRegNo || "",
               CustomerIdentityNo: customerData.customer.CustomerIdentityNo || "",
               AccountCode: customerData.customer.AccountCode || "",
               AccountName: customerData.customer.AccountName || "",
               Remark: customerData.customer.Remark || "",
-              // NEW: Set GL-related values
               CreateNewAccount: customerData.customer.CreateNewAccount || false,
               AccountTypeID: customerData.customer.AccountTypeID?.toString() || "",
               CurrencyID: customerData.customer.CurrencyID?.toString() || "",
@@ -468,18 +469,44 @@ const CustomerForm = () => {
         AccountCode: data.AccountCode,
         AccountName: data.AccountName,
         Remark: data.Remark,
-        // NEW: Add GL-related fields
         CreateNewAccount: data.CreateNewAccount,
         AccountTypeID: data.AccountTypeID ? parseInt(data.AccountTypeID) : undefined,
         CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
         CompanyID: data.CompanyID ? parseInt(data.CompanyID) : undefined,
       };
 
+      // Prepare contacts array
+      let allContacts = [...contacts];
+
+      // If primary contact information is provided, create or update the primary contact
+      if (data.PrimaryContactName || data.PrimaryEmail || data.PrimaryPhone) {
+        const primaryContact: CustomerContact = {
+          CustomerContactID: isEdit && contacts.length > 0 ? contacts[0].CustomerContactID : 0,
+          CustomerID: customer?.CustomerID || 0,
+          ContactTypeID: 1, // Assuming 1 is the primary contact type ID
+          ContactName: data.PrimaryContactName || data.CustomerFullName,
+          EmailID: data.PrimaryEmail || undefined,
+          ContactNo: data.PrimaryPhone || undefined,
+          CountryID: data.CountryID ? parseInt(data.CountryID) : undefined,
+          CityID: data.CityID ? parseInt(data.CityID) : undefined,
+          Address: data.Address || undefined,
+          ContactTypeName: "Primary",
+        };
+
+        if (isEdit && contacts.length > 0) {
+          // Update existing primary contact
+          allContacts[0] = primaryContact;
+        } else {
+          // Add as new primary contact
+          allContacts.unshift(primaryContact);
+        }
+      }
+
       if (isEdit && customer) {
         // Update existing customer
         const result = await customerService.updateCustomer({
           customer: { ...customerData, CustomerID: customer.CustomerID },
-          contacts,
+          contacts: allContacts,
           attachments,
         });
 
@@ -493,7 +520,7 @@ const CustomerForm = () => {
         // Create new customer
         const result = await customerService.createCustomer({
           customer: customerData,
-          contacts,
+          contacts: allContacts,
           attachments,
         });
 
@@ -585,7 +612,7 @@ const CustomerForm = () => {
       attachmentForm.reset({
         DocTypeID: attachment.DocTypeID?.toString() || "",
         DocumentName: attachment.DocumentName || "",
-        file: undefined, // Don't set the file input, but use the preview URL
+        file: undefined,
         DocIssueDate: attachment.DocIssueDate ? new Date(attachment.DocIssueDate) : null,
         DocExpiryDate: attachment.DocExpiryDate ? new Date(attachment.DocExpiryDate) : null,
         Remark: attachment.Remark || "",
@@ -625,12 +652,8 @@ const CustomerForm = () => {
     // If there's a file, add file-related properties
     if (data.file) {
       newAttachment.file = data.file;
-
-      // Generate a preview URL for display
       const fileUrl = URL.createObjectURL(data.file);
       newAttachment.fileUrl = fileUrl;
-
-      // Store file information
       newAttachment.FileContentType = data.file.type;
       newAttachment.FileSize = data.file.size;
     } else if (editingAttachment) {
@@ -666,8 +689,6 @@ const CustomerForm = () => {
     setIsUploading(true);
     setUploadError(null);
 
-    // In a real app, you would upload to server here
-    // For demo, we'll simulate an upload process
     setTimeout(() => {
       if (file.size > 10 * 1024 * 1024) {
         setUploadError("File size exceeds 10MB limit");
@@ -675,21 +696,18 @@ const CustomerForm = () => {
         return;
       }
 
-      // Create a preview URL
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
 
       setIsUploading(false);
       setUploadSuccess(true);
 
-      // Reset success status after a moment
       setTimeout(() => setUploadSuccess(false), 3000);
     }, 1500);
   };
 
   // Handle file removal
   const handleFileRemove = () => {
-    // Clean up any preview URL
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -735,7 +753,7 @@ const CustomerForm = () => {
                 <div className="px-6">
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="basic">Basic Information</TabsTrigger>
-                    <TabsTrigger value="contacts">Contacts ({contacts.length})</TabsTrigger>
+                    <TabsTrigger value="contacts">Additional Contacts ({contacts.length})</TabsTrigger>
                     <TabsTrigger value="attachments">Attachments ({attachments.length})</TabsTrigger>
                   </TabsList>
                 </div>
@@ -814,13 +832,23 @@ const CustomerForm = () => {
 
                   <Separator />
 
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Primary Contact Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <FormField form={customerForm} name="PrimaryContactName" label="Contact Person" placeholder="Enter contact person name" />
+                      <FormField form={customerForm} name="PrimaryEmail" label="Email Address" type="email" placeholder="Enter email address" />
+                      <FormField form={customerForm} name="PrimaryPhone" label="Phone Number" placeholder="Enter phone number" />
+                    </div>
+                  </div>
+
+                  <Separator />
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <FormField form={customerForm} name="TaxRegNo" label="Tax Registration Number" placeholder="Enter tax registration number" />
                     <FormField form={customerForm} name="AccountCode" label="Account Code" placeholder="Enter account code" />
                     <FormField form={customerForm} name="AccountName" label="Account Name" placeholder="Enter account name" />
                   </div>
 
-                  {/* NEW: GL Account Section */}
                   <Separator />
 
                   <div className="space-y-4">
@@ -884,7 +912,10 @@ const CustomerForm = () => {
 
                 <TabsContent value="contacts" className="p-6 pt-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium">Contact Persons</h3>
+                    <div>
+                      <h3 className="text-lg font-medium">Additional Contact Persons</h3>
+                      <p className="text-sm text-muted-foreground">Primary contact information is managed in the Basic Information tab</p>
+                    </div>
                     <Button type="button" onClick={() => openContactDialog()}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add Contact
@@ -893,7 +924,7 @@ const CustomerForm = () => {
 
                   {contacts.length === 0 ? (
                     <div className="text-center py-8 border rounded-md bg-muted/10">
-                      <p className="text-muted-foreground">No contacts added yet</p>
+                      <p className="text-muted-foreground">No additional contacts added yet</p>
                       <Button type="button" variant="outline" className="mt-4" onClick={() => openContactDialog()}>
                         <Plus className="h-4 w-4 mr-2" />
                         Add Contact
@@ -1034,7 +1065,8 @@ const CustomerForm = () => {
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingContact ? "Edit Contact" : "Add Contact"}</DialogTitle>
+            <DialogTitle>{editingContact ? "Edit Contact" : "Add Additional Contact"}</DialogTitle>
+            <DialogDescription>This will be added as an additional contact. Primary contact information is managed in the Basic Information tab.</DialogDescription>
           </DialogHeader>
           <Form {...contactForm}>
             <form onSubmit={contactForm.handleSubmit(onSubmitContact)} className="space-y-4">
@@ -1074,7 +1106,7 @@ const CustomerForm = () => {
               <FormField form={contactForm} name="ContactNo" label="Phone Number" placeholder="Enter phone number" />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  form={customerForm}
+                  form={contactForm}
                   name="CountryID"
                   label="Country"
                   type="select"
@@ -1083,11 +1115,10 @@ const CustomerForm = () => {
                     value: country.CountryID.toString(),
                   }))}
                   placeholder="Select country"
-                  onChange={handleCountryChange}
                 />
 
                 <FormField
-                  form={customerForm}
+                  form={contactForm}
                   name="CityID"
                   label="City"
                   type="select"
@@ -1095,8 +1126,7 @@ const CustomerForm = () => {
                     label: city.CityName,
                     value: city.CityID.toString(),
                   }))}
-                  placeholder={selectedCountryId ? "Select city" : "Select country first"}
-                  disabled={!selectedCountryId}
+                  placeholder="Select city"
                 />
               </div>
               <FormField form={contactForm} name="Address" label="Address" placeholder="Enter address" type="textarea" />
