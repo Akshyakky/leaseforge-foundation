@@ -36,6 +36,33 @@ const ENHANCED_UNIT_TABS = {
   ATTACHMENTS: "attachments",
 };
 
+export const transformNullValues = (obj: any): any => {
+  if (obj === null) return undefined;
+  if (obj === undefined) return undefined;
+
+  if (Array.isArray(obj)) {
+    return obj.map(transformNullValues);
+  }
+
+  if (typeof obj === "object" && obj !== null) {
+    const transformed: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === null) {
+        transformed[key] = undefined;
+      } else if (typeof value === "string" && value.trim() === "") {
+        transformed[key] = undefined;
+      } else if (typeof value === "object") {
+        transformed[key] = transformNullValues(value);
+      } else {
+        transformed[key] = value;
+      }
+    }
+    return transformed;
+  }
+
+  return obj;
+};
+
 // Define the form validation schema
 const unitFormSchema = z.object({
   UnitNo: z.string().min(1, "Unit number is required"),
@@ -310,7 +337,7 @@ const CloneInfoDisplay: React.FC<{ sourceUnit: Unit | null }> = ({ sourceUnit })
 
 // Helper function to create cloned unit data
 const createClonedUnitData = (sourceUnit: Unit): Partial<Unit> => {
-  const clonedData = { ...sourceUnit };
+  const clonedData = transformNullValues({ ...sourceUnit });
 
   // Remove fields that should not be cloned
   delete clonedData.UnitID;
@@ -381,7 +408,19 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
 
   // Reset form based on mode and unit/source unit data availability
   useEffect(() => {
-    const formValues = getDefaultValues();
+    const getFormValues = (): UnitFormValues => {
+      if (mode.isClone && sourceUnit) {
+        const clonedData = createClonedUnitData(sourceUnit);
+        return { ...DEFAULT_FORM_VALUES, ...clonedData } as UnitFormValues;
+      } else if (mode.isEdit && unit) {
+        const transformedUnit = transformNullValues(unit);
+        return { ...DEFAULT_FORM_VALUES, ...transformedUnit } as UnitFormValues;
+      } else {
+        return DEFAULT_FORM_VALUES as UnitFormValues;
+      }
+    };
+
+    const formValues = getFormValues();
     form.reset(formValues);
   }, [unit, sourceUnit, mode.isEdit, mode.isCreate, mode.isClone, form]);
 
@@ -778,6 +817,21 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
   };
 
   const handleSubmit = async (data: UnitFormValues) => {
+    // Clean the data before submission
+    const cleanedData = transformNullValues(data);
+
+    // Convert undefined numeric values to null for database compatibility
+    const preparedData = Object.entries(cleanedData).reduce((acc, [key, value]) => {
+      if (value === undefined && typeof value !== "string") {
+        acc[key] = null;
+      } else if (value === "" && key !== "UnitNo") {
+        acc[key] = null;
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as any);
+
     // Validate that all new attachments have doc types
     const attachmentsWithoutType = attachments.filter((att) => att.isNew && (!att.DocTypeID || att.DocTypeID === 0));
     if (attachmentsWithoutType.length > 0) {
@@ -810,7 +864,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         Remarks: att.Remarks,
       }));
 
-    await onSave(data, contacts);
+    await onSave(preparedData, contacts);
   };
 
   // Open attachment dialog
