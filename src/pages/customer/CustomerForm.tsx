@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -275,6 +275,12 @@ const CustomerForm = () => {
   const [isContactTypeDialogOpen, setIsContactTypeDialogOpen] = useState(false);
   const [isDocTypeDialogOpen, setIsDocTypeDialogOpen] = useState(false);
 
+  // --- Automation tracking refs ---
+  const fullNameManuallyEdited = useRef(false);
+  const accountNameManuallyEdited = useRef(false);
+  const documentNameManuallyEdited = useRef(false);
+  const contactPersonManuallyEdited = useRef(false);
+
   // Initialize forms
   const customerForm = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
@@ -331,6 +337,13 @@ const CustomerForm = () => {
 
   // Watch CreateNewAccount value to toggle required fields
   const createNewAccount = customerForm.watch("CreateNewAccount");
+  // Watch fields for automation
+  const firstName = customerForm.watch("FirstName");
+  const lastName = customerForm.watch("LastName");
+  const customerFullName = customerForm.watch("CustomerFullName");
+  const accountName = customerForm.watch("AccountName");
+  const docTypeId = attachmentForm.watch("DocTypeID");
+  const documentName = attachmentForm.watch("DocumentName");
 
   // Initialize and fetch reference data
   useEffect(() => {
@@ -413,6 +426,63 @@ const CustomerForm = () => {
 
     initializeForm();
   }, [id, isEdit, navigate, customerForm, contactForm, attachmentForm]);
+
+  // --- Automation for Full Name and Account Name and Contact Person ---
+  useEffect(() => {
+    // Only autofill if not manually edited
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!fullNameManuallyEdited.current) {
+      if (fullName && customerFullName !== fullName) {
+        customerForm.setValue("CustomerFullName", fullName);
+      }
+    }
+    if (!accountNameManuallyEdited.current) {
+      if (fullName && accountName !== fullName) {
+        customerForm.setValue("AccountName", fullName);
+      }
+    }
+    if (!contactPersonManuallyEdited.current) {
+      if (fullName && customerForm.getValues("PrimaryContactName") !== fullName) {
+        customerForm.setValue("PrimaryContactName", fullName);
+      }
+    }
+  }, [firstName, lastName]);
+
+  // --- Automation for Document Name ---
+  useEffect(() => {
+    if (!documentNameManuallyEdited.current && docTypeId) {
+      const docType = documentTypes.find((d) => d.DocTypeID.toString() === docTypeId);
+      if (docType && documentName !== docType.Description) {
+        attachmentForm.setValue("DocumentName", docType.Description);
+      }
+    }
+  }, [docTypeId, documentTypes]);
+
+  // --- Track manual edits for Full Name, Account Name, Document Name, Contact Person ---
+  // For CustomerFullName, AccountName, PrimaryContactName
+  useEffect(() => {
+    const subscription = customerForm.watch((value, { name, type }) => {
+      if (name === "CustomerFullName" && type === "change") {
+        fullNameManuallyEdited.current = true;
+      }
+      if (name === "AccountName" && type === "change") {
+        accountNameManuallyEdited.current = true;
+      }
+      if (name === "PrimaryContactName" && type === "change") {
+        contactPersonManuallyEdited.current = true;
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [customerForm]);
+  // For DocumentName
+  useEffect(() => {
+    const subscription = attachmentForm.watch((value, { name, type }) => {
+      if (name === "DocumentName" && type === "change") {
+        documentNameManuallyEdited.current = true;
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [attachmentForm]);
 
   const handleSaveDocType = (newDocType: DocType) => {
     setDocumentTypes([...documentTypes, newDocType]);
@@ -698,6 +768,12 @@ const CustomerForm = () => {
 
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+
+      // Auto-set Document Name to file name if not manually edited
+      if (!documentNameManuallyEdited.current) {
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+        attachmentForm.setValue("DocumentName", fileName);
+      }
 
       setIsUploading(false);
       setUploadSuccess(true);
