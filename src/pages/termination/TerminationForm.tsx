@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationForm.tsx - Enhanced with Email Integration
+// src/pages/termination/TerminationForm.tsx - Enhanced with Email Integration and Auto-Calculation
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -46,11 +46,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField as CustomFormField } from "@/components/forms/FormField";
-import { format } from "date-fns";
+import { format, differenceInDays, differenceInCalendarDays } from "date-fns";
 
 // Import Email components
 import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
 import { useEmailIntegration } from "@/hooks/useEmailIntegration";
+import { taxService } from "@/services/taxService";
 
 // Create Document Type Dialog
 const CreateDocTypeDialog = ({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (docType: any) => void }) => {
@@ -289,21 +290,17 @@ const TerminationForm: React.FC = () => {
     const initializeForm = async () => {
       try {
         // Fetch reference data in parallel
-        const [contractsData, deductionsData, docTypesData] = await Promise.all([
+        const [contractsData, deductionsData, docTypesData, taxesData] = await Promise.all([
           contractService.getAllContracts(),
           terminationService.getAvailableDeductions(),
           docTypeService.getAllDocTypes(),
+          taxService.getAllTaxes(),
         ]);
 
         setContracts(contractsData);
         setDeductions(deductionsData);
         setDocTypes(docTypesData);
-
-        // Mock taxes data - replace with actual tax service
-        setTaxes([
-          { TaxID: 1, TaxName: "VAT", TaxCode: "VAT", TaxRate: 15 },
-          { TaxID: 2, TaxName: "Service Tax", TaxCode: "ST", TaxRate: 5 },
-        ]);
+        setTaxes(taxesData);
 
         // If editing, fetch the termination data
         if (isEdit && id) {
@@ -390,11 +387,121 @@ const TerminationForm: React.FC = () => {
     }
   }, [form.watch("ContractID"), contractDetails, form.watch("sendEmailNotification")]);
 
+  // Enhanced date-based auto-calculation effect
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      if (type !== "change" || !name) return;
+
+      // Auto-calculate stay period when vacating date or effective date changes
+      if ((name === "VacatingDate" || name === "EffectiveDate") && canEditTermination) {
+        const vacatingDate = form.getValues("VacatingDate");
+        const effectiveDate = form.getValues("EffectiveDate");
+
+        if (vacatingDate && effectiveDate) {
+          // Calculate stay period in days
+          const stayPeriodDays = differenceInCalendarDays(vacatingDate, effectiveDate);
+
+          if (stayPeriodDays >= 0) {
+            form.setValue("StayPeriodDays", stayPeriodDays, { shouldValidate: false });
+
+            // Auto-calculate stay period amount based on contract daily rate
+            if (contractDetails && contractDetails.GrandTotal) {
+              // Assume monthly rent is total contract value divided by contract months
+              // This is a simplified calculation - adjust based on your business logic
+              const monthlyRent = contractDetails.GrandTotal / 12; // Assuming 1-year contract
+              const dailyRate = monthlyRent / 30; // Approximate daily rate
+              const stayPeriodAmount = Math.round(dailyRate * stayPeriodDays * 100) / 100;
+
+              form.setValue("StayPeriodAmount", stayPeriodAmount, { shouldValidate: false });
+
+              toast.success(`Stay period calculated: ${stayPeriodDays} days (${stayPeriodAmount.toFixed(2)} amount)`);
+            }
+          } else if (stayPeriodDays < 0) {
+            // Reset values if vacating date is before effective date
+            form.setValue("StayPeriodDays", 0, { shouldValidate: false });
+            form.setValue("StayPeriodAmount", 0, { shouldValidate: false });
+            toast.warning("Vacating date should be after effective date");
+          }
+        }
+      }
+
+      // Auto-set move out date when vacating date changes (typically same day or next day)
+      if (name === "VacatingDate" && canEditTermination) {
+        const vacatingDate = form.getValues("VacatingDate");
+        const currentMoveOutDate = form.getValues("MoveOutDate");
+
+        if (vacatingDate && !currentMoveOutDate) {
+          // Set move out date to same as vacating date by default
+          form.setValue("MoveOutDate", vacatingDate, { shouldValidate: false });
+        }
+      }
+
+      // Auto-calculate key return date (typically 1-3 days after move out)
+      if (name === "MoveOutDate" && canEditTermination) {
+        const moveOutDate = form.getValues("MoveOutDate");
+        const currentKeyReturnDate = form.getValues("KeyReturnDate");
+
+        if (moveOutDate && !currentKeyReturnDate) {
+          // Set key return date to 2 days after move out by default
+          const keyReturnDate = new Date(moveOutDate);
+          keyReturnDate.setDate(keyReturnDate.getDate() + 2);
+          form.setValue("KeyReturnDate", keyReturnDate, { shouldValidate: false });
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, canEditTermination, contractDetails]);
+
+  // Effect to auto-calculate tax and total amount when deduction amount changes
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      if (type !== "change" || !name) return;
+
+      // Auto-calculate deduction total amount based on amount and tax
+      if ((name.includes("DeductionAmount") || name.includes("TaxPercentage") || name.includes("TaxID")) && name.includes("deductions")) {
+        const index = parseInt(name.split(".")[1]);
+        const deductions = form.getValues("deductions");
+        if (deductions && deductions[index]) {
+          const amount = deductions[index].DeductionAmount || 0;
+
+          // If TaxID is present, use the tax rate from the selected tax
+          if (deductions[index].TaxID) {
+            const selectedTax = taxes.find((tax) => tax.TaxID === deductions[index].TaxID);
+            if (selectedTax) {
+              const taxRate = selectedTax.TaxRate;
+              const taxAmount = (amount * taxRate) / 100;
+
+              form.setValue(`deductions.${index}.TaxPercentage`, taxRate, { shouldValidate: false });
+              form.setValue(`deductions.${index}.TaxAmount`, taxAmount, { shouldValidate: false });
+              form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount, { shouldValidate: false });
+              form.setValue(`deductions.${index}.TaxCode`, selectedTax.TaxCode, { shouldValidate: false });
+              form.setValue(`deductions.${index}.TaxName`, selectedTax.TaxName, { shouldValidate: false });
+            }
+          } else {
+            // Fallback to manual tax percentage if no TaxID
+            const taxPercent = deductions[index].TaxPercentage || 0;
+            const taxAmount = (amount * taxPercent) / 100;
+            form.setValue(`deductions.${index}.TaxAmount`, taxAmount, { shouldValidate: false });
+            form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount, { shouldValidate: false });
+          }
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, taxes]);
+
   // Fetch contract details
   const fetchContractDetails = async (contractId: number) => {
     try {
       const data = await contractService.getContractById(contractId);
       setContractDetails(data.contract);
+
+      // Auto-populate security deposit amount from contract if available
+      if (data.contract && data.additionalCharges.find((charge) => charge.AdditionalChargesID === 1) && !form.getValues("SecurityDepositAmount")) {
+        form.setValue("SecurityDepositAmount", data.additionalCharges.find((charge) => charge.AdditionalChargesID === 1)?.Amount || 0);
+      }
     } catch (error) {
       console.error("Error fetching contract details:", error);
     }
@@ -426,43 +533,6 @@ const TerminationForm: React.FC = () => {
 
     return recipients;
   };
-
-  // Effect to auto-calculate tax and total amount when deduction amount changes
-  useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
-      // Auto-calculate deduction total amount based on amount and tax
-      if (name && (name.includes("DeductionAmount") || name.includes("TaxPercentage") || name.includes("TaxID")) && name.includes("deductions")) {
-        const index = parseInt(name.split(".")[1]);
-        const deductions = form.getValues("deductions");
-        if (deductions && deductions[index]) {
-          const amount = deductions[index].DeductionAmount || 0;
-
-          // If TaxID is present, use the tax rate from the selected tax
-          if (deductions[index].TaxID) {
-            const selectedTax = taxes.find((tax) => tax.TaxID === deductions[index].TaxID);
-            if (selectedTax) {
-              const taxRate = selectedTax.TaxRate;
-              const taxAmount = (amount * taxRate) / 100;
-
-              form.setValue(`deductions.${index}.TaxPercentage`, taxRate);
-              form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
-              form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
-              form.setValue(`deductions.${index}.TaxCode`, selectedTax.TaxCode);
-              form.setValue(`deductions.${index}.TaxName`, selectedTax.TaxName);
-            }
-          } else {
-            // Fallback to manual tax percentage if no TaxID
-            const taxPercent = deductions[index].TaxPercentage || 0;
-            const taxAmount = (amount * taxPercent) / 100;
-            form.setValue(`deductions.${index}.TaxAmount`, taxAmount);
-            form.setValue(`deductions.${index}.TotalAmount`, amount + taxAmount);
-          }
-        }
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [form, taxes]);
 
   // Calculate totals
   const calculateTotals = () => {
@@ -830,17 +900,19 @@ const TerminationForm: React.FC = () => {
     }
   };
 
-  // Calculate figures function
+  // Calculate figures function with enhanced logic
   const calculateFigures = () => {
     const securityDeposit = form.getValues("SecurityDepositAmount") || 0;
     const totalDeductions = calculateTotals().totalDeductions;
     const adjustment = form.getValues("AdjustAmount") || 0;
+    const stayPeriodAmount = form.getValues("StayPeriodAmount") || 0;
 
     // Calculate refund or credit note
     let refundAmount = 0;
     let creditNoteAmount = 0;
 
-    const balance = securityDeposit - totalDeductions - adjustment;
+    // Include stay period amount as additional income/adjustment
+    const balance = securityDeposit + stayPeriodAmount - totalDeductions - adjustment;
 
     if (balance > 0) {
       refundAmount = balance;
@@ -852,9 +924,35 @@ const TerminationForm: React.FC = () => {
       securityDeposit,
       totalDeductions,
       adjustment,
+      stayPeriodAmount,
       refundAmount,
       creditNoteAmount,
     };
+  };
+
+  // Manual recalculation trigger
+  const handleRecalculateAll = () => {
+    // Trigger all auto-calculations manually
+    const vacatingDate = form.getValues("VacatingDate");
+    const effectiveDate = form.getValues("EffectiveDate");
+
+    if (vacatingDate && effectiveDate) {
+      const stayPeriodDays = differenceInCalendarDays(vacatingDate, effectiveDate);
+
+      if (stayPeriodDays >= 0) {
+        form.setValue("StayPeriodDays", stayPeriodDays);
+
+        if (contractDetails && contractDetails.GrandTotal) {
+          const monthlyRent = contractDetails.GrandTotal / 12;
+          const dailyRate = monthlyRent / 30;
+          const stayPeriodAmount = Math.round(dailyRate * stayPeriodDays * 100) / 100;
+
+          form.setValue("StayPeriodAmount", stayPeriodAmount);
+        }
+      }
+    }
+
+    toast.success("All calculations have been refreshed");
   };
 
   if (initialLoading) {
@@ -1056,6 +1154,7 @@ const TerminationForm: React.FC = () => {
                             <FormControl>
                               <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
+                            <FormDescription>When the termination becomes effective</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1072,6 +1171,7 @@ const TerminationForm: React.FC = () => {
                             <FormControl>
                               <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
+                            <FormDescription>When the tenant will vacate the property</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1086,6 +1186,7 @@ const TerminationForm: React.FC = () => {
                             <FormControl>
                               <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
+                            <FormDescription>When the tenant will physically move out</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1100,6 +1201,7 @@ const TerminationForm: React.FC = () => {
                             <FormControl>
                               <DatePicker value={field.value} onChange={field.onChange} disabled={(date) => false} readOnly={!canEditTermination} />
                             </FormControl>
+                            <FormDescription>When keys will be returned</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1120,8 +1222,10 @@ const TerminationForm: React.FC = () => {
                                 {...field}
                                 onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                                 disabled={!canEditTermination}
+                                className="bg-muted/50"
                               />
                             </FormControl>
+                            <FormDescription>Calculated from effective date to vacating date</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1140,8 +1244,10 @@ const TerminationForm: React.FC = () => {
                                 {...field}
                                 onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
                                 disabled={!canEditTermination}
+                                className="bg-muted/50"
                               />
                             </FormControl>
+                            <FormDescription>Calculated based on daily rate and stay period days</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1222,7 +1328,13 @@ const TerminationForm: React.FC = () => {
 
                     <Card className="bg-muted/50">
                       <CardHeader>
-                        <CardTitle className="text-lg">Termination Summary</CardTitle>
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          Termination Summary
+                          <Button type="button" variant="outline" size="sm" onClick={handleRecalculateAll} disabled={!canEditTermination}>
+                            <Calculator className="mr-2 h-4 w-4" />
+                            Recalculate All
+                          </Button>
+                        </CardTitle>
                       </CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
                         <div>
@@ -1230,42 +1342,31 @@ const TerminationForm: React.FC = () => {
                           <div className="text-2xl font-bold">{figures.securityDeposit.toLocaleString()}</div>
                         </div>
                         <div>
+                          <div className="text-sm font-medium text-muted-foreground">Stay Period Amount</div>
+                          <div className="text-2xl font-bold text-blue-600">+{figures.stayPeriodAmount.toLocaleString()}</div>
+                        </div>
+                        <div>
                           <div className="text-sm font-medium text-muted-foreground">Total Deductions</div>
-                          <div className="text-2xl font-bold">{figures.totalDeductions.toLocaleString()}</div>
+                          <div className="text-2xl font-bold text-red-600">-{figures.totalDeductions.toLocaleString()}</div>
                         </div>
                         <div>
                           <div className="text-sm font-medium text-muted-foreground">Adjustment</div>
-                          <div className="text-2xl font-bold">{figures.adjustment.toLocaleString()}</div>
+                          <div className="text-2xl font-bold">-{figures.adjustment.toLocaleString()}</div>
                         </div>
-                        <div>
+                        <div className="col-span-2 border-t pt-4">
                           {figures.refundAmount > 0 ? (
                             <>
                               <div className="text-sm font-medium text-muted-foreground">Refund Amount</div>
-                              <div className="text-2xl font-bold text-green-600">{figures.refundAmount.toLocaleString()}</div>
+                              <div className="text-3xl font-bold text-green-600">{figures.refundAmount.toLocaleString()}</div>
                             </>
                           ) : (
                             <>
                               <div className="text-sm font-medium text-muted-foreground">Credit Note Amount</div>
-                              <div className="text-2xl font-bold text-red-600">{figures.creditNoteAmount.toLocaleString()}</div>
+                              <div className="text-3xl font-bold text-red-600">{figures.creditNoteAmount.toLocaleString()}</div>
                             </>
                           )}
                         </div>
                       </CardContent>
-                      <CardFooter>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => {
-                            // Recalculate to force form update
-                            calculateFigures();
-                          }}
-                          disabled={!canEditTermination}
-                        >
-                          <Calculator className="mr-2 h-4 w-4" />
-                          Recalculate Figures
-                        </Button>
-                      </CardFooter>
                     </Card>
                   </CardContent>
                 </Card>
