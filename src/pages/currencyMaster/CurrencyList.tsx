@@ -1,19 +1,23 @@
+// src/pages/currencyMaster/CurrencyList.tsx (Updated)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, DollarSign, RefreshCw, CheckCircle, Ban } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { currencyService, Currency } from "@/services/currencyService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { debounce } from "lodash";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { CurrencyIcon } from "@/utils/currencyIcons";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const CurrencyList: React.FC = () => {
   const navigate = useNavigate();
+  const { refreshDefaultCurrency } = useCurrency();
 
   // State variables
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,6 +100,8 @@ const CurrencyList: React.FC = () => {
       if (success) {
         setCurrencies(currencies.filter((c) => c.CurrencyID !== selectedCurrency.CurrencyID));
         toast.success("Currency deleted successfully");
+        // Refresh default currency in case the deleted currency was default
+        await refreshDefaultCurrency();
       } else {
         toast.error("Failed to delete currency");
       }
@@ -135,6 +141,10 @@ const CurrencyList: React.FC = () => {
           IsDefault: currency.CurrencyID === selectedCurrency.CurrencyID,
         }));
         setCurrencies(updatedCurrencies);
+
+        // Refresh the default currency in context
+        await refreshDefaultCurrency();
+
         toast.success(`${selectedCurrency.CurrencyName} set as default currency`);
       } else {
         toast.error("Failed to set default currency");
@@ -194,7 +204,7 @@ const CurrencyList: React.FC = () => {
                       <TableCell className="font-medium">{currency.CurrencyCode}</TableCell>
                       <TableCell>
                         <div className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <CurrencyIcon currencyCode={currency.CurrencyCode} className="h-4 w-4 mr-2 text-muted-foreground" />
                           {currency.CurrencyName}
                         </div>
                       </TableCell>
@@ -222,11 +232,7 @@ const CurrencyList: React.FC = () => {
                               Set as default
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-500"
-                              onClick={() => openDeleteDialog(currency)}
-                              disabled={currency.IsDefault} // Prevent deleting default currency
-                            >
+                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(currency)} disabled={currency.IsDefault}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>

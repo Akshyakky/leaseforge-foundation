@@ -14,6 +14,7 @@ import AppRoutes from "./routes";
 
 // Import i18n
 import "@/i18n/i18n";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 
 // Create a client with better settings for performance
 const queryClient = new QueryClient({
@@ -31,17 +32,19 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <Provider store={store}>
-      <PersistGate loading={<LoadingPage />} persistor={persistor}>
-        <TooltipProvider>
-          <div className="h-screen flex flex-col overflow-hidden">
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </div>
-        </TooltipProvider>
-      </PersistGate>
+      <CurrencyProvider>
+        <PersistGate loading={<LoadingPage />} persistor={persistor}>
+          <TooltipProvider>
+            <div className="h-screen flex flex-col overflow-hidden">
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </div>
+          </TooltipProvider>
+        </PersistGate>
+      </CurrencyProvider>
     </Provider>
   </QueryClientProvider>
 );

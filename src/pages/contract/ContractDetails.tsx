@@ -63,11 +63,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 // Import Email components
 import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
 import { useEmailIntegration } from "@/hooks/useEmailIntegration";
+import { CurrencyIcon } from "@/utils/currencyIcons";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAppSelector((state) => state.auth);
+
+  const { defaultCurrency } = useCurrency();
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [units, setUnits] = useState<ContractUnit[]>([]);
@@ -1002,7 +1006,7 @@ const ContractDetails: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
+                  <CurrencyIcon currencyCode={defaultCurrency?.CurrencyCode} className="h-5 w-5 text-primary" />
                   Additional Charges
                 </CardTitle>
                 {canEditContract ? (
