@@ -33,6 +33,8 @@ import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { paymentTermsService } from "@/services/paymentTermsService";
+import { bankService, bankCategoryService } from "@/services/bankService";
 
 // Create the schema for supplier form validation
 const supplierSchema = z.object({
@@ -214,6 +216,9 @@ const SupplierForm = () => {
           accountTypesData,
           countriesData,
           contactTypesData,
+          paymentTermsData,
+          banksData,
+          bankCategoriesData,
           // For mock data, we'll create empty arrays
         ] = await Promise.all([
           supplierService.getAllSupplierTypes(),
@@ -223,6 +228,9 @@ const SupplierForm = () => {
           accountService.getAllAccountTypes(),
           countryService.getAllCountries(),
           contactTypeService.getAllContactTypes(),
+          paymentTermsService.getAllPaymentTerms(),
+          bankService.getAllBanks(),
+          bankCategoryService.getAllBankCategories(),
         ]);
 
         setSupplierTypes(typesData);
@@ -232,24 +240,9 @@ const SupplierForm = () => {
         setAccountTypes(accountTypesData);
         setCountries(countriesData);
         setContactTypes(contactTypesData);
-
-        // Mock data for other entities (implement services when available)
-        setPaymentTerms([
-          { PaymentTermID: 1, TermCode: "NET30", TermName: "Net 30 Days", DaysCount: 30 },
-          { PaymentTermID: 2, TermCode: "NET15", TermName: "Net 15 Days", DaysCount: 15 },
-          { PaymentTermID: 3, TermCode: "COD", TermName: "Cash on Delivery", DaysCount: 0 },
-        ]);
-
-        setBanks([
-          { BankID: 1, BankCode: "BANK001", BankName: "First National Bank", SwiftCode: "FNBUS44" },
-          { BankID: 2, BankCode: "BANK002", BankName: "Global Bank", SwiftCode: "GLBUS44" },
-        ]);
-
-        setBankCategories([
-          { CategoryID: 1, CategoryName: "Current Account" },
-          { CategoryID: 2, CategoryName: "Savings Account" },
-          { CategoryID: 3, CategoryName: "Term Deposit" },
-        ]);
+        setPaymentTerms(paymentTermsData);
+        setBanks(banksData);
+        setBankCategories(bankCategoriesData);
 
         // If editing, fetch the supplier data
         if (isEdit && id) {

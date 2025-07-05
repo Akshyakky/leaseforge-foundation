@@ -37,6 +37,7 @@ import leaseRevenuePostingRoutes from "./leaseRevenuePostingRoutes";
 import emailRoutes from "./emailRoutes";
 import countryRoutes from "./countryRoutes";
 import cityRoutes from "./cityRoutes";
+import paymentTermsRoutes from "./paymentTermsRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -116,6 +117,8 @@ const AppRoutes = () => {
           {bankRoutes}
           {/* Lease Revenue Posting routes */}
           {leaseRevenuePostingRoutes}
+          {/* Payment Terms routes */}
+          {paymentTermsRoutes}
         </Route>
 
         {/* Catch-all route */}

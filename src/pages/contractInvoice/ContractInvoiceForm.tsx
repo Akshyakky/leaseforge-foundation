@@ -59,6 +59,7 @@ import {
   GENERATION_MODE,
   APPROVAL_STATUS,
 } from "@/types/contractInvoiceTypes";
+import { paymentTermsService } from "@/services/paymentTermsService";
 
 // Enhanced schema for invoice generation form
 const contractUnitInvoiceSchema = z.object({
@@ -275,7 +276,7 @@ const ContractInvoiceForm: React.FC = () => {
   // Fetch reference data
   const fetchReferenceData = async () => {
     try {
-      const [companiesData, fiscalYearsData, customersData, contractsData, unitsData, currenciesData, accountsData, taxesData] = await Promise.all([
+      const [companiesData, fiscalYearsData, customersData, contractsData, unitsData, currenciesData, accountsData, taxesData, paymentTermsData] = await Promise.all([
         companyService.getCompaniesForDropdown(true),
         fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
         customerService.getAllCustomers(),
@@ -284,6 +285,7 @@ const ContractInvoiceForm: React.FC = () => {
         currencyService.getAllCurrencies(),
         accountService.getAllAccounts(),
         taxService.getAllTaxes(),
+        paymentTermsService.getAllPaymentTerms(),
       ]);
 
       setCompanies(companiesData);
@@ -293,12 +295,7 @@ const ContractInvoiceForm: React.FC = () => {
       setUnits(unitsData);
       setCurrencies(currenciesData);
       setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
-      setPaymentTerms([
-        { PaymentTermID: 1, TermName: "Net 30", DaysCount: 30 },
-        { PaymentTermID: 2, TermName: "Net 15", DaysCount: 15 },
-        { PaymentTermID: 3, TermName: "Net 60", DaysCount: 60 },
-        { PaymentTermID: 4, TermName: "Due on Receipt", DaysCount: 0 },
-      ]);
+      setPaymentTerms(paymentTermsData);
       setTaxes(taxesData);
 
       // Set default values
