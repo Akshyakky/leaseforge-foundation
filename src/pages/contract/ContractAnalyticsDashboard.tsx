@@ -12,6 +12,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { format, addMonths, addDays, startOfMonth, endOfMonth } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
+import { propertyService } from "@/services/propertyService";
+import { customerService } from "@/services/customerService";
 
 // Define color palettes for charts
 const STATUS_COLORS = [
@@ -89,17 +91,10 @@ const ContractAnalyticsDashboard: React.FC = () => {
       try {
         // These would be actual API calls in a real implementation
         // For now, using placeholder data
-        setProperties([
-          { PropertyID: 1, PropertyName: "Property A" },
-          { PropertyID: 2, PropertyName: "Property B" },
-          { PropertyID: 3, PropertyName: "Property C" },
-        ]);
-
-        setCustomers([
-          { CustomerID: 1, CustomerName: "Customer X" },
-          { CustomerID: 2, CustomerName: "Customer Y" },
-          { CustomerID: 3, CustomerName: "Customer Z" },
-        ]);
+        const properties = await propertyService.getAllProperties();
+        const customers = await customerService.getAllCustomers();
+        setProperties(properties);
+        setCustomers(customers);
       } catch (error) {
         console.error("Error loading filter data:", error);
       }
@@ -320,7 +315,7 @@ const ContractAnalyticsDashboard: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Contract Analytics</h1>

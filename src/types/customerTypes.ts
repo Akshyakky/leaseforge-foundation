@@ -35,7 +35,7 @@ export interface Customer extends BaseCustomer {
   CreateGL?: string;
   GLID?: number;
   Remark?: string;
-  
+
   // Additional fields from joins
   CountryName?: string;
   CityName?: string;
@@ -43,7 +43,7 @@ export interface Customer extends BaseCustomer {
   AgentName?: string;
   SourceName?: string;
   GLAccountName?: string; // NEW: GL Account Name
-  
+
   // New GL Account Creation Parameters
   CreateNewAccount?: boolean;
   AccountTypeID?: number;
@@ -61,7 +61,7 @@ export interface CustomerContact extends BaseCustomer {
   CityID?: number;
   ContactNo?: string;
   Address?: string;
-  
+
   // Additional fields from joins
   ContactTypeName?: string;
   CountryName?: string;
@@ -79,10 +79,10 @@ export interface CustomerAttachment extends BaseCustomer {
   DocIssueDate?: string | Date;
   DocExpiryDate?: string | Date;
   Remark?: string;
-  
+
   // Additional fields from joins
   DocTypeName?: string;
-  
+
   // For UI only - not sent to backend
   file?: File;
   fileUrl?: string; // For displaying preview
@@ -99,7 +99,7 @@ export interface CustomerGLDetails extends BaseCustomer {
   CurrencyID?: number;
   IsDefault?: boolean;
   Remarks?: string;
-  
+
   // Additional fields from joins
   GLAccountName?: string;
   AccountTypeName?: string;
@@ -153,10 +153,13 @@ export interface CustomerStatistics {
   ActiveCustomers: number;
   CustomersThisMonth: number;
   CustomersLastMonth: number;
-  TypeDistribution: {
-    TypeName: string;
-    Count: number;
-  }[];
+  CustomersThisYear: number;
+  CustomersWithContacts: number;
+  CustomersWithAttachments: number;
+  CustomersWithGLAccounts: number;
+  DocumentsExpiringSoon: number;
+  AvgContactsPerCustomer: number;
+  AvgAttachmentsPerCustomer: number;
 }
 
 // Request parameters for customer operations
@@ -177,6 +180,36 @@ export interface CustomerGLRequest {
   IsDefault?: boolean;
   Remarks?: string;
   CustomerGLID?: number; // For updates
+}
+export interface CustomerCountryDistribution {
+  CountryID: number;
+  CountryName: string;
+  CustomerCount: number;
+  Percentage: number;
+}
+export interface CustomerTypeDistribution {
+  TypeID: number;
+  TypeName: string;
+  CustomerCount: number;
+  Percentage: number;
+}
+export interface CustomerMonthlyTrend {
+  Year: number;
+  Month: number;
+  MonthName: string;
+  CustomerCount: number;
+}
+export interface CustomerStatusSummary {
+  Metric: string;
+  Value: string;
+}
+
+export interface CustomerDashboardData {
+  statistics: CustomerStatistics;
+  typeDistribution: CustomerTypeDistribution[];
+  countryDistribution: CustomerCountryDistribution[];
+  monthlyTrend: CustomerMonthlyTrend[];
+  statusSummary: CustomerStatusSummary[];
 }
 
 // API response

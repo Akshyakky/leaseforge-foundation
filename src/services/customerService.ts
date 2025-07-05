@@ -14,6 +14,7 @@ import {
   Company,
   CustomerStatistics,
   CustomerGLRequest,
+  CustomerDashboardData,
 } from "../types/customerTypes";
 
 /**
@@ -669,65 +670,153 @@ class CustomerService extends BaseService {
       { TypeID: 4, Description: "Non-Profit" },
     ];
   }
-
   /**
-   * Get account types for dropdown
-   * @returns Array of account types
+   * Get comprehensive customer statistics for dashboard
+   * @returns Customer dashboard data with statistics, distributions, and trends
    */
-  async getAccountTypes(): Promise<AccountType[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
-    return [
-      { AccountTypeID: 1, AccountTypeName: "Assets" },
-      { AccountTypeID: 2, AccountTypeName: "Liabilities" },
-      { AccountTypeID: 3, AccountTypeName: "Equity" },
-      { AccountTypeID: 4, AccountTypeName: "Revenue" },
-      { AccountTypeID: 5, AccountTypeName: "Expenses" },
-    ];
-  }
+  async getCustomerStatistics(): Promise<CustomerDashboardData> {
+    const request: BaseRequest = {
+      mode: 23, // Mode 23: Get Customer Statistics
+      parameters: {},
+    };
 
-  /**
-   * Get currencies for dropdown
-   * @returns Array of currencies
-   */
-  async getCurrencies(): Promise<Currency[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
-    return [
-      { CurrencyID: 1, CurrencyName: "US Dollar", CurrencyCode: "USD" },
-      { CurrencyID: 2, CurrencyName: "Euro", CurrencyCode: "EUR" },
-      { CurrencyID: 3, CurrencyName: "British Pound", CurrencyCode: "GBP" },
-      { CurrencyID: 4, CurrencyName: "Japanese Yen", CurrencyCode: "JPY" },
-    ];
-  }
+    const response = await this.execute(request);
 
-  /**
-   * Get companies for dropdown
-   * @returns Array of companies
-   */
-  async getCompanies(): Promise<Company[]> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
-    return [
-      { CompanyID: 1, CompanyName: "Main Company" },
-      { CompanyID: 2, CompanyName: "Subsidiary 1" },
-      { CompanyID: 3, CompanyName: "Subsidiary 2" },
-    ];
-  }
+    if (response.success) {
+      return {
+        statistics:
+          response.table1 && response.table1.length > 0
+            ? response.table1[0]
+            : {
+                TotalCustomers: 0,
+                ActiveCustomers: 0,
+                CustomersThisMonth: 0,
+                CustomersLastMonth: 0,
+                CustomersThisYear: 0,
+                CustomersWithContacts: 0,
+                CustomersWithAttachments: 0,
+                CustomersWithGLAccounts: 0,
+                DocumentsExpiringSoon: 0,
+                AvgContactsPerCustomer: 0,
+                AvgAttachmentsPerCustomer: 0,
+              },
+        typeDistribution: response.table2 || [],
+        countryDistribution: response.table3 || [],
+        monthlyTrend: response.table4 || [],
+        statusSummary: response.table5 || [],
+      };
+    }
 
-  /**
-   * Get customer statistics
-   * @returns Customer statistics
-   */
-  async getCustomerStatistics(): Promise<CustomerStatistics> {
-    // This would need a corresponding endpoint in the backend
-    // For now, returning mock data
+    // Return empty data structure if API call fails
     return {
-      TotalCustomers: 0,
-      ActiveCustomers: 0,
-      CustomersThisMonth: 0,
-      CustomersLastMonth: 0,
-      TypeDistribution: [],
+      statistics: {
+        TotalCustomers: 0,
+        ActiveCustomers: 0,
+        CustomersThisMonth: 0,
+        CustomersLastMonth: 0,
+        CustomersThisYear: 0,
+        CustomersWithContacts: 0,
+        CustomersWithAttachments: 0,
+        CustomersWithGLAccounts: 0,
+        DocumentsExpiringSoon: 0,
+        AvgContactsPerCustomer: 0,
+        AvgAttachmentsPerCustomer: 0,
+      },
+      typeDistribution: [],
+      countryDistribution: [],
+      monthlyTrend: [],
+      statusSummary: [],
+    };
+  }
+
+  /**
+   * Get customer growth statistics
+   * @returns Growth comparison data
+   */
+  async getCustomerGrowthStats(): Promise<{
+    currentMonthGrowth: number;
+    previousMonthGrowth: number;
+    growthPercentage: number;
+    yearToDateGrowth: number;
+  }> {
+    const dashboardData = await this.getCustomerStatistics();
+    const { statistics } = dashboardData;
+
+    const currentMonthGrowth = statistics.CustomersThisMonth;
+    const previousMonthGrowth = statistics.CustomersLastMonth;
+
+    const growthPercentage = previousMonthGrowth > 0 ? ((currentMonthGrowth - previousMonthGrowth) / previousMonthGrowth) * 100 : 0;
+
+    return {
+      currentMonthGrowth,
+      previousMonthGrowth,
+      growthPercentage: Math.round(growthPercentage * 100) / 100, // Round to 2 decimal places
+      yearToDateGrowth: statistics.CustomersThisYear,
+    };
+  }
+
+  /**
+   * Get customer engagement metrics
+   * @returns Engagement statistics
+   */
+  async getCustomerEngagementMetrics(): Promise<{
+    engagementRate: number;
+    contactCoverage: number;
+    attachmentCoverage: number;
+    glAccountCoverage: number;
+  }> {
+    const dashboardData = await this.getCustomerStatistics();
+    const { statistics } = dashboardData;
+
+    const totalCustomers = statistics.TotalCustomers;
+
+    const engagementRate = totalCustomers > 0 ? (statistics.ActiveCustomers / totalCustomers) * 100 : 0;
+
+    const contactCoverage = totalCustomers > 0 ? (statistics.CustomersWithContacts / totalCustomers) * 100 : 0;
+
+    const attachmentCoverage = totalCustomers > 0 ? (statistics.CustomersWithAttachments / totalCustomers) * 100 : 0;
+
+    const glAccountCoverage = totalCustomers > 0 ? (statistics.CustomersWithGLAccounts / totalCustomers) * 100 : 0;
+
+    return {
+      engagementRate: Math.round(engagementRate * 100) / 100,
+      contactCoverage: Math.round(contactCoverage * 100) / 100,
+      attachmentCoverage: Math.round(attachmentCoverage * 100) / 100,
+      glAccountCoverage: Math.round(glAccountCoverage * 100) / 100,
+    };
+  }
+  /**
+   * Get document expiry alerts
+   * @returns Document expiry information
+   */
+  async getDocumentExpiryAlerts(): Promise<{
+    expiringSoonCount: number;
+    urgencyLevel: "low" | "medium" | "high";
+    message: string;
+  }> {
+    const dashboardData = await this.getCustomerStatistics();
+    const expiringSoonCount = dashboardData.statistics.DocumentsExpiringSoon;
+
+    let urgencyLevel: "low" | "medium" | "high" = "low";
+    let message = "All documents are up to date";
+
+    if (expiringSoonCount > 0) {
+      if (expiringSoonCount <= 5) {
+        urgencyLevel = "low";
+        message = `${expiringSoonCount} document(s) expiring within 30 days`;
+      } else if (expiringSoonCount <= 15) {
+        urgencyLevel = "medium";
+        message = `${expiringSoonCount} documents expiring within 30 days - review recommended`;
+      } else {
+        urgencyLevel = "high";
+        message = `${expiringSoonCount} documents expiring within 30 days - immediate attention required`;
+      }
+    }
+
+    return {
+      expiringSoonCount,
+      urgencyLevel,
+      message,
     };
   }
 }
