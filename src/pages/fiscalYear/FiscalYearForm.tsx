@@ -20,13 +20,23 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, addDays, isBefore, isAfter } from "date-fns";
 
-// Create the schema for fiscal year form validation
+// Updated schema to handle date transformation properly
 const fiscalYearSchema = z
   .object({
     FYCode: z.string().min(1, "Fiscal year code is required").max(50, "Code cannot exceed 50 characters"),
     FYDescription: z.string().min(2, "Description must be at least 2 characters").max(250, "Description cannot exceed 250 characters"),
-    StartDate: z.string().min(1, "Start date is required"),
-    EndDate: z.string().min(1, "End date is required"),
+    StartDate: z.union([z.string().min(1, "Start date is required"), z.date()]).transform((val) => {
+      if (val instanceof Date) {
+        return format(val, "yyyy-MM-dd");
+      }
+      return val;
+    }),
+    EndDate: z.union([z.string().min(1, "End date is required"), z.date()]).transform((val) => {
+      if (val instanceof Date) {
+        return format(val, "yyyy-MM-dd");
+      }
+      return val;
+    }),
     CompanyID: z.string().min(1, "Company is required"),
     IsActive: z.boolean().default(true),
     IsClosed: z.boolean().default(false),
@@ -124,7 +134,11 @@ const FiscalYearForm = () => {
 
       if (startDate && endDate && companyId) {
         try {
-          const hasOverlap = await fiscalYearService.checkDateOverlap(parseInt(companyId), startDate, endDate, isEdit ? fiscalYear?.FiscalYearID : undefined);
+          // Ensure dates are in string format for API call
+          const startDateStr = typeof startDate === "string" ? startDate : format(startDate, "yyyy-MM-dd");
+          const endDateStr = typeof endDate === "string" ? endDate : format(endDate, "yyyy-MM-dd");
+
+          const hasOverlap = await fiscalYearService.checkDateOverlap(parseInt(companyId), startDateStr, endDateStr, isEdit ? fiscalYear?.FiscalYearID : undefined);
 
           if (hasOverlap) {
             setDateOverlapWarning("Warning: The selected date range overlaps with an existing fiscal year for this company.");
@@ -144,10 +158,10 @@ const FiscalYearForm = () => {
   }, [watchedValues, isEdit, fiscalYear?.FiscalYearID]);
 
   // Auto-generate fiscal year code based on dates
-  const generateFYCode = (startDate: string, endDate: string) => {
+  const generateFYCode = (startDate: string | Date, endDate: string | Date) => {
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = startDate instanceof Date ? startDate : new Date(startDate);
+      const end = endDate instanceof Date ? endDate : new Date(endDate);
       const startYear = start.getFullYear();
       const endYear = end.getFullYear();
 
@@ -161,22 +175,23 @@ const FiscalYearForm = () => {
   };
 
   // Auto-generate description based on dates
-  const generateDescription = (startDate: string, endDate: string) => {
+  const generateDescription = (startDate: string | Date, endDate: string | Date) => {
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = startDate instanceof Date ? startDate : new Date(startDate);
+      const end = endDate instanceof Date ? endDate : new Date(endDate);
       return `Fiscal Year ${format(start, "yyyy")} - ${format(end, "yyyy")}`;
     }
     return "";
   };
 
-  // Handle start date change
-  const handleStartDateChange = (value: string) => {
-    form.setValue("StartDate", value);
+  // Handle start date change with proper type handling
+  const handleStartDateChange = (value: string | Date) => {
+    const dateValue = value instanceof Date ? format(value, "yyyy-MM-dd") : value;
+    form.setValue("StartDate", dateValue);
 
     // Auto-generate end date (one year minus one day)
-    if (value && !form.getValues("EndDate")) {
-      const startDate = new Date(value);
+    if (dateValue && !form.getValues("EndDate")) {
+      const startDate = new Date(dateValue);
       const endDate = addDays(new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate()), -1);
       form.setValue("EndDate", format(endDate, "yyyy-MM-dd"));
     }
@@ -185,8 +200,8 @@ const FiscalYearForm = () => {
     if (!isEdit) {
       const endDate = form.getValues("EndDate");
       if (endDate) {
-        const generatedCode = generateFYCode(value, endDate);
-        const generatedDescription = generateDescription(value, endDate);
+        const generatedCode = generateFYCode(dateValue, endDate);
+        const generatedDescription = generateDescription(dateValue, endDate);
 
         if (!form.getValues("FYCode")) {
           form.setValue("FYCode", generatedCode);
@@ -198,16 +213,17 @@ const FiscalYearForm = () => {
     }
   };
 
-  // Handle end date change
-  const handleEndDateChange = (value: string) => {
-    form.setValue("EndDate", value);
+  // Handle end date change with proper type handling
+  const handleEndDateChange = (value: string | Date) => {
+    const dateValue = value instanceof Date ? format(value, "yyyy-MM-dd") : value;
+    form.setValue("EndDate", dateValue);
 
     // Auto-generate code and description if not in edit mode
     if (!isEdit) {
       const startDate = form.getValues("StartDate");
       if (startDate) {
-        const generatedCode = generateFYCode(startDate, value);
-        const generatedDescription = generateDescription(startDate, value);
+        const generatedCode = generateFYCode(startDate, dateValue);
+        const generatedDescription = generateDescription(startDate, dateValue);
 
         if (!form.getValues("FYCode")) {
           form.setValue("FYCode", generatedCode);
@@ -225,12 +241,16 @@ const FiscalYearForm = () => {
     setValidationErrors([]);
 
     try {
+      // Ensure dates are in proper string format
+      const startDateStr = typeof data.StartDate === "string" ? data.StartDate : format(data.StartDate, "yyyy-MM-dd");
+      const endDateStr = typeof data.EndDate === "string" ? data.EndDate : format(data.EndDate, "yyyy-MM-dd");
+
       // Prepare fiscal year data
       const fiscalYearData = {
         FYCode: data.FYCode,
         FYDescription: data.FYDescription,
-        StartDate: data.StartDate,
-        EndDate: data.EndDate,
+        StartDate: startDateStr,
+        EndDate: endDateStr,
         CompanyID: parseInt(data.CompanyID),
         IsActive: data.IsActive,
         IsClosed: data.IsClosed,
