@@ -79,36 +79,3 @@ export const CurrencyIcon: React.FC<{
 
   return <IconComponent {...iconProps} />;
 };
-
-export const DirhamCircleIcon: React.FC<CurrencyIconProps> = ({ className = "h-4 w-4", size }) => {
-  const sizeValue = size || 24;
-
-  return (
-    <svg width={sizeValue} height={sizeValue} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      {/* Outer circle */}
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
-
-      {/* Dirham symbol - D with two horizontal lines */}
-      <g transform="translate(12, 12)">
-        {/* Letter D shape */}
-        <path
-          d="M -3 -5 L -3 5 L 1 5 Q 3.5 5 3.5 2.5 L 3.5 -2.5 Q 3.5 -5 1 -5 Z"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Upper horizontal line */}
-        <line x1="-4" y1="-2" x2="3" y2="-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-
-        {/* Lower horizontal line */}
-        <line x1="-4" y1="1" x2="3" y2="1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      </g>
-    </svg>
-  );
-};
-
-// Update the mapping to use custom AED icon
-currencyIconMap["AED"] = DirhamCircleIcon;
