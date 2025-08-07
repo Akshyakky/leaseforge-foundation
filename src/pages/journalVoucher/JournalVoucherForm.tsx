@@ -31,7 +31,7 @@ import {
   Receipt,
   CreditCard,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Info,
   RotateCcw,
@@ -955,7 +955,7 @@ const JournalVoucherForm: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-red-600" />
+                      <HandCoins className="h-4 w-4 text-red-600" />
                       <span className="text-sm font-medium text-muted-foreground">Total Credits</span>
                     </div>
                     <div className="text-2xl font-bold text-red-600">{totalCredits.toLocaleString()}</div>
@@ -1358,7 +1358,7 @@ const JournalVoucherForm: React.FC = () => {
 
                               <div className="space-y-4">
                                 <div className="flex items-center gap-2">
-                                  <DollarSign className="h-4 w-4 text-green-500" />
+                                  <HandCoins className="h-4 w-4 text-green-500" />
                                   <span className="font-medium">Tax Information</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

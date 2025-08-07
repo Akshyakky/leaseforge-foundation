@@ -17,7 +17,7 @@ import {
   FileText,
   Building,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Eye,
   Edit,
@@ -1089,7 +1089,7 @@ const TerminationList: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -1354,7 +1354,7 @@ const TerminationList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-blue-600" />
+                <HandCoins className="h-4 w-4 text-blue-600" />
                 <span className="text-sm text-muted-foreground">Total Deposits</span>
               </div>
               <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalSecurityDeposit)}</div>
@@ -1364,7 +1364,7 @@ const TerminationList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-600" />
+                <HandCoins className="h-4 w-4 text-green-600" />
                 <span className="text-sm text-muted-foreground">Total Refunds</span>
               </div>
               <div className="text-lg font-bold text-green-600">{formatCurrency(stats.totalRefunds)}</div>
@@ -1420,7 +1420,7 @@ const TerminationList: React.FC = () => {
                       Send Termination Notifications ({selectedTerminations.size})
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleBulkEmail("refund_notification")} disabled={selectedTerminations.size === 0 || isBulkEmailing}>
-                      <DollarSign className="mr-2 h-4 w-4" />
+                      <HandCoins className="mr-2 h-4 w-4" />
                       Send Refund Notifications ({selectedTerminations.size})
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleBulkEmail("move_out_reminder")} disabled={selectedTerminations.size === 0 || isBulkEmailing}>
@@ -1480,7 +1480,7 @@ const TerminationList: React.FC = () => {
                         Send Termination Notifications
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleBulkEmail("refund_notification")} disabled={isBulkEmailing}>
-                        <DollarSign className="mr-2 h-4 w-4" />
+                        <HandCoins className="mr-2 h-4 w-4" />
                         Send Refund Notifications
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleBulkEmail("move_out_reminder")} disabled={isBulkEmailing}>
@@ -1970,7 +1970,7 @@ const TerminationList: React.FC = () => {
                                   Move Out Reminder
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleSendEmail(termination, "refund_notification")}>
-                                  <DollarSign className="mr-2 h-4 w-4" />
+                                  <HandCoins className="mr-2 h-4 w-4" />
                                   Refund Notification
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleSendEmail(termination, "key_return_reminder")}>
@@ -2035,7 +2035,7 @@ const TerminationList: React.FC = () => {
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => openRefundDialog(termination)}>
-                                      <DollarSign className="mr-2 h-4 w-4" />
+                                      <HandCoins className="mr-2 h-4 w-4" />
                                       Process Refund
                                     </DropdownMenuItem>
                                   </>

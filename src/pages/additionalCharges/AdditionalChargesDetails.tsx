@@ -5,7 +5,7 @@ import { additionalChargesService, Charge } from "@/services/additionalChargesSe
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, Tag, Percent, DollarSign, Calendar, Info } from "lucide-react";
+import { ArrowLeft, Edit2, Trash2, Tag, Percent, HandCoins, Calendar, Info } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -190,7 +190,7 @@ const AdditionalChargesDetails: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex items-center">
-                  <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <HandCoins className="mr-2 h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">
                     {charge.CurrencyName} {charge.ChargeAmount?.toLocaleString()}
                   </span>

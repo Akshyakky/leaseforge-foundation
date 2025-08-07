@@ -6,7 +6,7 @@ import { Property } from "../../services/propertyService";
 import { DocType } from "../../services/docTypeService";
 import { DEFAULT_FORM_VALUES, UNIT_STATUS_OPTIONS, UNIT_TABS } from "./constants";
 import { UnitContacts } from "./UnitContacts";
-import { Home, Users, Save, RotateCcw, DollarSign, Info, Building2, Copy, Upload, X, FileImage, Paperclip, Star, Eye, Trash2, Settings } from "lucide-react";
+import { Home, Users, Save, RotateCcw, HandCoins, Info, Building2, Copy, Upload, X, FileImage, Paperclip, Star, Eye, Trash2, Settings } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -934,7 +934,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
               General Information
             </TabsTrigger>
             <TabsTrigger value={ENHANCED_UNIT_TABS.PRICING}>
-              <DollarSign className="mr-2 h-4 w-4" />
+              <HandCoins className="mr-2 h-4 w-4" />
               Pricing & Payment
             </TabsTrigger>
             <TabsTrigger value={ENHANCED_UNIT_TABS.ATTACHMENTS} className="relative">

@@ -19,7 +19,7 @@ import {
   Clock,
   AlertCircle,
   FileText,
-  DollarSign,
+  HandCoins,
   Calendar,
   Building,
   Users,
@@ -514,7 +514,7 @@ const ContractReceiptDetails: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };

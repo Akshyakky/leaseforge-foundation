@@ -1,5 +1,5 @@
 import React from "react";
-import { DollarSign, ShoppingCart, CreditCard, TrendingUp, Users, Package } from "lucide-react";
+import { HandCoins, ShoppingCart, CreditCard, TrendingUp, Users, Package } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ComposedChart, Area } from "recharts";
@@ -49,7 +49,7 @@ const SalesDashboard = () => {
           value="$124,563.00"
           subtitle="Current period"
           trend={{ value: 14.6, positive: true, label: "vs last period" }}
-          icon={<DollarSign className="h-4 w-4 text-emerald-500" />}
+          icon={<HandCoins className="h-4 w-4 text-emerald-500" />}
         />
         <DashboardCard
           title="Orders"

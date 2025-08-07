@@ -23,7 +23,7 @@ import {
   Building,
   Receipt,
   CheckCircle,
-  DollarSign,
+  HandCoins,
   Calendar,
   Filter,
   RefreshCw,
@@ -482,7 +482,7 @@ const LeaseRevenuePostingForm: React.FC = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -500,7 +500,7 @@ const LeaseRevenuePostingForm: React.FC = () => {
   const renderTransactionTypeBadge = (transactionType: string) => {
     const config = {
       Invoice: { className: "bg-blue-100 text-blue-800", icon: Receipt },
-      Receipt: { className: "bg-green-100 text-green-800", icon: DollarSign },
+      Receipt: { className: "bg-green-100 text-green-800", icon: HandCoins },
     };
 
     const typeConfig = config[transactionType as keyof typeof config] || config.Invoice;
@@ -800,7 +800,7 @@ const LeaseRevenuePostingForm: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-purple-600" />
+                      <HandCoins className="h-4 w-4 text-purple-600" />
                       <span className="text-sm font-medium text-muted-foreground">Receipts</span>
                     </div>
                     <div className="text-2xl font-bold text-purple-600">{stats.receiptCount}</div>
@@ -887,7 +887,7 @@ const LeaseRevenuePostingForm: React.FC = () => {
                     </div>
                     {stats.selectedAmount > 0 && (
                       <Badge variant="secondary" className="flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
+                        <HandCoins className="h-3 w-3" />
                         {formatCurrency(stats.selectedAmount)}
                       </Badge>
                     )}

@@ -998,7 +998,7 @@ class ContractService extends BaseService {
   formatAmount(amount: number, currencyCode: string = "USD"): string {
     const formatter = new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currencyCode,
+      currency: currencyCode || "AED",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

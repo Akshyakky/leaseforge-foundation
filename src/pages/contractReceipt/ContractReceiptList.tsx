@@ -25,7 +25,7 @@ import {
   Trash2,
   Calendar,
   Building,
-  DollarSign,
+  HandCoins,
   Send,
   CreditCard,
   RefreshCw,
@@ -1021,7 +1021,7 @@ const ContractReceiptList: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -1178,7 +1178,7 @@ const ContractReceiptList: React.FC = () => {
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-indigo-600" />
+                    <HandCoins className="h-4 w-4 text-indigo-600" />
                     <span className="text-sm text-muted-foreground">Total Amount</span>
                   </div>
                   <div className="text-lg font-bold text-indigo-600">{formatCurrency(stats.totalAmount)}</div>

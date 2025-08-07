@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, Filter, Percent, DollarSign, Tag, Database } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, Filter, Percent, HandCoins, Tag, Database } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { additionalChargesService, Charge } from "@/services/additionalChargesService";
 import { additionalChargesCategoryService, ChargesCategory } from "@/services/additionalChargesCategoryService";
@@ -416,7 +416,7 @@ const AdditionalChargesList: React.FC = () => {
                           <TableCell>{charge.IsPercentage ? `${charge.PercentageValue}%` : formatCurrency(charge.ChargeAmount, charge.CurrencyName)}</TableCell>
                           <TableCell>
                             <Badge variant={charge.IsPercentage ? "secondary" : "outline"}>
-                              {charge.IsPercentage ? <Percent className="h-3 w-3 mr-1" /> : <DollarSign className="h-3 w-3 mr-1" />}
+                              {charge.IsPercentage ? <Percent className="h-3 w-3 mr-1" /> : <HandCoins className="h-3 w-3 mr-1" />}
                               {charge.IsPercentage ? "Percentage" : "Fixed"}
                             </Badge>
                           </TableCell>

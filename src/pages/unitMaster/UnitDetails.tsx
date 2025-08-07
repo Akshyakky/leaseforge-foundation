@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { UnitDetailsProps } from "./types";
 import { UnitAttachment } from "../../services/unitService";
 import { UNIT_TABS } from "./constants";
-import { Home, Users, Calendar, DollarSign, Copy, Edit, FileImage, Paperclip, Download, Eye, Trash2, Star } from "lucide-react";
+import { Home, Users, Calendar, HandCoins, Copy, Edit, FileImage, Paperclip, Download, Eye, Trash2, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -245,7 +245,7 @@ export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoad
             Contacts ({contacts.length})
           </TabsTrigger>
           <TabsTrigger value="pricing">
-            <DollarSign className="mr-2 h-4 w-4" />
+            <HandCoins className="mr-2 h-4 w-4" />
             Pricing Details
           </TabsTrigger>
         </TabsList>
@@ -304,7 +304,7 @@ export const UnitDetails: React.FC<UnitDetailsProps> = ({ unit, contacts, isLoad
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-semibold mb-4 flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5" />
+                  <HandCoins className="mr-2 h-5 w-5" />
                   Financial Details
                 </h3>
                 <div className="space-y-4">

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Search, Plus, Filter, Calendar, DollarSign, Tag } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, Filter, Calendar, HandCoins, Tag } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deductionService, Deduction } from "@/services/deductionService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -241,7 +241,7 @@ const DeductionChargesList: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-1 text-muted-foreground" />
+                          <HandCoins className="h-4 w-4 mr-1 text-muted-foreground" />
                           <span>{deduction.DeductionValue}</span>
                         </div>
                       </TableCell>

@@ -26,7 +26,7 @@ import {
   FileText,
   Building,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Calculator,
   AlertCircle,
@@ -1419,7 +1419,7 @@ const ContractForm: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Additional Charges</span>
                   </div>
                   <div className="text-2xl font-bold">{chargesTotal.toLocaleString()}</div>
@@ -1646,7 +1646,7 @@ const ContractForm: React.FC = () => {
 
                             <div className="space-y-4">
                               <div className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4 text-green-500" />
+                                <HandCoins className="h-4 w-4 text-green-500" />
                                 <span className="font-medium">Tax Information</span>
                               </div>
                               <FormField
@@ -1704,7 +1704,7 @@ const ContractForm: React.FC = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-primary" />
+                    <HandCoins className="h-5 w-5 text-primary" />
                     Additional Charges
                     {isApproved && <Lock className="h-4 w-4 text-red-500" />}
                   </CardTitle>
@@ -1719,7 +1719,7 @@ const ContractForm: React.FC = () => {
             <CardContent>
               {chargesFieldArray.fields.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <DollarSign className="mx-auto h-8 w-8 mb-4 text-muted-foreground/50" />
+                  <HandCoins className="mx-auto h-8 w-8 mb-4 text-muted-foreground/50" />
                   <p>No additional charges have been added yet.</p>
                 </div>
               ) : (
@@ -1733,7 +1733,7 @@ const ContractForm: React.FC = () => {
                         <AccordionTrigger className="px-4 hover:no-underline">
                           <div className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-3">
-                              <DollarSign className="h-5 w-5 text-muted-foreground" />
+                              <HandCoins className="h-5 w-5 text-muted-foreground" />
                               <div className="text-left">
                                 <div className="font-medium">{chargeDetails ? chargeDetails.ChargesName : `Charge ${index + 1}`}</div>
                                 <div className="text-sm text-muted-foreground">{chargeDetails && chargeDetails.ChargesCategoryName}</div>
@@ -1780,7 +1780,7 @@ const ContractForm: React.FC = () => {
 
                             <div className="space-y-4">
                               <div className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4 text-green-500" />
+                                <HandCoins className="h-4 w-4 text-green-500" />
                                 <span className="font-medium">Tax Information</span>
                               </div>
                               <FormField

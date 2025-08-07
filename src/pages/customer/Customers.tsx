@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MoreHorizontal, Search, UserPlus, ChevronDown, FileText, Phone, Mail, DollarSign, TrendingUp, CreditCard, AlertCircle } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, UserPlus, ChevronDown, FileText, Phone, Mail, HandCoins, TrendingUp, CreditCard, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { customerService } from "@/services/customerService";
 import { Customer, CustomerType, CustomerOutstandingBalance } from "@/types/customerTypes";
@@ -263,7 +263,7 @@ const Customers = () => {
               <Button variant={showBalanceOnly ? "default" : "outline"} onClick={handleBalanceFilterToggle} className="whitespace-nowrap">
                 {showBalanceOnly ? (
                   <>
-                    <DollarSign className="mr-2 h-4 w-4" />
+                    <HandCoins className="mr-2 h-4 w-4" />
                     Only Outstanding
                   </>
                 ) : (
@@ -290,7 +290,7 @@ const Customers = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-blue-600" />
+                  <HandCoins className="h-4 w-4 text-blue-600" />
                   <span className="text-sm text-muted-foreground">With Outstanding Balance</span>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">{outstandingBalances.filter((b) => b.OutstandingBalance > 0).length}</div>

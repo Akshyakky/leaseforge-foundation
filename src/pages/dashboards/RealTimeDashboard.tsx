@@ -10,7 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useNavigate } from "react-router-dom";
 import { format, subDays, differenceInDays } from "date-fns";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Area } from "recharts";
-import { ArrowUp, ArrowDown, DollarSign, FileText, Users, BarChart3, Clock, RefreshCw, AlertTriangle, Calendar, PieChart as PieIcon, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowDown, HandCoins, FileText, Users, BarChart3, Clock, RefreshCw, AlertTriangle, Calendar, PieChart as PieIcon, Loader2 } from "lucide-react";
 
 // Status colors for charts
 const CONTRACT_STATUS_COLORS = {
@@ -165,7 +165,7 @@ const RealTimeDashboard = () => {
   const formatCurrency = (value) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
@@ -332,7 +332,7 @@ const RealTimeDashboard = () => {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium">Pending Refunds</CardTitle>
-                <DollarSign className="h-4 w-4 text-rose-500" />
+                <HandCoins className="h-4 w-4 text-rose-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(kpis.totalPendingRefundAmount)}</div>
@@ -625,7 +625,7 @@ const RealTimeDashboard = () => {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium">Pending Refunds</CardTitle>
-                <DollarSign className="h-4 w-4 text-rose-500" />
+                <HandCoins className="h-4 w-4 text-rose-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(kpis.totalPendingRefundAmount)}</div>

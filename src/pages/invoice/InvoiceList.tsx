@@ -19,7 +19,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  DollarSign,
+  HandCoins,
   Receipt,
   Eye,
   History,
@@ -657,7 +657,7 @@ const InvoiceList: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -836,7 +836,7 @@ const InvoiceList: React.FC = () => {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-blue-600" />
+              <HandCoins className="h-4 w-4 text-blue-600" />
               <span className="text-sm text-muted-foreground">Total Value</span>
             </div>
             <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>

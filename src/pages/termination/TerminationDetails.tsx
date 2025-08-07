@@ -15,7 +15,7 @@ import {
   Building,
   Calendar,
   Users,
-  DollarSign,
+  HandCoins,
   Download,
   PlusCircle,
   Info,
@@ -111,7 +111,7 @@ const TerminationDetails: React.FC = () => {
   const [showEmailHistory, setShowEmailHistory] = useState(false);
 
   // Termination status options
-  const terminationStatusOptions = ["Draft", "Pending", "Approved", "Completed", "Cancelled"];
+  const terminationStatusOptions = ["Draft", "Pending", "Completed", "Cancelled"]; //"Approved",
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
@@ -657,7 +657,7 @@ const TerminationDetails: React.FC = () => {
                   Termination Notification
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleSendEmail("refund_notification")}>
-                  <DollarSign className="mr-2 h-4 w-4" />
+                  <HandCoins className="mr-2 h-4 w-4" />
                   Refund Notification
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleSendEmail("document_request")}>
@@ -742,7 +742,7 @@ const TerminationDetails: React.FC = () => {
 
             {termination.TerminationStatus === "Approved" && termination.RefundAmount > 0 && !termination.IsRefundProcessed && (
               <Button variant="outline" onClick={openRefundDialog}>
-                <DollarSign className="mr-2 h-4 w-4" />
+                <HandCoins className="mr-2 h-4 w-4" />
                 Process Refund
               </Button>
             )}
@@ -1047,7 +1047,7 @@ const TerminationDetails: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
+                  <HandCoins className="mr-2 h-5 w-5 text-muted-foreground" />
                   Deductions
                   {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600" />}
                 </CardTitle>

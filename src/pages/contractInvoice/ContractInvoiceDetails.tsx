@@ -28,7 +28,7 @@ import {
   Clock,
   XCircle,
   User,
-  DollarSign,
+  HandCoins,
   Send,
   RotateCcw,
   Printer,
@@ -184,7 +184,7 @@ export const ContractInvoiceDetails = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currencyCode || "USD",
+      currency: currencyCode || "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -793,7 +793,7 @@ export const ContractInvoiceDetails = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">Total Amount:</span>
                     <span className="text-lg font-semibold">{formatCurrency(invoice.TotalAmount, invoice.CurrencyCode)}</span>
                   </div>

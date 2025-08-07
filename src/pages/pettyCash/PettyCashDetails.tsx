@@ -36,7 +36,6 @@ import {
   Clock,
   XCircle,
   User,
-  DollarSign,
   ChevronDown,
   Loader2,
   Lock,
@@ -205,7 +204,7 @@ const PettyCashDetails: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD", //currencyCode ||
+      currency: "AED", //currencyCode ||
       minimumFractionDigits: 2,
     }).format(amount);
   };

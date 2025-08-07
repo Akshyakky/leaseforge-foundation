@@ -5,7 +5,7 @@ import { supplierService } from "@/services/supplierService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, CreditCard, Building, Phone, Mail, Globe } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, HandCoins, CreditCard, Building, Phone, Mail, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -157,7 +157,7 @@ export const SupplierDetails = () => {
                     <span className="font-medium">{supplier.PaymentTermName || "N/A"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Credit Limit:</span>
                     <span className="font-medium">{supplier.CreditLimit ? `${supplier.CreditLimit.toFixed(2)}` : "N/A"}</span>
                   </div>
@@ -179,7 +179,7 @@ export const SupplierDetails = () => {
                     <span className="font-medium">{supplier.TaxName || "N/A"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Discount %:</span>
                     <span className="font-medium">{supplier.DiscountPercentage ? `${supplier.DiscountPercentage}%` : "N/A"}</span>
                   </div>

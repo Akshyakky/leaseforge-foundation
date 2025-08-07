@@ -31,7 +31,7 @@ import {
   Clock,
   XCircle,
   User,
-  DollarSign,
+  HandCoins,
   Building,
   MapPin,
   Users,
@@ -338,7 +338,7 @@ export const LeaseContractDetails = () => {
                   <span>{formatDate(contract.TransactionDate)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <HandCoins className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">Grand Total:</span>
                   <span className="text-lg font-semibold text-green-600">{formatCurrency(contract.GrandTotal)}</span>
                 </div>
@@ -528,7 +528,7 @@ export const LeaseContractDetails = () => {
             <TabsContent value="charges" className="mt-6">
               {additionalCharges.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <DollarSign className="mx-auto h-12 w-12 mb-4" />
+                  <HandCoins className="mx-auto h-12 w-12 mb-4" />
                   <p>No additional charges for this contract.</p>
                 </div>
               ) : (

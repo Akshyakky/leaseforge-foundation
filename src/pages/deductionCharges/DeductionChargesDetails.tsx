@@ -5,7 +5,7 @@ import { deductionService, Deduction } from "@/services/deductionService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, Tag, DollarSign, Calendar, Info } from "lucide-react";
+import { ArrowLeft, Edit2, Trash2, Tag, HandCoins, Calendar, Info } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -182,7 +182,7 @@ const DeductionChargesDetails: React.FC = () => {
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Deduction Value</h3>
               <div className="flex items-center">
-                <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />
+                <HandCoins className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">{deduction.DeductionValue}</span>
                 {deduction.ApplicableOn && <span className="ml-2 text-muted-foreground">applicable on {deduction.ApplicableOn}</span>}
               </div>

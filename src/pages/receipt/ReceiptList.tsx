@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  DollarSign,
+  HandCoins,
   Receipt,
   Eye,
   RefreshCw,
@@ -549,7 +549,7 @@ const ReceiptList: React.FC = () => {
         <div className="flex space-x-2">
           {bulkActions.length > 0 && (
             <Button variant="outline" onClick={handleBulkPost} disabled={actionLoading}>
-              <DollarSign className="mr-2 h-4 w-4" />
+              <HandCoins className="mr-2 h-4 w-4" />
               Post Selected ({bulkActions.length})
             </Button>
           )}
@@ -864,7 +864,7 @@ const ReceiptList: React.FC = () => {
                                   <DropdownMenuSeparator />
 
                                   <DropdownMenuItem onClick={() => openPostDialog(receipt)} disabled={receipt.IsPosted || receipt.PaymentStatus === PaymentStatus.REVERSED}>
-                                    <DollarSign className="h-4 w-4 mr-2" />
+                                    <HandCoins className="h-4 w-4 mr-2" />
                                     Post to GL
                                   </DropdownMenuItem>
 

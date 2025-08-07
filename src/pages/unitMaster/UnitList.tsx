@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { UnitListProps } from "./types";
 import { UNIT_STATUS_OPTIONS } from "./constants";
-import { Eye, Edit, Trash2, MoreHorizontal, CheckCircle2, Copy, FileImage, Paperclip, MapPin, Calendar, Home, DollarSign } from "lucide-react";
+import { Eye, Edit, Trash2, MoreHorizontal, CheckCircle2, Copy, FileImage, Paperclip, MapPin, Calendar, Home, HandCoins } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -191,7 +191,7 @@ export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, on
                   <div className="space-y-2">
                     <div className="text-sm">{formatArea(unit)}</div>
                     <div className="font-medium flex items-center">
-                      <DollarSign className="h-3 w-3 mr-1" />
+                      <HandCoins className="h-3 w-3 mr-1" />
                       {formatPrice(unit)}
                     </div>
                     {unit.UnitRate && <div className="text-xs text-muted-foreground">Rate: ${unit.UnitRate.toLocaleString()}/sqft</div>}

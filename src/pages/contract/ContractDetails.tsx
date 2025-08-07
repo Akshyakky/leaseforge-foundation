@@ -14,7 +14,7 @@ import {
   Building,
   Calendar,
   Users,
-  DollarSign,
+  HandCoins,
   Download,
   PlusCircle,
   Info,

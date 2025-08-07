@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit2, Trash2, DollarSign, RefreshCw, Clock, Star, CircleCheck } from "lucide-react";
+import { ArrowLeft, Edit2, Trash2, HandCoins, RefreshCw, Clock, Star, CircleCheck } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -240,7 +240,7 @@ const CurrencyDetails: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
+              <HandCoins className="mr-2 h-5 w-5 text-muted-foreground" />
               Currency Information
             </CardTitle>
           </CardHeader>

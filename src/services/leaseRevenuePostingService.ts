@@ -706,7 +706,7 @@ class LeaseRevenuePostingService extends BaseService {
   formatAmount(amount: number, currencyCode?: string): string {
     const formatter = new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currencyCode || "USD",
+      currency: currencyCode || "AED",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

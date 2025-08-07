@@ -21,7 +21,7 @@ import {
   Trash2,
   Calendar,
   Building,
-  DollarSign,
+  HandCoins,
   Send,
   RotateCcw,
   Ban,
@@ -298,7 +298,7 @@ const LeaseInvoiceList = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -410,7 +410,7 @@ const LeaseInvoiceList = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-blue-600" />
+                  <HandCoins className="h-4 w-4 text-blue-600" />
                   <span className="text-sm text-muted-foreground">Total Amount</span>
                 </div>
                 <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalAmount)}</div>
@@ -419,7 +419,7 @@ const LeaseInvoiceList = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <HandCoins className="h-4 w-4 text-green-600" />
                   <span className="text-sm text-muted-foreground">Paid Amount</span>
                 </div>
                 <div className="text-lg font-bold text-green-600">{formatCurrency(stats.paidAmount)}</div>
@@ -428,7 +428,7 @@ const LeaseInvoiceList = () => {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-orange-600" />
+                  <HandCoins className="h-4 w-4 text-orange-600" />
                   <span className="text-sm text-muted-foreground">Balance</span>
                 </div>
                 <div className="text-lg font-bold text-orange-600">{formatCurrency(stats.balanceAmount)}</div>

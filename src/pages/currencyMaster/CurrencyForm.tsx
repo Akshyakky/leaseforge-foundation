@@ -6,7 +6,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, RotateCcw, DollarSign, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Save, RotateCcw, HandCoins, AlertTriangle } from "lucide-react";
 import { currencyService, Currency } from "@/services/currencyService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";

@@ -19,7 +19,7 @@ import {
   Calendar,
   Plus,
   Download,
-  DollarSign,
+  HandCoins,
   CreditCard,
   TrendingUp,
 } from "lucide-react";
@@ -242,7 +242,7 @@ export const CustomerDetails = () => {
                 </div>
                 {outstandingBalance && (
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className={`font-semibold ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`}>
                       Outstanding Balance: {formatCurrency(outstandingBalance.OutstandingBalance)}
                     </span>
@@ -524,7 +524,7 @@ export const CustomerDetails = () => {
                           </p>
                         </div>
                         <div className={`p-4 rounded-full ${outstandingBalance.OutstandingBalance >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
-                          <DollarSign className={`h-8 w-8 ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`} />
+                          <HandCoins className={`h-8 w-8 ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`} />
                         </div>
                       </div>
                     </CardContent>

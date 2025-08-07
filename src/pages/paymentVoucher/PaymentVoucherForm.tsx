@@ -30,7 +30,7 @@ import {
   Network,
   CreditCard,
   Receipt,
-  DollarSign,
+  HandCoins,
   Users,
   CheckCircle,
   Info,
@@ -1115,7 +1115,7 @@ const PaymentVoucherForm: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <HandCoins className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Total Amount</span>
                     </div>
                     <div className="text-2xl font-bold">{totalAmount.toLocaleString()}</div>
@@ -1267,7 +1267,7 @@ const PaymentVoucherForm: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-primary" />
+                      <HandCoins className="h-5 w-5 text-primary" />
                       Voucher Lines
                       {isPaidOrReversed && <Lock className="h-4 w-4 text-red-500" />}
                     </CardTitle>
@@ -1282,7 +1282,7 @@ const PaymentVoucherForm: React.FC = () => {
               <CardContent>
                 {linesFieldArray.fields.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                    <DollarSign className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <HandCoins className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground mb-4">No voucher lines have been added yet.</p>
                     <Button type="button" variant="outline" onClick={addVoucherLine} disabled={!canEditVoucher}>
                       {canEditVoucher ? <Plus className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
@@ -1300,7 +1300,7 @@ const PaymentVoucherForm: React.FC = () => {
                           <AccordionTrigger className="px-4 hover:no-underline">
                             <div className="flex items-center justify-between w-full">
                               <div className="flex items-center gap-3">
-                                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                                <HandCoins className="h-5 w-5 text-muted-foreground" />
                                 <div className="text-left">
                                   <div className="font-medium">{accountDetails ? `${accountDetails.AccountCode} - ${accountDetails.AccountName}` : `Line ${index + 1}`}</div>
                                   <div className="text-sm text-muted-foreground">{form.watch(`lines.${index}.description`) || "No description"}</div>

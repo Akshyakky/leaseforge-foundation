@@ -1,6 +1,6 @@
 // src/utils/currencyIcons.tsx
 import React from "react";
-import { DollarSign, Euro, PoundSterling, CircleDollarSign, Banknote, Coins, CreditCard, Wallet } from "lucide-react";
+import { DollarSign, Euro, PoundSterling, HandCoins, Banknote, Coins, CreditCard, Wallet } from "lucide-react";
 
 export interface CurrencyIconProps {
   className?: string;
@@ -21,9 +21,8 @@ export const currencyIconMap: Record<string, React.ComponentType<CurrencyIconPro
   GBP: PoundSterling,
   "£": PoundSterling,
 
-  // UAE Dirham - using CircleDollarSign as a distinct alternative
-  AED: CircleDollarSign,
-  "د.إ": CircleDollarSign,
+  AED: HandCoins,
+  "د.إ": HandCoins,
 
   // Saudi Riyal
   SAR: Banknote,

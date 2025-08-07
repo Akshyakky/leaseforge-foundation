@@ -37,7 +37,7 @@ import {
   Download,
   Eye,
   Calendar,
-  DollarSign,
+  HandCoins,
   Receipt,
   Info,
 } from "lucide-react";
@@ -1085,7 +1085,7 @@ const PettyCashForm: React.FC = () => {
                 <Separator />
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-primary" />
+                    <HandCoins className="h-5 w-5 text-primary" />
                     <h3 className="text-lg font-semibold">Tax Information</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1121,7 +1121,7 @@ const PettyCashForm: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-red-600" />
+                      <HandCoins className="h-4 w-4 text-red-600" />
                       <span className="text-sm font-medium text-muted-foreground">Total Debits</span>
                     </div>
                     <div className="text-2xl font-bold text-red-600">{totalDebits.toLocaleString()}</div>
@@ -1131,7 +1131,7 @@ const PettyCashForm: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <HandCoins className="h-4 w-4 text-green-600" />
                       <span className="text-sm font-medium text-muted-foreground">Total Credits</span>
                     </div>
                     <div className="text-2xl font-bold text-green-600">{totalCredits.toLocaleString()}</div>

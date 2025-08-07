@@ -24,7 +24,7 @@ import {
   Trash2,
   Calendar,
   Building,
-  DollarSign,
+  HandCoins,
   Send,
   RotateCcw,
   RefreshCw,
@@ -542,7 +542,7 @@ const LeaseRevenuePostingList: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };

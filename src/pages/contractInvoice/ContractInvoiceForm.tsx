@@ -23,7 +23,7 @@ import {
   FileText,
   Building,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Calculator,
   AlertCircle,
@@ -1193,7 +1193,7 @@ const ContractInvoiceForm: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Tax Amount</span>
                   </div>
                   <div className="text-2xl font-bold">{taxTotal.toLocaleString()}</div>
@@ -1201,7 +1201,7 @@ const ContractInvoiceForm: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Discount</span>
                   </div>
                   <div className="text-2xl font-bold">{discountTotal.toLocaleString()}</div>

@@ -33,7 +33,7 @@ import {
   AlertCircle,
   AlertTriangle,
   User,
-  DollarSign,
+  HandCoins,
   Network,
   CreditCard,
   Building,
@@ -375,7 +375,7 @@ const JournalVoucherDetails: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD", //currencyCode ||
+      currency: "AED", //currencyCode ||
       minimumFractionDigits: 2,
     }).format(amount);
   };

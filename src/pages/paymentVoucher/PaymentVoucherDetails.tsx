@@ -36,7 +36,7 @@ import {
   Clock,
   XCircle,
   User,
-  DollarSign,
+  HandCoins,
   Building,
   Users,
   Network,
@@ -437,7 +437,7 @@ const PaymentVoucherDetails: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -486,7 +486,7 @@ const PaymentVoucherDetails: React.FC = () => {
   // Render payment type badge
   const renderPaymentTypeBadge = (paymentType: string) => {
     const paymentTypeConfig = {
-      Cash: { icon: DollarSign, className: "bg-green-100 text-green-800" },
+      Cash: { icon: HandCoins, className: "bg-green-100 text-green-800" },
       Cheque: { icon: FileText, className: "bg-blue-100 text-blue-800" },
       "Bank Transfer": { icon: Building, className: "bg-purple-100 text-purple-800" },
       Online: { icon: CreditCard, className: "bg-orange-100 text-orange-800" },
@@ -1004,7 +1004,7 @@ const PaymentVoucherDetails: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
+                  <HandCoins className="mr-2 h-5 w-5 text-muted-foreground" />
                   Voucher Lines
                 </CardTitle>
                 {canEditVoucher ? (

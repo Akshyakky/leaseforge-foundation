@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MoreHorizontal, Search, Plus, FileText, Calendar, Building, DollarSign, Users, TrendingUp, Eye, Edit, Trash2 } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, FileText, Calendar, Building, HandCoins, Users, TrendingUp, Eye, Edit, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -302,7 +302,7 @@ const LeaseContractList = () => {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-blue-600" />
+                    <HandCoins className="h-4 w-4 text-blue-600" />
                     <span className="text-sm text-muted-foreground">Total Value</span>
                   </div>
                   <div className="text-lg font-bold text-blue-600">{formatCurrency(summaryReport.TotalContractValue)}</div>
@@ -430,7 +430,7 @@ const LeaseContractList = () => {
                             )}
                             {contract.ChargeCount && contract.ChargeCount > 0 && (
                               <div className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
+                                <HandCoins className="h-3 w-3" />
                                 {contract.ChargeCount} charges
                               </div>
                             )}

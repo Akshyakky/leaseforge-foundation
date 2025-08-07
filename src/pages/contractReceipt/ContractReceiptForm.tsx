@@ -23,7 +23,7 @@ import {
   Receipt,
   Building,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Calculator,
   AlertCircle,
@@ -1009,7 +1009,7 @@ const ContractReceiptForm: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <HandCoins className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Received Amount</span>
                     </div>
                     <div className="text-2xl font-bold">{formatCurrency(totals.receivedAmount)}</div>
@@ -1017,7 +1017,7 @@ const ContractReceiptForm: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <HandCoins className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Additional Amounts</span>
                     </div>
                     <div className="text-2xl font-bold">{formatCurrency(totals.securityDepositAmount + totals.penaltyAmount - totals.discountAmount)}</div>

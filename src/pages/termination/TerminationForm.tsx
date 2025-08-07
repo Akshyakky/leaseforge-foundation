@@ -27,7 +27,7 @@ import {
   X,
   Lock,
   Shield,
-  DollarSign,
+  HandCoins,
   Mail,
   Send,
   Settings,
@@ -1398,7 +1398,7 @@ const TerminationForm: React.FC = () => {
                             <AccordionTrigger className="px-4">
                               <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center">
-                                  <DollarSign className="h-5 w-5 mr-2 text-muted-foreground" />
+                                  <HandCoins className="h-5 w-5 mr-2 text-muted-foreground" />
                                   <span className="font-medium">{form.watch(`deductions.${index}.DeductionName`) || `Deduction ${index + 1}`}</span>
                                 </div>
                                 <div className="font-medium">

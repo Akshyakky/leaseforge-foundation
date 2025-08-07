@@ -18,7 +18,7 @@ import {
   FileText,
   Building,
   Users,
-  DollarSign,
+  HandCoins,
   Calendar,
   Eye,
   Edit,
@@ -697,7 +697,7 @@ const PaymentVoucherList: React.FC = () => {
   // Render payment type badge
   const renderPaymentTypeBadge = (paymentType: string) => {
     const paymentTypeConfig = {
-      Cash: { icon: DollarSign, className: "bg-green-100 text-green-800" },
+      Cash: { icon: HandCoins, className: "bg-green-100 text-green-800" },
       Cheque: { icon: FileText, className: "bg-blue-100 text-blue-800" },
       "Bank Transfer": { icon: Building, className: "bg-purple-100 text-purple-800" },
       Online: { icon: CreditCard, className: "bg-orange-100 text-orange-800" },
@@ -732,7 +732,7 @@ const PaymentVoucherList: React.FC = () => {
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -931,7 +931,7 @@ const PaymentVoucherList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-blue-600" />
+                <HandCoins className="h-4 w-4 text-blue-600" />
                 <span className="text-sm text-muted-foreground">Total Value</span>
               </div>
               <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>

@@ -16,7 +16,7 @@ import {
   Trash2,
   Download,
   Printer,
-  DollarSign,
+  HandCoins,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -414,7 +414,7 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
               <DropdownMenuSeparator />
 
               <DropdownMenuItem onClick={openPostDialog} disabled={!canPost}>
-                <DollarSign className="h-4 w-4 mr-2" />
+                <HandCoins className="h-4 w-4 mr-2" />
                 Post to GL
               </DropdownMenuItem>
 
@@ -622,7 +622,7 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <DollarSign className="h-5 w-5 mr-2" />
+                <HandCoins className="h-5 w-5 mr-2" />
                 Financial Summary
               </CardTitle>
             </CardHeader>
@@ -718,7 +718,7 @@ const ReceiptDetails: React.FC<ReceiptDetailsProps> = () => {
             <CardContent className="space-y-2">
               {canPost && (
                 <Button variant="outline" className="w-full justify-start" onClick={openPostDialog}>
-                  <DollarSign className="h-4 w-4 mr-2" />
+                  <HandCoins className="h-4 w-4 mr-2" />
                   Post to GL
                 </Button>
               )}

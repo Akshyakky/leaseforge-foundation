@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { contractService } from "@/services/contractService";
 import { terminationService } from "@/services/terminationService";
-import { Calendar, BarChart3, PieChart as PieChartIcon, TrendingUp, DollarSign, FileText, Clock, AlertCircle, Plus, Users, RefreshCw } from "lucide-react";
+import { Calendar, BarChart3, PieChart as PieChartIcon, TrendingUp, HandCoins, FileText, Clock, AlertCircle, Plus, Users, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -175,7 +175,7 @@ const ContractAnalyticsDashboard: React.FC = () => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
@@ -272,7 +272,7 @@ const ContractAnalyticsDashboard: React.FC = () => {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium">Active Contracts Value</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <HandCoins className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(dashboardData.totalValues.activeContractsValue)}</div>
@@ -490,7 +490,7 @@ const ContractAnalyticsDashboard: React.FC = () => {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium">Pending Refunds</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <HandCoins className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{dashboardData.totalValues.pendingRefundsCount}</div>
@@ -501,7 +501,7 @@ const ContractAnalyticsDashboard: React.FC = () => {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-medium">Total Refund Amount</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <HandCoins className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(dashboardData.terminationStats.pendingRefunds.reduce((sum, refund) => sum + refund.RefundAmount, 0))}</div>

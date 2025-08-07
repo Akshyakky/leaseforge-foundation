@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileText, BarChart3, PieChart, TrendingUp, Calculator, Building, CreditCard, Clock, ArrowRight, DollarSign, BookOpen } from "lucide-react";
+import { Loader2, FileText, BarChart3, PieChart, TrendingUp, Calculator, Building, CreditCard, Clock, ArrowRight, HandCoins, BookOpen } from "lucide-react";
 import { generalLedgerService } from "@/services/generalLedgerService";
 import { fiscalYearService } from "@/services/fiscalYearService";
 import { companyService } from "@/services/companyService";
@@ -127,7 +127,7 @@ const GeneralLedgerDashboard = () => {
         {
           title: "Total Expenses",
           value: formatCurrency(trialBalance.items.filter((item) => item.AccountTypeName?.toLowerCase().includes("expense")).reduce((sum, item) => sum + item.DebitBalance, 0)),
-          icon: <DollarSign className="h-5 w-5" />,
+          icon: <HandCoins className="h-5 w-5" />,
         },
       ];
 
@@ -139,7 +139,7 @@ const GeneralLedgerDashboard = () => {
         { title: "Total Assets", value: "$0.00", icon: <Building className="h-5 w-5" /> },
         { title: "Total Liabilities", value: "$0.00", icon: <CreditCard className="h-5 w-5" /> },
         { title: "Total Revenue", value: "$0.00", icon: <TrendingUp className="h-5 w-5" /> },
-        { title: "Total Expenses", value: "$0.00", icon: <DollarSign className="h-5 w-5" /> },
+        { title: "Total Expenses", value: "$0.00", icon: <HandCoins className="h-5 w-5" /> },
       ]);
     }
   };
@@ -147,7 +147,7 @@ const GeneralLedgerDashboard = () => {
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "AED",
     }).format(amount);
   };
 

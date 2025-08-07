@@ -24,7 +24,7 @@ import {
   Clock,
   XCircle,
   User,
-  DollarSign,
+  HandCoins,
   Send,
   RotateCcw,
   Printer,
@@ -213,7 +213,7 @@ const LeaseRevenuePostingDetails: React.FC<LeaseRevenuePostingDetailsProps> = ()
     if (amount === undefined || amount === null) return "—";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: currencyCode || "USD",
+      currency: currencyCode || "AED",
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -643,7 +643,7 @@ const LeaseRevenuePostingDetails: React.FC<LeaseRevenuePostingDetailsProps> = ()
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
+                  <HandCoins className="mr-2 h-5 w-5 text-muted-foreground" />
                   Amount Details
                 </CardTitle>
                 <CardDescription>Comprehensive breakdown of transaction amounts</CardDescription>

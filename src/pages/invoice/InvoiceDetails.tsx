@@ -16,7 +16,7 @@ import {
   Download,
   Printer,
   Send,
-  DollarSign,
+  HandCoins,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -449,7 +449,7 @@ const InvoiceDetails: React.FC = () => {
               <DropdownMenuSeparator />
 
               <DropdownMenuItem onClick={handlePostToGL} disabled={invoice.InvoiceStatus === "Draft" || invoice.InvoiceStatus === "Cancelled"}>
-                <DollarSign className="h-4 w-4 mr-2" />
+                <HandCoins className="h-4 w-4 mr-2" />
                 Post to GL
               </DropdownMenuItem>
 
@@ -696,7 +696,7 @@ const InvoiceDetails: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <DollarSign className="h-5 w-5 mr-2" />
+                <HandCoins className="h-5 w-5 mr-2" />
                 Financial Summary
               </CardTitle>
             </CardHeader>

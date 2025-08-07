@@ -5,7 +5,7 @@ import { fiscalYearService } from "@/services/fiscalYearService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, DollarSign, Activity, Filter, Plus, Save, X, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, HandCoins, Activity, Filter, Plus, Save, X, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -375,7 +375,7 @@ const AccountDetails = () => {
                     <span className="font-medium">{account.AccountTypeName || "N/A"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Currency:</span>
                     <span className="font-medium">{account.CurrencyName || "N/A"}</span>
                   </div>
@@ -537,7 +537,7 @@ const AccountDetails = () => {
                 {/* Current Opening Balances Table */}
                 {openingBalances.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
-                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <HandCoins className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No opening balances have been set for this account.</p>
                     {availableFiscalYears.length > 0 && (
                       <Button className="mt-4" onClick={() => setShowAddOpeningBalance(true)}>
