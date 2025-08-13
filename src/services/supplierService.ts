@@ -16,6 +16,7 @@ import {
   GLAccountRequest,
   ApiResponse,
   SupplierUpdateRequest,
+  ExpiringSupplierDocument,
 } from "../types/supplierTypes";
 
 /**
@@ -48,8 +49,8 @@ class SupplierService extends BaseService {
   }
 
   /**
-   * Process attachment file for upload
-   * @param attachment - The attachment with file data
+   * Convert attachment file to proper format for database storage
+   * @param attachment - The attachment with potential file data
    * @returns Processed attachment ready for API
    */
   private async processAttachmentFile(attachment: Partial<SupplierAttachment>): Promise<Partial<SupplierAttachment>> {
@@ -58,27 +59,96 @@ class SupplierService extends BaseService {
 
     // If there's a file object, convert it to base64
     if (attachment.file) {
-      processedAttachment.FileContent = await this.fileToBase64(attachment.file);
-      processedAttachment.FileContentType = attachment.file.type;
-      processedAttachment.FileSize = attachment.file.size;
+      try {
+        processedAttachment.FileContent = await this.fileToBase64(attachment.file);
+        processedAttachment.FileContentType = attachment.file.type;
+        processedAttachment.FileSize = attachment.file.size;
 
-      // Remove the file object as it's not needed for the API
-      delete processedAttachment.file;
-      delete processedAttachment.fileUrl;
+        // Set document name from file if not provided
+        if (!processedAttachment.DocumentName) {
+          processedAttachment.DocumentName = attachment.file.name;
+        }
+
+        // Remove the file object as it's not needed for the API
+        delete processedAttachment.file;
+        delete processedAttachment.fileUrl;
+      } catch (error) {
+        console.error("Error processing attachment file:", error);
+        throw new Error("Failed to process attachment file");
+      }
     }
 
     return processedAttachment;
   }
 
   /**
-   * Create a new supplier with optional GL account, contacts, and bank details
-   * @param data - The supplier request data
+   * Generate file URL for attachment display
+   * @param attachment - The attachment with file content
+   * @returns URL for file display or download
+   */
+  generateAttachmentUrl(attachment: SupplierAttachment): string {
+    if (!attachment.FileContent || !attachment.FileContentType) {
+      return "";
+    }
+
+    try {
+      // Convert base64 back to blob for URL generation
+      const byteCharacters = atob(attachment.FileContent as string);
+      const byteNumbers = new Array(byteCharacters.length);
+
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: attachment.FileContentType });
+
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error("Error generating attachment URL:", error);
+      return "";
+    }
+  }
+
+  /**
+   * Download attachment file
+   * @param attachment - The attachment to download
+   */
+  downloadAttachment(attachment: SupplierAttachment): void {
+    if (!attachment.FileContent || !attachment.DocumentName) {
+      return;
+    }
+
+    try {
+      const url = this.generateAttachmentUrl(attachment);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = attachment.DocumentName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the URL
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading attachment:", error);
+    }
+  }
+
+  /**
+   * Create supplier with attachments
+   * @param data - The supplier request data including attachments
    * @returns Response with status and newly created supplier ID
    */
   async createSupplier(data: SupplierRequest): Promise<ApiResponse> {
+    // Process attachments if present
+    let processedAttachments: Partial<SupplierAttachment>[] = [];
+    if (data.attachments && data.attachments.length > 0) {
+      processedAttachments = await Promise.all(data.attachments.map((attachment) => this.processAttachmentFile(attachment)));
+    }
+
     // Prepare parameters for GL account
     let glAccountParams: any = {};
-
     if (data.glAccountDetails) {
       const gl = data.glAccountDetails;
       glAccountParams = {
@@ -155,6 +225,9 @@ class SupplierService extends BaseService {
               IsDefaultBank: data.bankDetails[0].IsDefault,
             }
           : {}),
+
+        // Attachments as JSON if provided
+        AttachmentsJSON: processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null,
 
         // Audit parameters
         CurrentUserID: this.getCurrentUserId(),
@@ -269,18 +342,19 @@ class SupplierService extends BaseService {
   }
 
   /**
-   * Get supplier by ID with all related data
+   * Get supplier by ID with all related data including attachments
    * @param supplierId - The ID of the supplier to fetch
-   * @returns Supplier with contacts, bank details, and GL details
+   * @returns Supplier with contacts, bank details, GL details, and attachments
    */
   async getSupplierById(supplierId: number): Promise<{
     supplier: Supplier | null;
     contacts: SupplierContact[];
     bankDetails: SupplierBankDetails[];
     glDetails: SupplierGLDetails[];
+    attachments: SupplierAttachment[];
   }> {
     const request: BaseRequest = {
-      mode: 4, // Mode 4: Fetch Supplier by ID
+      mode: 4,
       parameters: {
         SupplierID: supplierId,
       },
@@ -294,10 +368,11 @@ class SupplierService extends BaseService {
         contacts: response.table2 || [],
         bankDetails: response.table3 || [],
         glDetails: response.table4 || [],
+        attachments: response.table5 || [],
       };
     }
 
-    return { supplier: null, contacts: [], bankDetails: [], glDetails: [] };
+    return { supplier: null, contacts: [], bankDetails: [], glDetails: [], attachments: [] };
   }
 
   /**
@@ -603,6 +678,156 @@ class SupplierService extends BaseService {
       Status: 0,
       Message: response.message || "Failed to delete bank details",
     };
+  }
+
+  /**
+   * Add attachment to supplier
+   * @param attachment - The attachment data including supplier ID
+   * @returns Response with status and attachment ID
+   */
+  async addSupplierAttachment(attachment: Partial<SupplierAttachment> & { SupplierID: number }): Promise<ApiResponse> {
+    // Process file if present
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
+    const request: BaseRequest = {
+      mode: 16, // Mode 16: Add Single Attachment to Supplier
+      parameters: {
+        SupplierID: attachment.SupplierID,
+        DocTypeID: processedAttachment.DocTypeID,
+        DocumentName: processedAttachment.DocumentName,
+        FileContent: processedAttachment.FileContent,
+        FileContentType: processedAttachment.FileContentType,
+        FileSize: processedAttachment.FileSize,
+        DocIssueDate: processedAttachment.DocIssueDate,
+        DocExpiryDate: processedAttachment.DocExpiryDate,
+        AttachmentRemark: processedAttachment.Remarks,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment added successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment added successfully",
+        NewAttachmentID: response.NewAttachmentID,
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to add attachment",
+    };
+  }
+
+  /**
+   * Update supplier attachment
+   * @param attachment - The attachment data with ID
+   * @returns Response with status
+   */
+  async updateSupplierAttachment(attachment: Partial<SupplierAttachment> & { SupplierAttachmentID: number }): Promise<ApiResponse> {
+    // Process file if present
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
+    const request: BaseRequest = {
+      mode: 17, // Mode 17: Update Single Attachment
+      parameters: {
+        SupplierAttachmentID: attachment.SupplierAttachmentID,
+        DocTypeID: processedAttachment.DocTypeID,
+        DocumentName: processedAttachment.DocumentName,
+        FileContent: processedAttachment.FileContent,
+        FileContentType: processedAttachment.FileContentType,
+        FileSize: processedAttachment.FileSize,
+        DocIssueDate: processedAttachment.DocIssueDate,
+        DocExpiryDate: processedAttachment.DocExpiryDate,
+        AttachmentRemark: processedAttachment.Remarks,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment updated successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment updated successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to update attachment",
+    };
+  }
+
+  /**
+   * Delete supplier attachment
+   * @param attachmentId - The attachment ID to delete
+   * @returns Response with status
+   */
+  async deleteSupplierAttachment(attachmentId: number): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 18, // Mode 18: Delete Single Attachment
+      parameters: {
+        SupplierAttachmentID: attachmentId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment deleted successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment deleted successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to delete attachment",
+    };
+  }
+
+  /**
+   * Get supplier attachments by supplier ID
+   * @param supplierId - The supplier ID
+   * @returns Array of supplier attachments
+   */
+  async getSupplierAttachments(supplierId: number): Promise<SupplierAttachment[]> {
+    const request: BaseRequest = {
+      mode: 19, // Mode 19: Get Attachments by Supplier ID
+      parameters: {
+        SupplierID: supplierId,
+      },
+    };
+
+    const response = await this.execute<SupplierAttachment[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Get expiring supplier documents for notifications
+   * @param daysAhead - Number of days ahead to check for expiry (default 30)
+   * @returns Array of expiring documents
+   */
+  async getExpiringSupplierDocuments(daysAhead: number = 30): Promise<ExpiringSupplierDocument[]> {
+    const request: BaseRequest = {
+      mode: 20, // Mode 20: Get Expiring Documents
+      parameters: {
+        DaysToExpiry: daysAhead,
+      },
+    };
+
+    const response = await this.execute<ExpiringSupplierDocument[]>(request);
+    return response.success ? response.data || [] : [];
   }
 
   /**

@@ -5,8 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl } from "@/components/ui/form";
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form } from "@/components/ui/form";
 import { ArrowLeft, Loader2, Save, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { supplierService } from "@/services/supplierService";
 import { companyService } from "@/services/companyService";
@@ -29,12 +29,18 @@ import { City } from "@/services/cityService";
 import { ContactType } from "@/services/contactTypeService";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { paymentTermsService } from "@/services/paymentTermsService";
 import { bankService, bankCategoryService } from "@/services/bankService";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { docTypeService } from "@/services/docTypeService";
+import { SupplierAttachment } from "@/types/supplierTypes";
+import { DocType } from "@/services/docTypeService";
+import { Upload, Eye } from "lucide-react";
 
 // Create the schema for supplier form validation
 const supplierSchema = z.object({
@@ -132,6 +138,13 @@ const SupplierForm = () => {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [bankCategories, setBankCategories] = useState<BankCategory[]>([]);
 
+  const [attachments, setAttachments] = useState<SupplierAttachment[]>([]);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
+  const [selectedAttachment, setSelectedAttachment] = useState<SupplierAttachment | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
   // Initialize forms
   const supplierForm = useForm<SupplierFormValues>({
     resolver: zodResolver(supplierSchema),
@@ -219,6 +232,7 @@ const SupplierForm = () => {
           paymentTermsData,
           banksData,
           bankCategoriesData,
+          docTypesData,
           // For mock data, we'll create empty arrays
         ] = await Promise.all([
           supplierService.getAllSupplierTypes(),
@@ -231,6 +245,7 @@ const SupplierForm = () => {
           paymentTermsService.getAllPaymentTerms(),
           bankService.getAllBanks(),
           bankCategoryService.getAllBankCategories(),
+          docTypeService.getAllDocTypes(),
         ]);
 
         setSupplierTypes(typesData);
@@ -243,6 +258,7 @@ const SupplierForm = () => {
         setPaymentTerms(paymentTermsData);
         setBanks(banksData);
         setBankCategories(bankCategoriesData);
+        setDocTypes(docTypesData);
 
         // If editing, fetch the supplier data
         if (isEdit && id) {
@@ -252,6 +268,7 @@ const SupplierForm = () => {
             setSupplier(data.supplier);
             setContacts(data.contacts || []);
             setBankDetails(data.bankDetails || []);
+            setAttachments(data.attachments || []);
 
             // Set form values
             supplierForm.reset({
@@ -284,6 +301,12 @@ const SupplierForm = () => {
               GLCurrencyID: "",
               GLCompanyID: "",
             });
+
+            const processedAttachments = (data.attachments || []).map((attachment) => ({
+              ...attachment,
+              fileUrl: attachment.FileContent ? supplierService.generateAttachmentUrl(attachment) : undefined,
+            }));
+            setAttachments(processedAttachments);
 
             // Load cities based on country
             if (data.supplier.CountryID) {
@@ -583,6 +606,114 @@ const SupplierForm = () => {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, docTypeId: string) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (e.g., 10MB limit)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+
+    setUploadingAttachment(true);
+
+    try {
+      const newAttachment: Partial<SupplierAttachment> = {
+        SupplierAttachmentID: -(attachments.length + 1), // Temporary ID for new attachment
+        SupplierID: supplier?.SupplierID || 0,
+        DocTypeID: parseInt(docTypeId),
+        DocumentName: file.name,
+        FileSize: file.size,
+        FileContentType: file.type,
+        file: file,
+        fileUrl: URL.createObjectURL(file),
+        DocTypeName: docTypes.find((dt) => dt.DocTypeID === parseInt(docTypeId))?.Description,
+      };
+
+      if (isEdit && supplier) {
+        // Add attachment to existing supplier
+        const result = await supplierService.addSupplierAttachment({
+          ...newAttachment,
+          SupplierID: supplier.SupplierID,
+        });
+
+        if (result.Status === 1) {
+          toast.success(result.Message);
+          // Refresh attachments
+          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
+          const processedAttachments = (updatedData.attachments || []).map((attachment) => ({
+            ...attachment,
+            fileUrl: attachment.FileContent ? supplierService.generateAttachmentUrl(attachment) : undefined,
+          }));
+          setAttachments(processedAttachments);
+        } else {
+          toast.error(result.Message);
+        }
+      } else {
+        // Add to local state for new supplier
+        setAttachments([...attachments, newAttachment as SupplierAttachment]);
+        toast.success("Attachment added successfully");
+      }
+    } catch (error) {
+      console.error("Error uploading attachment:", error);
+      toast.error("Failed to upload attachment");
+    } finally {
+      setUploadingAttachment(false);
+      // Reset file input
+      event.target.value = "";
+    }
+  };
+
+  // Delete attachment handler
+  const handleDeleteAttachment = async (attachmentId: number) => {
+    if (!confirm("Are you sure you want to delete this attachment?")) {
+      return;
+    }
+
+    try {
+      if (isEdit && supplier && attachmentId > 0) {
+        // Delete from server
+        const result = await supplierService.deleteSupplierAttachment(attachmentId);
+        if (result.Status === 1) {
+          toast.success(result.Message);
+          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
+          const processedAttachments = (updatedData.attachments || []).map((attachment) => ({
+            ...attachment,
+            fileUrl: attachment.FileContent ? supplierService.generateAttachmentUrl(attachment) : undefined,
+          }));
+          setAttachments(processedAttachments);
+        } else {
+          toast.error(result.Message);
+        }
+      } else {
+        // Remove from local state
+        setAttachments(attachments.filter((attachment) => attachment.SupplierAttachmentID !== attachmentId));
+        toast.success("Attachment removed successfully");
+      }
+    } catch (error) {
+      console.error("Error deleting attachment:", error);
+      toast.error("Failed to delete attachment");
+    }
+  };
+
+  // Preview attachment handler
+  const handlePreviewAttachment = (attachment: SupplierAttachment) => {
+    setSelectedAttachment(attachment);
+    setIsPreviewOpen(true);
+  };
+
+  // Open gallery handler
+  const handleOpenGallery = (attachmentId?: number) => {
+    setIsGalleryOpen(true);
+    if (attachmentId) {
+      // Find and set the initial attachment for gallery
+      const attachment = attachments.find((a) => a.SupplierAttachmentID === attachmentId);
+      setSelectedAttachment(attachment || null);
+    }
+  };
+
   // Cancel button handler
   const handleCancel = () => {
     navigate("/suppliers");
@@ -633,6 +764,7 @@ const SupplierForm = () => {
                     <TabsTrigger value="basic">Basic Information</TabsTrigger>
                     <TabsTrigger value="contacts">Contacts</TabsTrigger>
                     <TabsTrigger value="banking">Banking Details</TabsTrigger>
+                    <TabsTrigger value="attachments">Attachments</TabsTrigger>
                     <TabsTrigger value="gl-account">GL Account</TabsTrigger>
                   </TabsList>
                 </div>
@@ -1011,6 +1143,125 @@ const SupplierForm = () => {
                   </div>
                 </TabsContent>
 
+                <TabsContent value="attachments" className="p-6 pt-4 space-y-6">
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                      <h3 className="text-lg font-medium mb-4">Current Attachments</h3>
+                      {attachments.length === 0 ? (
+                        <p className="text-muted-foreground">No attachments have been added for this supplier.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {attachments.map((attachment) => (
+                            <div key={attachment.SupplierAttachmentID} className="border rounded-lg p-3 bg-white">
+                              <div className="flex justify-center mb-2">
+                                <AttachmentThumbnail
+                                  fileUrl={attachment.fileUrl}
+                                  fileName={attachment.DocumentName || "Document"}
+                                  fileType={attachment.FileContentType}
+                                  onClick={() => handlePreviewAttachment(attachment)}
+                                />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-medium truncate" title={attachment.DocumentName}>
+                                  {attachment.DocumentName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{attachment.DocTypeName || "Unknown Type"}</p>
+                                {attachment.FileSize && <p className="text-xs text-muted-foreground">{(attachment.FileSize / 1024).toFixed(1)} KB</p>}
+                              </div>
+                              <div className="flex justify-center mt-2 gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePreviewAttachment(attachment)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                                  disabled={uploadingAttachment}
+                                  onClick={() => handleDeleteAttachment(attachment.SupplierAttachmentID)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {attachments.length > 1 && (
+                        <div className="mt-4 text-center">
+                          <Button variant="outline" onClick={() => handleOpenGallery()}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View All Attachments
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                      <h3 className="text-lg font-medium mb-4">Upload New Attachment</h3>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="docType">Document Type</Label>
+                            <Select>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select document type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {docTypes.map((docType) => (
+                                  <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                    {docType.Description}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="fileUpload">Choose File</Label>
+                            <div className="mt-1">
+                              <input
+                                id="fileUpload"
+                                type="file"
+                                className="hidden"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.xls,.xlsx"
+                                onChange={(e) => {
+                                  const docTypeSelect = document.querySelector("[data-doc-type-select]") as HTMLSelectElement;
+                                  const selectedDocType = docTypeSelect?.value;
+                                  if (!selectedDocType) {
+                                    toast.error("Please select a document type first");
+                                    return;
+                                  }
+                                  handleFileUpload(e, selectedDocType);
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => document.getElementById("fileUpload")?.click()}
+                                disabled={uploadingAttachment}
+                                className="w-full"
+                              >
+                                {uploadingAttachment ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Uploading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Choose File
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, XLS, XLSX. Maximum file size: 10MB.</p>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
                 <TabsContent value="gl-account" className="p-6 pt-4 space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center space-x-2">
@@ -1103,6 +1354,48 @@ const SupplierForm = () => {
           </div>
         </form>
       </Form>
+      {/* Attachment Preview Dialog */}
+      {selectedAttachment && (
+        <AttachmentPreview
+          isOpen={isPreviewOpen}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setSelectedAttachment(null);
+          }}
+          fileUrl={selectedAttachment.fileUrl}
+          fileName={selectedAttachment.DocumentName || "Document"}
+          fileType={selectedAttachment.FileContentType}
+          fileSize={selectedAttachment.FileSize}
+          uploadDate={selectedAttachment.CreatedOn}
+          uploadedBy={selectedAttachment.CreatedBy}
+          documentType={selectedAttachment.DocTypeName}
+          issueDate={selectedAttachment.DocIssueDate}
+          expiryDate={selectedAttachment.DocExpiryDate}
+        />
+      )}
+
+      {/* Attachment Gallery Dialog */}
+      <AttachmentGallery
+        isOpen={isGalleryOpen}
+        onClose={() => {
+          setIsGalleryOpen(false);
+          setSelectedAttachment(null);
+        }}
+        attachments={attachments.map((attachment) => ({
+          ...attachment,
+          DocumentName: attachment.DocumentName,
+          FileContentType: attachment.FileContentType,
+          FileSize: attachment.FileSize,
+          CreatedOn: attachment.CreatedOn,
+          CreatedBy: attachment.CreatedBy,
+          DocumentDescription: attachment.Remarks,
+          DocTypeName: attachment.DocTypeName,
+          DocIssueDate: attachment.DocIssueDate,
+          DocExpiryDate: attachment.DocExpiryDate,
+          fileUrl: attachment.fileUrl,
+        }))}
+        initialAttachmentId={selectedAttachment?.SupplierAttachmentID}
+      />
     </div>
   );
 };

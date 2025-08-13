@@ -5,15 +5,21 @@ import { supplierService } from "@/services/supplierService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, HandCoins, CreditCard, Building, Phone, Mail, Globe } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Eye, FileText, Calendar, HandCoins, CreditCard, Building, Phone, Mail, Globe, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { Supplier, SupplierContact, SupplierBankDetails, SupplierGLDetails } from "@/types/supplierTypes";
-import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
+import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
+import { SupplierAttachment } from "@/types/supplierTypes";
+import { Download } from "lucide-react";
+import { format } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export const SupplierDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +31,10 @@ export const SupplierDetails = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [attachments, setAttachments] = useState<SupplierAttachment[]>([]);
+  const [selectedAttachment, setSelectedAttachment] = useState<SupplierAttachment | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   useEffect(() => {
     const fetchSupplierData = async () => {
@@ -39,6 +49,11 @@ export const SupplierDetails = () => {
           setContacts(data.contacts || []);
           setBankDetails(data.bankDetails || []);
           setGlDetails(data.glDetails || []);
+          const processedAttachments = (data.attachments || []).map((attachment) => ({
+            ...attachment,
+            fileUrl: attachment.FileContent ? supplierService.generateAttachmentUrl(attachment) : undefined,
+          }));
+          setAttachments(processedAttachments);
         } else {
           setError("Supplier not found");
           toast.error("Supplier not found");
@@ -69,6 +84,50 @@ export const SupplierDetails = () => {
     } catch (err) {
       console.error("Error deleting supplier:", err);
       toast.error("Failed to delete supplier");
+    }
+  };
+
+  const handlePreviewAttachment = (attachment: SupplierAttachment) => {
+    setSelectedAttachment(attachment);
+    setIsPreviewOpen(true);
+  };
+
+  const handleOpenGallery = (attachmentId?: number) => {
+    setIsGalleryOpen(true);
+    if (attachmentId) {
+      const attachment = attachments.find((a) => a.SupplierAttachmentID === attachmentId);
+      setSelectedAttachment(attachment || null);
+    }
+  };
+
+  const handleDownloadAttachment = (attachment: SupplierAttachment) => {
+    supplierService.downloadAttachment(attachment);
+  };
+
+  const handleDeleteAttachment = async (attachmentId: number) => {
+    if (!confirm("Are you sure you want to delete this attachment?")) {
+      return;
+    }
+
+    try {
+      const result = await supplierService.deleteSupplierAttachment(attachmentId);
+      if (result.Status === 1) {
+        toast.success(result.Message);
+        // Refresh attachments
+        if (supplier) {
+          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
+          const processedAttachments = (updatedData.attachments || []).map((attachment) => ({
+            ...attachment,
+            fileUrl: attachment.FileContent ? supplierService.generateAttachmentUrl(attachment) : undefined,
+          }));
+          setAttachments(processedAttachments);
+        }
+      } else {
+        toast.error(result.Message);
+      }
+    } catch (error) {
+      console.error("Error deleting attachment:", error);
+      toast.error("Failed to delete attachment");
     }
   };
 
@@ -238,6 +297,7 @@ export const SupplierDetails = () => {
               <TabsTrigger value="contacts">Contacts</TabsTrigger>
               <TabsTrigger value="banking">Banking Details</TabsTrigger>
               <TabsTrigger value="gl-accounts">GL Accounts</TabsTrigger>
+              <TabsTrigger value="attachments">Attachments</TabsTrigger>
               <TabsTrigger value="transactions">Transactions</TabsTrigger>
             </TabsList>
 
@@ -370,6 +430,121 @@ export const SupplierDetails = () => {
                 </div>
               )}
             </TabsContent>
+            <TabsContent value="attachments" className="mt-6">
+              <h3 className="text-lg font-medium mb-4">Attachments</h3>
+              {attachments.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">No attachments found for this supplier.</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                    {attachments.map((attachment) => (
+                      <div key={attachment.SupplierAttachmentID} className="border rounded-lg p-3 bg-white">
+                        <div className="flex justify-center mb-2">
+                          <AttachmentThumbnail
+                            fileUrl={attachment.fileUrl}
+                            fileName={attachment.DocumentName || "Document"}
+                            fileType={attachment.FileContentType}
+                            onClick={() => handlePreviewAttachment(attachment)}
+                          />
+                        </div>
+                        <div className="text-center space-y-1">
+                          <p className="text-sm font-medium truncate" title={attachment.DocumentName}>
+                            {attachment.DocumentName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{attachment.DocTypeName || "Unknown Type"}</p>
+                          {attachment.FileSize && <p className="text-xs text-muted-foreground">{(attachment.FileSize / 1024).toFixed(1)} KB</p>}
+                          {attachment.DocExpiryDate && (
+                            <p className="text-xs text-amber-600 flex items-center justify-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Expires: {format(new Date(attachment.DocExpiryDate), "MMM dd, yyyy")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex justify-center mt-2 gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePreviewAttachment(attachment)} title="Preview">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDownloadAttachment(attachment)} title="Download">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteAttachment(attachment.SupplierAttachmentID)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {attachments.length > 1 && (
+                    <div className="text-center">
+                      <Button variant="outline" onClick={() => handleOpenGallery()}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View All Attachments
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Document Name</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Issue Date</TableHead>
+                          <TableHead>Expiry Date</TableHead>
+                          <TableHead>Uploaded By</TableHead>
+                          <TableHead className="w-20">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attachments.map((attachment) => (
+                          <TableRow key={attachment.SupplierAttachmentID}>
+                            <TableCell className="font-medium">{attachment.DocumentName}</TableCell>
+                            <TableCell>{attachment.DocTypeName || "Unknown"}</TableCell>
+                            <TableCell>{attachment.FileSize ? `${(attachment.FileSize / 1024).toFixed(1)} KB` : "Unknown"}</TableCell>
+                            <TableCell>{attachment.DocIssueDate ? format(new Date(attachment.DocIssueDate), "MMM dd, yyyy") : "-"}</TableCell>
+                            <TableCell>
+                              {attachment.DocExpiryDate ? (
+                                <span className={new Date(attachment.DocExpiryDate) < new Date() ? "text-red-600" : ""}>
+                                  {format(new Date(attachment.DocExpiryDate), "MMM dd, yyyy")}
+                                </span>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell>{attachment.CreatedBy || "-"}</TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handlePreviewAttachment(attachment)}>Preview</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDownloadAttachment(attachment)}>Download</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-red-500" onClick={() => handleDeleteAttachment(attachment.SupplierAttachmentID)}>
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
 
             <TabsContent value="transactions" className="mt-6">
               <h3 className="text-lg font-medium mb-4">Transaction History</h3>
@@ -388,6 +563,49 @@ export const SupplierDetails = () => {
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
+      />
+      {/* Attachment Preview Dialog */}
+      {selectedAttachment && (
+        <AttachmentPreview
+          isOpen={isPreviewOpen}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setSelectedAttachment(null);
+          }}
+          fileUrl={selectedAttachment.fileUrl}
+          fileName={selectedAttachment.DocumentName || "Document"}
+          fileType={selectedAttachment.FileContentType}
+          fileSize={selectedAttachment.FileSize}
+          uploadDate={selectedAttachment.CreatedOn}
+          uploadedBy={selectedAttachment.CreatedBy}
+          description={selectedAttachment.Remarks}
+          documentType={selectedAttachment.DocTypeName}
+          issueDate={selectedAttachment.DocIssueDate}
+          expiryDate={selectedAttachment.DocExpiryDate}
+        />
+      )}
+
+      {/* Attachment Gallery Dialog */}
+      <AttachmentGallery
+        isOpen={isGalleryOpen}
+        onClose={() => {
+          setIsGalleryOpen(false);
+          setSelectedAttachment(null);
+        }}
+        attachments={attachments.map((attachment) => ({
+          ...attachment,
+          DocumentName: attachment.DocumentName,
+          FileContentType: attachment.FileContentType,
+          FileSize: attachment.FileSize,
+          CreatedOn: attachment.CreatedOn,
+          CreatedBy: attachment.CreatedBy,
+          DocumentDescription: attachment.Remarks,
+          DocTypeName: attachment.DocTypeName,
+          DocIssueDate: attachment.DocIssueDate,
+          DocExpiryDate: attachment.DocExpiryDate,
+          fileUrl: attachment.fileUrl,
+        }))}
+        initialAttachmentId={selectedAttachment?.SupplierAttachmentID}
       />
     </div>
   );
