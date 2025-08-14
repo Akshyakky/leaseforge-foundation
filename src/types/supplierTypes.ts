@@ -222,69 +222,7 @@ export interface SupplierUpdateRequest {
   };
 }
 
-export interface SupplierAttachment extends BaseSupplier {
-  SupplierAttachmentID: number;
-  SupplierID: number;
-  DocTypeID?: number;
-  DocumentName?: string;
-  FilePath?: string;
-  FileContent?: string | ArrayBuffer | null;
-  FileContentType?: string;
-  FileSize?: number;
-  DocIssueDate?: string | Date;
-  DocExpiryDate?: string | Date;
-  Remarks?: string;
-
-  // Joined fields
-  DocTypeName?: string;
-
-  // For UI only - not sent to backend
-  file?: File;
-  fileUrl?: string;
-}
-
-// Add new interface for expiring documents
-export interface ExpiringSupplierDocument extends SupplierAttachment {
-  SupplierName: string;
-  SupplierNo: string;
-  DaysToExpiry: number;
-}
-
-// Update the main SupplierRequest interface to include attachments
-export interface SupplierRequest {
-  supplier: Partial<Supplier>;
-  contacts?: Partial<SupplierContact>[];
-  bankDetails?: Partial<SupplierBankDetails>[];
-  attachments?: Partial<SupplierAttachment>[];
-  glAccountDetails?: {
-    createNewAccount?: boolean;
-    accountID?: number;
-    accountCode?: string;
-    accountName?: string;
-    accountTypeID?: number;
-    currencyID?: number;
-    companyID?: number;
-  };
-}
-
-// Update the SupplierUpdateRequest interface
-export interface SupplierUpdateRequest {
-  supplier: Partial<Supplier> & { SupplierID: number };
-  contacts?: Partial<SupplierContact>[];
-  bankDetails?: Partial<SupplierBankDetails>[];
-  attachments?: Partial<SupplierAttachment>[];
-  glAccountDetails?: {
-    createNewAccount?: boolean;
-    accountID?: number;
-    accountCode?: string;
-    accountName?: string;
-    accountTypeID?: number;
-    currencyID?: number;
-    companyID?: number;
-  };
-}
-
-// Update the ApiResponse interface to include attachment-specific responses
+// API response
 export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
@@ -292,10 +230,8 @@ export interface ApiResponse<T = any> {
   NewSupplierTypeID?: number;
   NewContactID?: number;
   NewBankID?: number;
-  NewAttachmentID?: number;
   ContactID?: number;
   BankID?: number;
-  AttachmentID?: number;
   [key: string]: any;
   data?: T;
 }
