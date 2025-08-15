@@ -443,7 +443,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         setDocTypes(docTypesData);
 
         if (countries && !mode.isEdit) {
-          const defaultCountry = countries[0];
+          const defaultCountry = await countryService.getDefaultCountry();
           form.setValue("CountryID", defaultCountry.CountryID);
         }
 

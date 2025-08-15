@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { bankCategoryService } from "@/services/bankService";
-import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { BankCategory } from "@/types/bankTypes";
 
-// Create the schema for bank category form validation
 const bankCategorySchema = z.object({
   CategoryName: z.string().min(1, "Category name is required").max(250, "Category name must be 250 characters or less"),
   Description: z.string().optional(),
@@ -26,12 +27,10 @@ const BankCategoryForm = () => {
   const isEdit = id !== "new" && id !== undefined;
   const navigate = useNavigate();
 
-  // State variables
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [category, setCategory] = useState<BankCategory | null>(null);
 
-  // Initialize form
   const form = useForm<BankCategoryFormValues>({
     resolver: zodResolver(bankCategorySchema),
     defaultValues: {
@@ -41,18 +40,14 @@ const BankCategoryForm = () => {
     },
   });
 
-  // Initialize and fetch data if editing
   useEffect(() => {
     const initializeForm = async () => {
       try {
-        // If editing, fetch the bank category data
         if (isEdit && id) {
           const categoryData = await bankCategoryService.getBankCategoryById(parseInt(id));
 
           if (categoryData) {
             setCategory(categoryData);
-
-            // Set form values
             form.reset({
               CategoryName: categoryData.CategoryName || "",
               Description: categoryData.Description || "",
@@ -74,12 +69,10 @@ const BankCategoryForm = () => {
     initializeForm();
   }, [id, isEdit, navigate, form]);
 
-  // Submit handler for the bank category form
   const onSubmit = async (data: BankCategoryFormValues) => {
     setLoading(true);
 
     try {
-      // Prepare category data
       const categoryData = {
         CategoryName: data.CategoryName.trim(),
         Description: data.Description?.trim() || undefined,
@@ -87,7 +80,6 @@ const BankCategoryForm = () => {
       };
 
       if (isEdit && category) {
-        // Update existing category
         const result = await bankCategoryService.updateBankCategory({
           category: { ...categoryData, CategoryID: category.CategoryID },
         });
@@ -99,7 +91,6 @@ const BankCategoryForm = () => {
           toast.error(result.Message);
         }
       } else {
-        // Create new category
         const result = await bankCategoryService.createBankCategory({
           category: categoryData,
         });
@@ -119,7 +110,6 @@ const BankCategoryForm = () => {
     }
   };
 
-  // Cancel button handler
   const handleCancel = () => {
     navigate("/banks");
   };
@@ -152,38 +142,63 @@ const BankCategoryForm = () => {
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 gap-6">
                 <FormField
-                  form={form}
+                  control={form.control}
                   name="CategoryName"
-                  label="Category Name"
-                  placeholder="Enter category name (e.g., Commercial Banks, Investment Banks)"
-                  required
-                  description="Unique name for the bank category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter category name (e.g., Commercial Banks, Investment Banks)" {...field} />
+                      </FormControl>
+                      <FormDescription>Unique name for the bank category</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-6">
                 <FormField
-                  form={form}
+                  control={form.control}
                   name="Description"
-                  label="Description"
-                  type="textarea"
-                  placeholder="Enter a description for this category"
-                  description="Optional description explaining the purpose of this category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Enter a description for this category" {...field} />
+                      </FormControl>
+                      <FormDescription>Optional description explaining the purpose of this category</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField form={form} name="IsActive" label="Status" type="switch" description="Set to active to enable this category for use" />
+                <FormField
+                  control={form.control}
+                  name="IsActive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Active Status</FormLabel>
+                        <FormDescription>Toggle to activate or deactivate this category</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </div>
 
-              {/* Category Information */}
               <div className="p-4 bg-muted/50 rounded-lg">
                 <h4 className="text-sm font-medium mb-2">Bank Category Usage</h4>
                 <div className="text-sm text-muted-foreground space-y-1">
-                  <p>• Categories help organize banks by type or function</p>
-                  <p>• Examples: Commercial Banks, Investment Banks, Central Banks</p>
-                  <p>• Categories can be used for reporting and filtering</p>
-                  <p>• Inactive categories won't appear in dropdowns but preserve data</p>
+                  <p>Categories help organize banks by type or function</p>
+                  <p>Examples: Commercial Banks, Investment Banks, Central Banks</p>
+                  <p>Categories can be used for reporting and filtering</p>
+                  <p>Inactive categories will not appear in dropdown selections but preserve existing data</p>
                 </div>
               </div>
             </CardContent>

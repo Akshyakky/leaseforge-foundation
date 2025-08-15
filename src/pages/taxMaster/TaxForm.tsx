@@ -111,7 +111,7 @@ const TaxForm: React.FC = () => {
         setCountries(countriesData);
 
         if (countriesData && !isEdit) {
-          const defaultCountry = countriesData[0];
+          const defaultCountry = await countryService.getDefaultCountry();
           form.setValue("CountryID", defaultCountry.CountryID.toString());
         }
       } catch (error) {

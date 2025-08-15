@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { bankService } from "@/services/bankService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Trash2, Building2, Globe, CreditCard, Calendar, User, Copy, ExternalLink } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Building2, Globe, CreditCard, Calendar, Copy, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -76,6 +76,15 @@ export const BankDetails = () => {
     }
   };
 
+  const formatDate = (dateString?: string | Date) => {
+    if (!dateString) return "N/A";
+    return format(new Date(dateString), "PPP");
+  };
+
+  const renderStatusBadge = (isActive: boolean) => {
+    return <Badge variant={isActive ? "default" : "secondary"}>{isActive ? "Active" : "Inactive"}</Badge>;
+  };
+
   if (loading) {
     return (
       <div className="container p-4">
@@ -104,12 +113,6 @@ export const BankDetails = () => {
       </div>
     );
   }
-
-  // Format date for display
-  const formatDate = (dateString?: string | Date) => {
-    if (!dateString) return "N/A";
-    return format(new Date(dateString), "PPP");
-  };
 
   return (
     <div className="container mx-auto p-4">
@@ -144,9 +147,7 @@ export const BankDetails = () => {
             <div className="flex-1">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
                 <h2 className="text-2xl font-bold">{bank.BankName}</h2>
-                <Badge variant={bank.IsActive ? "default" : "secondary"} className={bank.IsActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
-                  {bank.IsActive ? "Active" : "Inactive"}
-                </Badge>
+                {renderStatusBadge(bank.IsActive)}
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -220,9 +221,7 @@ export const BankDetails = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <span className="text-sm font-medium text-muted-foreground">Status:</span>
-                  <Badge variant={bank.IsActive ? "default" : "secondary"} className={bank.IsActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
-                    {bank.IsActive ? "Active" : "Inactive"}
-                  </Badge>
+                  {renderStatusBadge(bank.IsActive)}
                 </div>
               </div>
             </div>
@@ -254,7 +253,6 @@ export const BankDetails = () => {
             </div>
           </div>
 
-          {/* SWIFT Code Information */}
           {bank.SwiftCode && (
             <>
               <Separator className="my-6" />
@@ -286,7 +284,6 @@ export const BankDetails = () => {
             </>
           )}
 
-          {/* Usage Information */}
           <Separator className="my-6" />
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Usage & Integration</h3>
@@ -294,11 +291,11 @@ export const BankDetails = () => {
               <div className="space-y-2 text-sm">
                 <p className="font-medium text-blue-900">This bank can be used in:</p>
                 <ul className="space-y-1 text-blue-800 ml-4">
-                  <li>• Supplier bank details</li>
-                  <li>• Payment voucher bank references</li>
-                  <li>• Receipt deposit bank information</li>
-                  <li>• Bank transfer transactions</li>
-                  <li>• Cheque processing</li>
+                  <li>Supplier bank details</li>
+                  <li>Payment voucher bank references</li>
+                  <li>Receipt deposit bank information</li>
+                  <li>Bank transfer transactions</li>
+                  <li>Cheque processing</li>
                 </ul>
               </div>
             </div>

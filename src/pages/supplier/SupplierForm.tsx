@@ -225,6 +225,12 @@ const SupplierForm = () => {
           form.setValue("GLCurrencyID", defaultCurrency.CurrencyID.toString());
         }
 
+        if (countriesData && !isEdit) {
+          const defaultCountry = await countryService.getDefaultCountry();
+          form.setValue("CountryID", defaultCountry.CountryID.toString());
+          handleCountryChange(defaultCountry.CountryID.toString());
+        }
+
         // If editing, fetch the supplier data
         if (isEdit && id) {
           const data = await supplierService.getSupplierById(parseInt(id));

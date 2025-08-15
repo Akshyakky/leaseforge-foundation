@@ -182,8 +182,9 @@ const PropertyForm: React.FC = () => {
         setDocTypes(docTypesData);
 
         if (countriesData && !isEdit) {
-          const defaultCountry = countriesData[0];
+          const defaultCountry = await countryService.getDefaultCountry();
           form.setValue("CountryID", defaultCountry.CountryID.toString());
+          handleCountryChange(defaultCountry.CountryID.toString());
         }
 
         // If editing, fetch the property data

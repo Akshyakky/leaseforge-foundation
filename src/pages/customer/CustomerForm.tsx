@@ -377,8 +377,9 @@ const CustomerForm = () => {
         }
 
         if (countriesData && !isEdit) {
-          const defaultCountry = countriesData[0];
+          const defaultCountry = await countryService.getDefaultCountry();
           customerForm.setValue("CountryID", defaultCountry.CountryID.toString());
+          handleCountryChange(defaultCountry.CountryID.toString());
         }
 
         // If editing, fetch the customer data
