@@ -381,9 +381,11 @@ const SupplierForm = () => {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      const fileUrl = URL.createObjectURL(file);
       setEditingAttachment((prev) => ({
         ...prev,
         file,
+        fileUrl,
         DocumentName: prev?.DocumentName || file.name,
         FileSize: file.size,
         FileContentType: file.type,
