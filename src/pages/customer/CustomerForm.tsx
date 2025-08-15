@@ -239,7 +239,6 @@ const CustomerForm = () => {
   const { id } = useParams<{ id: string }>();
   const isEdit = id !== "new" && id !== undefined;
   const navigate = useNavigate();
-  const { user } = useAppSelector((state) => state.auth);
 
   // State variables
   const [loading, setLoading] = useState(false);
@@ -367,6 +366,15 @@ const CustomerForm = () => {
         setAccountTypes(accountTypesData);
         setCurrencies(currenciesData);
         setCompanies(companiesData);
+
+        if (companiesData && !isEdit) {
+          const defaultCompany = companiesData[0];
+          customerForm.setValue("CompanyID", defaultCompany.CompanyID.toString());
+        }
+        if (currenciesData && !isEdit) {
+          const defaultCurrency = currenciesData[0];
+          customerForm.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+        }
 
         // If editing, fetch the customer data
         if (isEdit && id) {
@@ -514,11 +522,6 @@ const CustomerForm = () => {
 
   // Submit handler for the customer form
   const onSubmitCustomer = async (data: CustomerFormValues) => {
-    if (!user) {
-      toast.error("User information not available");
-      return;
-    }
-
     setLoading(true);
 
     try {

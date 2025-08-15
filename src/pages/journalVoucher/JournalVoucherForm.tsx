@@ -437,6 +437,18 @@ const JournalVoucherForm: React.FC = () => {
       setTaxes(taxesData);
       setDocTypes(docTypesData);
       setCostCenters1(costCenters1Data || []);
+      if (companiesData && !isEdit) {
+        const defaultCompany = companiesData[0];
+        form.setValue("CompanyID", defaultCompany.CompanyID.toString());
+      }
+      if (currenciesData && !isEdit) {
+        const defaultCurrency = currenciesData[0];
+        form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+      }
+      if (fiscalYearsData && !isEdit) {
+        const defaultFiscalYear = fiscalYearsData[0];
+        form.setValue("FiscalYearID", defaultFiscalYear.FiscalYearID.toString());
+      }
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");

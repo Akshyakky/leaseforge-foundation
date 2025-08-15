@@ -92,6 +92,11 @@ const FiscalYearForm = () => {
         const companiesData = await companyService.getCompaniesForDropdown(true);
         setCompanies(companiesData);
 
+        if (companiesData && !isEdit) {
+          const defaultCompany = companiesData[0];
+          form.setValue("CompanyID", defaultCompany.CompanyID.toString());
+        }
+
         // If editing, fetch the fiscal year data
         if (isEdit && id) {
           const fiscalYearData = await fiscalYearService.getFiscalYearById(parseInt(id));

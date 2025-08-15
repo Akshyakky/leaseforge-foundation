@@ -150,6 +150,11 @@ const AccountForm = () => {
           accountForm.setValue("CurrencyID", defaultCurrencyData.CurrencyID.toString());
         }
 
+        if (companiesData && !isEdit) {
+          const defaultCompany = companiesData[0];
+          accountForm.setValue("CompanyID", defaultCompany.CompanyID.toString());
+        }
+
         // If editing, fetch the account data
         if (isEdit && id) {
           const data = await accountService.getAccountById(parseInt(id));

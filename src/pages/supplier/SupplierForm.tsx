@@ -53,6 +53,7 @@ import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { paymentTermsService } from "@/services/paymentTermsService";
 import { bankService, bankCategoryService } from "@/services/bankService";
 import { docTypeService } from "@/services";
+import { off } from "process";
 
 // Create the schema for supplier form validation
 const supplierSchema = z.object({
@@ -213,6 +214,16 @@ const SupplierForm = () => {
         setBanks(banksData);
         setBankCategories(bankCategoriesData);
         setDocumentTypes(docTypesData);
+
+        if (companiesData.length > 0) {
+          const defaultCompany = companiesData[0];
+          form.setValue("GLCompanyID", defaultCompany.CompanyID.toString());
+        }
+
+        if (currenciesData.length > 0) {
+          const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
+          form.setValue("GLCurrencyID", defaultCurrency.CurrencyID.toString());
+        }
 
         // If editing, fetch the supplier data
         if (isEdit && id) {
