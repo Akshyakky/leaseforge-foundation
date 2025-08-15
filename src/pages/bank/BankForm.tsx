@@ -6,13 +6,13 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { bankService } from "@/services/bankService";
-import { countryService } from "@/services/countryService";
+import { Country, countryService } from "@/services/countryService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { Bank } from "@/types/bankTypes";
-import { Country } from "@/types/countryTypes";
 
 // Create the schema for bank form validation
 const bankSchema = z.object({
@@ -68,6 +68,10 @@ const BankForm = () => {
         // Fetch countries for dropdown
         const countriesData = await countryService.getCountriesForDropdown();
         setCountries(countriesData);
+        if (countriesData && !isEdit) {
+          const defaultCountry = countriesData[0];
+          form.setValue("CountryID", defaultCountry.CountryID.toString());
+        }
 
         // If editing, fetch the bank data
         if (isEdit && id) {
@@ -199,7 +203,7 @@ const BankForm = () => {
                   label="SWIFT Code"
                   placeholder="Enter SWIFT code (e.g., ABCBUS33XXX)"
                   description="Bank Identifier Code (BIC) for international transfers"
-                  onBlur={handleSwiftCodeBlur}
+                  render={({ field }) => <Input {...field} placeholder="Enter SWIFT code (e.g., ABCBUS33XXX)" onBlur={handleSwiftCodeBlur} />}
                 />
                 <FormField
                   form={form}

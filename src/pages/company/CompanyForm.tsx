@@ -65,6 +65,11 @@ const CompanyForm = () => {
         const countriesData = await countryService.getCountriesForDropdown();
         setCountries(countriesData);
 
+        if (countriesData && !isEdit) {
+          const defaultCountry = countriesData[0];
+          form.setValue("CountryID", defaultCountry.CountryID.toString());
+        }
+
         // If editing and country is set, fetch cities for that country
         if (isEdit && company?.CountryID) {
           const citiesData = await cityService.getCitiesByCountry(company.CountryID);

@@ -54,6 +54,11 @@ const CityForm = () => {
         const countriesData = await countryService.getCountriesForDropdown();
         setCountries(countriesData);
 
+        if (countriesData && !isEdit) {
+          const defaultCountry = countriesData[0];
+          form.setValue("CountryID", defaultCountry.CountryID.toString());
+        }
+
         // If editing, fetch city data
         if (isEdit && id) {
           const cityData = await cityService.getCityById(parseInt(id));

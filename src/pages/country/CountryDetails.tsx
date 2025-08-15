@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Edit, Trash2, Globe, MapPin, Calendar, User, Building2 } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Globe, MapPin, Calendar, User, Building2, Star } from "lucide-react";
 import { toast } from "sonner";
 
 export const CountryDetails = () => {
@@ -131,22 +131,35 @@ export const CountryDetails = () => {
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Button>
-            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)} disabled={country.IsDefault}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              {country.IsDefault ? "Cannot Delete Default" : "Delete"}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-6 mb-6">
             <div className="flex items-center justify-center md:justify-start">
-              <div className="flex items-center justify-center w-24 h-24 bg-blue-100 rounded-full">
+              <div className="flex items-center justify-center w-24 h-24 bg-blue-100 rounded-full relative">
                 <Globe className="h-12 w-12 text-blue-600" />
+                {country.IsDefault && (
+                  <div className="absolute -top-2 -right-2 bg-amber-500 rounded-full p-1">
+                    <Star className="h-4 w-4 text-white" />
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex-1">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
-                <h2 className="text-2xl font-bold">{country.CountryName}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{country.CountryName}</h2>
+                  {country.IsDefault && (
+                    <Badge variant="default" className="bg-amber-100 text-amber-800 border-amber-200">
+                      <Star className="h-3 w-3 mr-1" />
+                      Default Country
+                    </Badge>
+                  )}
+                </div>
                 <Badge variant="secondary" className="text-lg px-3 py-1">
                   {country.CountryCode}
                 </Badge>
@@ -188,6 +201,19 @@ export const CountryDetails = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <span className="text-sm font-medium text-muted-foreground">Country Name:</span>
                   <span>{country.CountryName}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Default Country:</span>
+                  <span>
+                    {country.IsDefault ? (
+                      <Badge variant="default" className="bg-amber-100 text-amber-800 border-amber-200">
+                        <Star className="h-3 w-3 mr-1" />
+                        Yes
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">No</Badge>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -277,10 +303,14 @@ export const CountryDetails = () => {
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDelete}
         title="Delete Country"
-        description={`Are you sure you want to delete ${country.CountryName}? This action cannot be undone and may affect related records including cities.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
+        description={
+          country.IsDefault
+            ? `Cannot delete ${country.CountryName} because it is set as the default country. Please set another country as default before deleting this one.`
+            : `Are you sure you want to delete ${country.CountryName}? This action cannot be undone and may affect related records including cities.`
+        }
+        confirmText={country.IsDefault ? "OK" : "Delete"}
+        cancelText={country.IsDefault ? undefined : "Cancel"}
+        type={country.IsDefault ? "info" : "danger"}
       />
     </div>
   );

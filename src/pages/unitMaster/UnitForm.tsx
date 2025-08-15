@@ -442,6 +442,11 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         });
         setDocTypes(docTypesData);
 
+        if (countries && !mode.isEdit) {
+          const defaultCountry = countries[0];
+          form.setValue("CountryID", defaultCountry.CountryID);
+        }
+
         // Load existing attachments if editing
         if (mode.isEdit && unit?.UnitID) {
           const existingAttachments = await unitService.getUnitAttachments(unit.UnitID);

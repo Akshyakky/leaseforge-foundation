@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MoreHorizontal, Search, Plus, Globe, MapPin } from "lucide-react";
+import { Loader2, MoreHorizontal, Search, Plus, Globe, MapPin, Star } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { countryService, Country } from "@/services/countryService";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -106,6 +106,9 @@ const Countries = () => {
     }
   };
 
+  // Calculate statistics
+  const defaultCountriesCount = countries.filter((country) => country.IsDefault).length;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -130,7 +133,7 @@ const Countries = () => {
           </div>
 
           {/* Summary Card */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
@@ -147,6 +150,15 @@ const Countries = () => {
                   <span className="text-sm text-muted-foreground">Active Records</span>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">{countries.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Star className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm text-muted-foreground">Default Country</span>
+                </div>
+                <div className="text-2xl font-bold text-amber-600">{defaultCountriesCount}</div>
               </CardContent>
             </Card>
             <Card>
@@ -173,6 +185,7 @@ const Countries = () => {
                   <TableRow>
                     <TableHead>Country Code</TableHead>
                     <TableHead>Country Name</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead>Created Date</TableHead>
                     <TableHead>Last Modified</TableHead>
@@ -190,7 +203,24 @@ const Countries = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{country.CountryName}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{country.CountryName}</span>
+                          {country.IsDefault && (
+                            <Badge variant="default" className="bg-amber-100 text-amber-800 border-amber-200">
+                              <Star className="h-3 w-3 mr-1" />
+                              Default
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {country.IsDefault ? (
+                          <Badge variant="default" className="bg-amber-100 text-amber-800 border-amber-200">
+                            Default
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Active</Badge>
+                        )}
                       </TableCell>
                       <TableCell>{country.CreatedBy ? <span>{country.CreatedBy}</span> : <span className="text-muted-foreground">System</span>}</TableCell>
                       <TableCell>
@@ -217,8 +247,12 @@ const Countries = () => {
                             <DropdownMenuItem onClick={() => handleViewCountry(country.CountryID)}>View details</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleEditCountry(country.CountryID)}>Edit</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(country)}>
-                              Delete
+                            <DropdownMenuItem
+                              className={country.IsDefault ? "text-muted-foreground" : "text-red-500"}
+                              onClick={() => !country.IsDefault && openDeleteDialog(country)}
+                              disabled={country.IsDefault}
+                            >
+                              {country.IsDefault ? "Cannot Delete Default" : "Delete"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

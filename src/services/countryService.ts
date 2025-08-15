@@ -5,6 +5,7 @@ export interface Country {
   CountryID: number;
   CountryCode: string;
   CountryName: string;
+  IsDefault: boolean;
   CreatedBy?: string;
   CreatedOn?: string;
   UpdatedBy?: string;
@@ -62,6 +63,7 @@ class CountryService extends BaseService {
       parameters: {
         CountryCode: country.CountryCode,
         CountryName: country.CountryName,
+        IsDefault: country.IsDefault || false,
       },
     };
 
@@ -86,6 +88,7 @@ class CountryService extends BaseService {
         CountryID: country.CountryID,
         CountryCode: country.CountryCode,
         CountryName: country.CountryName,
+        IsDefault: country.IsDefault || false,
       },
     };
 
@@ -149,6 +152,15 @@ class CountryService extends BaseService {
 
     const response = await this.execute<Country[]>(request, false);
     return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Get the default country
+   * @returns The default country or null if not found
+   */
+  async getDefaultCountry(): Promise<Country | null> {
+    const countries = await this.getAllCountries();
+    return countries.find((country) => country.IsDefault) || null;
   }
 }
 

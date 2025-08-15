@@ -376,6 +376,11 @@ const CustomerForm = () => {
           customerForm.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
         }
 
+        if (countriesData && !isEdit) {
+          const defaultCountry = countriesData[0];
+          customerForm.setValue("CountryID", defaultCountry.CountryID.toString());
+        }
+
         // If editing, fetch the customer data
         if (isEdit && id) {
           const customerData = await customerService.getCustomerById(parseInt(id));

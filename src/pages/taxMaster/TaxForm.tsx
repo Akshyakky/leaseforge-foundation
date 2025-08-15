@@ -109,6 +109,11 @@ const TaxForm: React.FC = () => {
       try {
         const countriesData = await countryService.getCountriesForDropdown();
         setCountries(countriesData);
+
+        if (countriesData && !isEdit) {
+          const defaultCountry = countriesData[0];
+          form.setValue("CountryID", defaultCountry.CountryID.toString());
+        }
       } catch (error) {
         console.error("Error fetching countries:", error);
       }

@@ -6,7 +6,9 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Loader2, Save, Star } from "lucide-react";
 import { countryService, Country } from "@/services/countryService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
@@ -19,6 +21,7 @@ const countrySchema = z.object({
     .max(10, "Country code must not exceed 10 characters")
     .regex(/^[A-Z0-9]+$/, "Country code must contain only uppercase letters and numbers"),
   CountryName: z.string().min(2, "Country name must be at least 2 characters").max(100, "Country name must not exceed 100 characters"),
+  IsDefault: z.boolean().default(false),
 });
 
 type CountryFormValues = z.infer<typeof countrySchema>;
@@ -39,8 +42,12 @@ const CountryForm = () => {
     defaultValues: {
       CountryCode: "",
       CountryName: "",
+      IsDefault: false,
     },
   });
+
+  // Watch IsDefault value for UI feedback
+  const isDefaultValue = form.watch("IsDefault");
 
   // Fetch country data for editing
   useEffect(() => {
@@ -58,6 +65,7 @@ const CountryForm = () => {
           form.reset({
             CountryCode: countryData.CountryCode || "",
             CountryName: countryData.CountryName || "",
+            IsDefault: countryData.IsDefault || false,
           });
         } else {
           toast.error("Country not found");
@@ -88,12 +96,14 @@ const CountryForm = () => {
           CountryID: country.CountryID,
           CountryCode: data.CountryCode,
           CountryName: data.CountryName,
+          IsDefault: data.IsDefault,
         });
       } else {
         // Create new country
         success = await countryService.createCountry({
           CountryCode: data.CountryCode,
           CountryName: data.CountryName,
+          IsDefault: data.IsDefault,
         });
       }
 
@@ -149,6 +159,22 @@ const CountryForm = () => {
                   required
                 />
                 <FormField form={form} name="CountryName" label="Country Name" placeholder="e.g., United States, United Kingdom" description="Full name of the country" required />
+              </div>
+
+              {/* Default Country Checkbox */}
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="isDefault" checked={isDefaultValue} onCheckedChange={(checked) => form.setValue("IsDefault", !!checked)} />
+                  <Label htmlFor="isDefault" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Set as default country
+                  </Label>
+                  {isDefaultValue && <Star className="h-4 w-4 text-amber-500" />}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {isDefaultValue
+                    ? "This country will be set as the system default. Any existing default country will be updated automatically."
+                    : "Mark this country as the system default for automatic selection in forms and processes."}
+                </p>
               </div>
 
               {isEdit && country && (
