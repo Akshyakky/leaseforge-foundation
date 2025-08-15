@@ -145,7 +145,24 @@ export interface SupplierOutstandingBalance {
   SupplierNo: string;
   SupplierName: string;
   OutstandingBalance: number;
-  BalanceAsOfDate: string | Date;
+}
+
+export interface ExpiringDocument {
+  SupplierAttachmentID: number;
+  SupplierID: number;
+  DocTypeID?: number;
+  DocumentName?: string;
+  FilePath?: string;
+  FileContent?: string | ArrayBuffer | null;
+  FileContentType?: string;
+  FileSize?: number;
+  DocIssueDate?: string | Date;
+  DocExpiryDate?: string | Date;
+  Remarks?: string;
+  DocTypeName?: string;
+  SupplierName: string;
+  SupplierNo: string;
+  DaysToExpiry: number;
 }
 
 export interface BankCategory {
@@ -186,6 +203,7 @@ export interface SupplierRequest {
   supplier: Partial<Supplier>;
   contacts?: Partial<SupplierContact>[];
   bankDetails?: Partial<SupplierBankDetails>[];
+  attachments?: Partial<SupplierAttachment>[];
   glAccountDetails?: {
     createNewAccount?: boolean;
     accountID?: number;
@@ -211,6 +229,7 @@ export interface SupplierUpdateRequest {
   supplier: Partial<Supplier> & { SupplierID: number };
   contacts?: Partial<SupplierContact>[];
   bankDetails?: Partial<SupplierBankDetails>[];
+  attachments?: Partial<SupplierAttachment>[];
   glAccountDetails?: {
     createNewAccount?: boolean;
     accountID?: number;
@@ -232,6 +251,7 @@ export interface ApiResponse<T = any> {
   NewBankID?: number;
   ContactID?: number;
   BankID?: number;
+  NewAttachmentID?: number;
   [key: string]: any;
   data?: T;
 }

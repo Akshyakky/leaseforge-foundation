@@ -6,8 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl } from "@/components/ui/form";
-import { ArrowLeft, Loader2, Save, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Form } from "@/components/ui/form";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, AlertTriangle, Upload, Eye, Edit } from "lucide-react";
 import { supplierService } from "@/services/supplierService";
 import { companyService } from "@/services/companyService";
 import { currencyService } from "@/services/currencyService";
@@ -20,7 +20,18 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useAppSelector } from "@/lib/hooks";
-import { Supplier, SupplierType, SupplierContact, SupplierBankDetails, SupplierRequest, PaymentTerm, BankCategory, Bank } from "@/types/supplierTypes";
+import {
+  Supplier,
+  SupplierType,
+  SupplierContact,
+  SupplierBankDetails,
+  SupplierAttachment,
+  SupplierRequest,
+  SupplierUpdateRequest,
+  PaymentTerm,
+  BankCategory,
+  Bank,
+} from "@/types/supplierTypes";
 import { Company } from "@/services/companyService";
 import { Currency } from "@/services/currencyService";
 import { Account, AccountType } from "@/types/accountTypes";
@@ -29,16 +40,23 @@ import { City } from "@/services/cityService";
 import { ContactType } from "@/services/contactTypeService";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/ui/date-picker";
+import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
+import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { paymentTermsService } from "@/services/paymentTermsService";
 import { bankService, bankCategoryService } from "@/services/bankService";
+import { docTypeService } from "@/services";
 
 // Create the schema for supplier form validation
 const supplierSchema = z.object({
-  SupplierNo: z.string().min(1, "Supplier number is required").max(50, "Supplier number cannot exceed 50 characters"),
+  SupplierNo: z.string().optional(),
   SupplierName: z.string().min(2, "Supplier name must be at least 2 characters").max(200, "Supplier name cannot exceed 200 characters"),
   SupplierTypeID: z.string().optional(),
   PaymentTermID: z.string().optional(),
@@ -69,39 +87,7 @@ const supplierSchema = z.object({
   GLCompanyID: z.string().optional(),
 });
 
-// Contact schema
-const contactSchema = z.object({
-  ContactTypeID: z.string().min(1, "Contact type is required"),
-  ContactName: z.string().min(1, "Contact name is required").max(200, "Contact name cannot exceed 200 characters"),
-  Designation: z.string().max(200, "Designation cannot exceed 200 characters").optional(),
-  EmailID: z.string().email("Invalid email address").optional().or(z.literal("")),
-  PhoneNo: z.string().max(30, "Phone number cannot exceed 30 characters").optional(),
-  MobileNo: z.string().max(30, "Mobile number cannot exceed 30 characters").optional(),
-  CountryID: z.string().optional(),
-  CityID: z.string().optional(),
-  Address: z.string().max(500, "Address cannot exceed 500 characters").optional(),
-  IsDefault: z.boolean().default(false),
-  Remarks: z.string().max(1000, "Remarks cannot exceed 1000 characters").optional(),
-});
-
-// Bank details schema
-const bankDetailsSchema = z.object({
-  AccountNo: z.string().min(1, "Account number is required").max(50, "Account number cannot exceed 50 characters"),
-  BankID: z.string().optional(),
-  BranchName: z.string().max(200, "Branch name cannot exceed 200 characters").optional(),
-  SwiftCode: z.string().max(15, "SWIFT code cannot exceed 15 characters").optional(),
-  IBAN: z.string().max(40, "IBAN cannot exceed 40 characters").optional(),
-  CountryID: z.string().optional(),
-  CityID: z.string().optional(),
-  ContactPerson: z.string().max(200, "Contact person cannot exceed 200 characters").optional(),
-  ContactNo: z.string().max(30, "Contact number cannot exceed 30 characters").optional(),
-  CategoryID: z.string().optional(),
-  IsDefault: z.boolean().default(false),
-});
-
 type SupplierFormValues = z.infer<typeof supplierSchema>;
-type ContactFormValues = z.infer<typeof contactSchema>;
-type BankFormValues = z.infer<typeof bankDetailsSchema>;
 
 const SupplierForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -116,8 +102,18 @@ const SupplierForm = () => {
   const [activeTab, setActiveTab] = useState("basic");
   const [contacts, setContacts] = useState<SupplierContact[]>([]);
   const [bankDetails, setBankDetails] = useState<SupplierBankDetails[]>([]);
-  const [isBusy, setIsBusy] = useState(false);
+  const [attachments, setAttachments] = useState<SupplierAttachment[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  // Dialog states
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Partial<SupplierContact> | null>(null);
+  const [editingBank, setEditingBank] = useState<Partial<SupplierBankDetails> | null>(null);
+  const [editingAttachment, setEditingAttachment] = useState<Partial<SupplierAttachment> | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<SupplierAttachment | null>(null);
 
   // Reference data states
   const [supplierTypes, setSupplierTypes] = useState<SupplierType[]>([]);
@@ -131,9 +127,10 @@ const SupplierForm = () => {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [bankCategories, setBankCategories] = useState<BankCategory[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<any[]>([]);
 
-  // Initialize forms
-  const supplierForm = useForm<SupplierFormValues>({
+  // Initialize form
+  const form = useForm<SupplierFormValues>({
     resolver: zodResolver(supplierSchema),
     defaultValues: {
       SupplierNo: "",
@@ -167,40 +164,6 @@ const SupplierForm = () => {
     },
   });
 
-  const contactForm = useForm<ContactFormValues>({
-    resolver: zodResolver(contactSchema),
-    defaultValues: {
-      ContactTypeID: "",
-      ContactName: "",
-      Designation: "",
-      EmailID: "",
-      PhoneNo: "",
-      MobileNo: "",
-      CountryID: "",
-      CityID: "",
-      Address: "",
-      IsDefault: false,
-      Remarks: "",
-    },
-  });
-
-  const bankForm = useForm<BankFormValues>({
-    resolver: zodResolver(bankDetailsSchema),
-    defaultValues: {
-      AccountNo: "",
-      BankID: "",
-      BranchName: "",
-      SwiftCode: "",
-      IBAN: "",
-      CountryID: "",
-      CityID: "",
-      ContactPerson: "",
-      ContactNo: "",
-      CategoryID: "",
-      IsDefault: false,
-    },
-  });
-
   // Initialize and fetch reference data
   useEffect(() => {
     const initializeForm = async () => {
@@ -219,7 +182,7 @@ const SupplierForm = () => {
           paymentTermsData,
           banksData,
           bankCategoriesData,
-          // For mock data, we'll create empty arrays
+          docTypesData,
         ] = await Promise.all([
           supplierService.getAllSupplierTypes(),
           companyService.getCompaniesForDropdown(true),
@@ -231,6 +194,7 @@ const SupplierForm = () => {
           paymentTermsService.getAllPaymentTerms(),
           bankService.getAllBanks(),
           bankCategoryService.getAllBankCategories(),
+          docTypeService.getAllDocTypes(),
         ]);
 
         setSupplierTypes(typesData);
@@ -243,6 +207,7 @@ const SupplierForm = () => {
         setPaymentTerms(paymentTermsData);
         setBanks(banksData);
         setBankCategories(bankCategoriesData);
+        setDocumentTypes(docTypesData);
 
         // If editing, fetch the supplier data
         if (isEdit && id) {
@@ -252,9 +217,10 @@ const SupplierForm = () => {
             setSupplier(data.supplier);
             setContacts(data.contacts || []);
             setBankDetails(data.bankDetails || []);
+            setAttachments(data.attachments || []);
 
             // Set form values
-            supplierForm.reset({
+            form.reset({
               SupplierNo: data.supplier.SupplierNo || "",
               SupplierName: data.supplier.SupplierName || "",
               SupplierTypeID: data.supplier.SupplierTypeID?.toString() || "",
@@ -303,12 +269,12 @@ const SupplierForm = () => {
     };
 
     initializeForm();
-  }, [id, isEdit, navigate, supplierForm]);
+  }, [id, isEdit, navigate, form]);
 
   // Handle country change - load cities
   const handleCountryChange = async (value: string) => {
-    supplierForm.setValue("CountryID", value);
-    supplierForm.setValue("CityID", "");
+    form.setValue("CountryID", value);
+    form.setValue("CityID", "");
 
     if (value) {
       try {
@@ -354,7 +320,7 @@ const SupplierForm = () => {
         Remarks: data.Remarks,
       };
 
-      // Prepare GL account details if creating new account
+      // Prepare GL account details
       let glAccountDetails;
       if (data.CreateNewAccount) {
         glAccountDetails = {
@@ -373,17 +339,18 @@ const SupplierForm = () => {
       }
 
       // Prepare the request
-      const requestData: SupplierRequest = {
+      const requestData: SupplierRequest | SupplierUpdateRequest = {
         supplier: supplierData,
         contacts: contacts,
         bankDetails: bankDetails,
+        attachments: attachments,
         glAccountDetails: glAccountDetails,
       };
 
       if (isEdit && supplier) {
         // Update existing supplier
-        requestData.supplier.SupplierID = supplier.SupplierID;
-        const result = await supplierService.updateSupplier(requestData as SupplierRequest & { supplier: Partial<Supplier> & { SupplierID: number } });
+        (requestData as SupplierUpdateRequest).supplier.SupplierID = supplier.SupplierID;
+        const result = await supplierService.updateSupplier(requestData as SupplierUpdateRequest);
 
         if (result.Status === 1) {
           toast.success(result.Message);
@@ -393,7 +360,7 @@ const SupplierForm = () => {
         }
       } else {
         // Create new supplier
-        const result = await supplierService.createSupplier(requestData);
+        const result = await supplierService.createSupplier(requestData as SupplierRequest);
 
         if (result.Status === 1) {
           toast.success(result.Message);
@@ -410,182 +377,156 @@ const SupplierForm = () => {
     }
   };
 
-  // Contact form handlers
-  const handleAddContact = async (data: ContactFormValues) => {
-    setIsBusy(true);
+  // Attachment handlers
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setEditingAttachment((prev) => ({
+        ...prev,
+        file,
+        DocumentName: prev?.DocumentName || file.name,
+        FileSize: file.size,
+        FileContentType: file.type,
+      }));
+    }
+  };
 
-    try {
-      const contactData: Partial<SupplierContact> = {
-        ContactTypeID: parseInt(data.ContactTypeID),
-        ContactName: data.ContactName,
-        Designation: data.Designation,
-        EmailID: data.EmailID,
-        PhoneNo: data.PhoneNo,
-        MobileNo: data.MobileNo,
-        CountryID: data.CountryID ? parseInt(data.CountryID) : undefined,
-        CityID: data.CityID ? parseInt(data.CityID) : undefined,
-        Address: data.Address,
-        IsDefault: data.IsDefault,
-        Remarks: data.Remarks,
-      };
+  const handleAddAttachment = () => {
+    setEditingAttachment({
+      DocumentName: "",
+      DocTypeID: undefined,
+    });
+    setAttachmentDialogOpen(true);
+  };
 
-      if (isEdit && supplier) {
-        // Add contact to existing supplier
-        const result = await supplierService.saveSupplierContact({
-          ...contactData,
-          SupplierID: supplier.SupplierID,
-        });
+  const handleEditAttachment = (attachment: SupplierAttachment) => {
+    setEditingAttachment(attachment);
+    setAttachmentDialogOpen(true);
+  };
 
-        if (result.Status === 1) {
-          toast.success(result.Message);
-          // Refresh contacts
-          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
-          setContacts(updatedData.contacts || []);
-        } else {
-          toast.error(result.Message);
-        }
+  const handleSaveAttachment = () => {
+    if (editingAttachment && editingAttachment.DocumentName) {
+      const existingIndex = attachments.findIndex((a) => a.SupplierAttachmentID === editingAttachment.SupplierAttachmentID);
+
+      if (existingIndex >= 0) {
+        const updatedAttachments = [...attachments];
+        updatedAttachments[existingIndex] = editingAttachment as SupplierAttachment;
+        setAttachments(updatedAttachments);
       } else {
-        // Add to local state for new supplier
+        const newAttachment = {
+          ...editingAttachment,
+          SupplierAttachmentID: -(attachments.length + 1), // Temporary ID
+          SupplierID: supplier?.SupplierID || 0,
+        } as SupplierAttachment;
+        setAttachments([...attachments, newAttachment]);
+      }
+
+      setAttachmentDialogOpen(false);
+      setEditingAttachment(null);
+    }
+  };
+
+  const handleDeleteAttachment = (index: number) => {
+    if (confirm("Are you sure you want to delete this attachment?")) {
+      const updatedAttachments = attachments.filter((_, i) => i !== index);
+      setAttachments(updatedAttachments);
+      toast.success("Attachment deleted successfully");
+    }
+  };
+
+  const handlePreviewAttachment = (attachment: SupplierAttachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewDialogOpen(true);
+  };
+
+  // Contact management functions
+  const handleAddContact = () => {
+    setEditingContact({
+      ContactName: "",
+      IsDefault: contacts.length === 0,
+    });
+    setContactDialogOpen(true);
+  };
+
+  const handleEditContact = (contact: SupplierContact) => {
+    setEditingContact(contact);
+    setContactDialogOpen(true);
+  };
+
+  const handleSaveContact = () => {
+    if (editingContact && editingContact.ContactName) {
+      const existingIndex = contacts.findIndex((c) => c.SupplierContactID === editingContact.SupplierContactID);
+
+      if (existingIndex >= 0) {
+        const updatedContacts = [...contacts];
+        updatedContacts[existingIndex] = editingContact as SupplierContact;
+        setContacts(updatedContacts);
+      } else {
         const newContact = {
-          ...contactData,
+          ...editingContact,
           SupplierContactID: -(contacts.length + 1), // Temporary ID
-          SupplierID: 0, // Will be set when supplier is created
+          SupplierID: supplier?.SupplierID || 0,
         } as SupplierContact;
         setContacts([...contacts, newContact]);
-        toast.success("Contact added successfully");
       }
 
-      // Reset form
-      contactForm.reset();
-    } catch (error) {
-      console.error("Error adding contact:", error);
-      toast.error("Failed to add contact");
-    } finally {
-      setIsBusy(false);
+      setContactDialogOpen(false);
+      setEditingContact(null);
+      toast.success("Contact saved successfully");
     }
   };
 
-  // Bank details form handlers
-  const handleAddBankDetails = async (data: BankFormValues) => {
-    setIsBusy(true);
+  const handleDeleteContact = (index: number) => {
+    if (confirm("Are you sure you want to delete this contact?")) {
+      const updatedContacts = contacts.filter((_, i) => i !== index);
+      setContacts(updatedContacts);
+      toast.success("Contact deleted successfully");
+    }
+  };
 
-    try {
-      const bankData: Partial<SupplierBankDetails> = {
-        AccountNo: data.AccountNo,
-        BankID: data.BankID ? parseInt(data.BankID) : undefined,
-        BranchName: data.BranchName,
-        SwiftCode: data.SwiftCode,
-        IBAN: data.IBAN,
-        CountryID: data.CountryID ? parseInt(data.CountryID) : undefined,
-        CityID: data.CityID ? parseInt(data.CityID) : undefined,
-        ContactPerson: data.ContactPerson,
-        ContactNo: data.ContactNo,
-        CategoryID: data.CategoryID ? parseInt(data.CategoryID) : undefined,
-        IsDefault: data.IsDefault,
-      };
+  // Bank details management functions
+  const handleAddBank = () => {
+    setEditingBank({
+      AccountNo: "",
+      IsDefault: bankDetails.length === 0,
+    });
+    setBankDialogOpen(true);
+  };
 
-      if (isEdit && supplier) {
-        // Add bank details to existing supplier
-        const result = await supplierService.saveSupplierBankDetails({
-          ...bankData,
-          SupplierID: supplier.SupplierID,
-        });
+  const handleEditBank = (bank: SupplierBankDetails) => {
+    setEditingBank(bank);
+    setBankDialogOpen(true);
+  };
 
-        if (result.Status === 1) {
-          toast.success(result.Message);
-          // Refresh bank details
-          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
-          setBankDetails(updatedData.bankDetails || []);
-        } else {
-          toast.error(result.Message);
-        }
+  const handleSaveBank = () => {
+    if (editingBank && editingBank.AccountNo) {
+      const existingIndex = bankDetails.findIndex((b) => b.SupplierBankID === editingBank.SupplierBankID);
+
+      if (existingIndex >= 0) {
+        const updatedBanks = [...bankDetails];
+        updatedBanks[existingIndex] = editingBank as SupplierBankDetails;
+        setBankDetails(updatedBanks);
       } else {
-        // Add to local state for new supplier
-        const newBankDetail = {
-          ...bankData,
+        const newBank = {
+          ...editingBank,
           SupplierBankID: -(bankDetails.length + 1), // Temporary ID
-          SupplierID: 0, // Will be set when supplier is created
+          SupplierID: supplier?.SupplierID || 0,
         } as SupplierBankDetails;
-        setBankDetails([...bankDetails, newBankDetail]);
-        toast.success("Bank details added successfully");
+        setBankDetails([...bankDetails, newBank]);
       }
 
-      // Reset form
-      bankForm.reset();
-    } catch (error) {
-      console.error("Error adding bank details:", error);
-      toast.error("Failed to add bank details");
-    } finally {
-      setIsBusy(false);
+      setBankDialogOpen(false);
+      setEditingBank(null);
+      toast.success("Bank details saved successfully");
     }
   };
 
-  // Delete handlers
-  const handleDeleteContact = async (contactId: number) => {
-    if (!confirm("Are you sure you want to delete this contact?")) {
-      return;
+  const handleDeleteBank = (index: number) => {
+    if (confirm("Are you sure you want to delete these bank details?")) {
+      const updatedBanks = bankDetails.filter((_, i) => i !== index);
+      setBankDetails(updatedBanks);
+      toast.success("Bank details deleted successfully");
     }
-
-    setIsBusy(true);
-
-    try {
-      if (isEdit && supplier && contactId > 0) {
-        // Delete from server
-        const result = await supplierService.deleteSupplierContact(contactId);
-        if (result.Status === 1) {
-          toast.success(result.Message);
-          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
-          setContacts(updatedData.contacts || []);
-        } else {
-          toast.error(result.Message);
-        }
-      } else {
-        // Remove from local state
-        setContacts(contacts.filter((contact) => contact.SupplierContactID !== contactId));
-        toast.success("Contact removed successfully");
-      }
-    } catch (error) {
-      console.error("Error deleting contact:", error);
-      toast.error("Failed to delete contact");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  const handleDeleteBankDetails = async (bankId: number) => {
-    if (!confirm("Are you sure you want to delete these bank details?")) {
-      return;
-    }
-
-    setIsBusy(true);
-
-    try {
-      if (isEdit && supplier && bankId > 0) {
-        // Delete from server
-        const result = await supplierService.deleteSupplierBankDetails(bankId);
-        if (result.Status === 1) {
-          toast.success(result.Message);
-          const updatedData = await supplierService.getSupplierById(supplier.SupplierID);
-          setBankDetails(updatedData.bankDetails || []);
-        } else {
-          toast.error(result.Message);
-        }
-      } else {
-        // Remove from local state
-        setBankDetails(bankDetails.filter((bank) => bank.SupplierBankID !== bankId));
-        toast.success("Bank details removed successfully");
-      }
-    } catch (error) {
-      console.error("Error deleting bank details:", error);
-      toast.error("Failed to delete bank details");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  // Cancel button handler
-  const handleCancel = () => {
-    navigate("/suppliers");
   };
 
   if (initialLoading) {
@@ -618,491 +559,594 @@ const SupplierForm = () => {
         </Alert>
       )}
 
-      <Form {...supplierForm}>
-        <form onSubmit={supplierForm.handleSubmit(onSubmitSupplier)}>
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEdit ? "Edit Supplier" : "Create New Supplier"}</CardTitle>
-                <CardDescription>{isEdit ? "Update supplier information" : "Enter the details for the new supplier"}</CardDescription>
-              </CardHeader>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmitSupplier)}>
+          <Card>
+            <CardHeader>
+              <CardTitle>{isEdit ? "Edit Supplier" : "Create New Supplier"}</CardTitle>
+              <CardDescription>{isEdit ? "Update supplier information" : "Enter the details for the new supplier"}</CardDescription>
+            </CardHeader>
 
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="pt-2">
-                <div className="px-6">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="basic">Basic Information</TabsTrigger>
-                    <TabsTrigger value="contacts">Contacts</TabsTrigger>
-                    <TabsTrigger value="banking">Banking Details</TabsTrigger>
-                    <TabsTrigger value="gl-account">GL Account</TabsTrigger>
-                  </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="pt-2">
+              <div className="px-6">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="basic">Basic Information</TabsTrigger>
+                  <TabsTrigger value="contacts">Contacts</TabsTrigger>
+                  <TabsTrigger value="banking">Banking Details</TabsTrigger>
+                  <TabsTrigger value="gl-account">GL Account</TabsTrigger>
+                  <TabsTrigger value="attachments">Attachments</TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="basic" className="p-6 pt-4 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField form={form} name="SupplierNo" label="Supplier Number" placeholder="Enter supplier number or leave empty to auto-generate" />
+                  <FormField form={form} name="SupplierName" label="Supplier Name" placeholder="Enter supplier name" required />
                 </div>
 
-                <TabsContent value="basic" className="p-6 pt-4 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField form={supplierForm} name="SupplierNo" label="Supplier Number" placeholder="Enter supplier number" required />
-                    <FormField form={supplierForm} name="SupplierName" label="Supplier Name" placeholder="Enter supplier name" required />
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    form={form}
+                    name="SupplierTypeID"
+                    label="Supplier Type"
+                    type="select"
+                    options={supplierTypes.map((type) => ({
+                      label: type.SupplierTypeName,
+                      value: type.SupplierTypeID.toString(),
+                    }))}
+                    placeholder="Select supplier type"
+                  />
+                  <FormField
+                    form={form}
+                    name="PaymentTermID"
+                    label="Payment Terms"
+                    type="select"
+                    options={paymentTerms.map((term) => ({
+                      label: term.TermName,
+                      value: term.PaymentTermID.toString(),
+                    }))}
+                    placeholder="Select payment terms"
+                  />
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      form={supplierForm}
-                      name="SupplierTypeID"
-                      label="Supplier Type"
-                      type="select"
-                      options={supplierTypes.map((type) => ({
-                        label: type.SupplierTypeName,
-                        value: type.SupplierTypeID.toString(),
-                      }))}
-                      placeholder="Select supplier type"
-                    />
-                    <FormField
-                      form={supplierForm}
-                      name="PaymentTermID"
-                      label="Payment Terms"
-                      type="select"
-                      options={paymentTerms.map((term) => ({
-                        label: term.TermName,
-                        value: term.PaymentTermID.toString(),
-                      }))}
-                      placeholder="Select payment terms"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField form={supplierForm} name="ChequeName" label="Cheque Name" placeholder="Enter name for cheques" />
-                    <div className="space-y-4">
-                      <Label>Status</Label>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="status"
-                          checked={supplierForm.watch("Status") === "Active"}
-                          onCheckedChange={(checked) => supplierForm.setValue("Status", checked ? "Active" : "Inactive")}
-                        />
-                        <Label htmlFor="status" className="cursor-pointer">
-                          {supplierForm.watch("Status")}
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField form={form} name="ChequeName" label="Cheque Name" placeholder="Enter name for cheques" />
                   <div className="space-y-4">
+                    <Label>Status</Label>
                     <div className="flex items-center space-x-2">
-                      <Switch
-                        id="credit-facility"
-                        checked={supplierForm.watch("HasCreditFacility")}
-                        onCheckedChange={(checked) => supplierForm.setValue("HasCreditFacility", checked)}
-                      />
-                      <Label htmlFor="credit-facility" className="cursor-pointer">
-                        Has Credit Facility
+                      <Switch id="status" checked={form.watch("Status") === "Active"} onCheckedChange={(checked) => form.setValue("Status", checked ? "Active" : "Inactive")} />
+                      <Label htmlFor="status" className="cursor-pointer">
+                        {form.watch("Status")}
                       </Label>
                     </div>
+                  </div>
+                </div>
 
-                    {supplierForm.watch("HasCreditFacility") && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField form={supplierForm} name="CreditLimit" label="Credit Limit" type="number" placeholder="0.00" />
-                        <FormField form={supplierForm} name="CreditDays" label="Credit Days" type="number" placeholder="0" />
-                      </div>
-                    )}
+                <Separator />
+
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch id="credit-facility" checked={form.watch("HasCreditFacility")} onCheckedChange={(checked) => form.setValue("HasCreditFacility", checked)} />
+                    <Label htmlFor="credit-facility" className="cursor-pointer">
+                      Has Credit Facility
+                    </Label>
                   </div>
 
-                  <Separator />
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormField form={supplierForm} name="VatRegNo" label="VAT Registration No" placeholder="Enter VAT number" />
-                    <FormField form={supplierForm} name="TaxID" label="Tax ID" placeholder="Enter tax ID" />
-                    <FormField form={supplierForm} name="DiscountPercentage" label="Discount %" type="number" placeholder="0.00" min="0" max="100" />
-                  </div>
-
-                  <Separator />
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormField form={supplierForm} name="PhoneNo" label="Phone Number" placeholder="Enter phone number" />
-                    <FormField form={supplierForm} name="FaxNo" label="Fax Number" placeholder="Enter fax number" />
-                    <FormField form={supplierForm} name="MobileNo" label="Mobile Number" placeholder="Enter mobile number" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField form={supplierForm} name="Email" label="Email" type="email" placeholder="Enter email address" />
-                    <FormField form={supplierForm} name="Website" label="Website" placeholder="Enter website URL" />
-                  </div>
-
-                  <FormField form={supplierForm} name="Address" label="Address" type="textarea" placeholder="Enter address" />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      form={supplierForm}
-                      name="CountryID"
-                      label="Country"
-                      type="select"
-                      options={countries.map((country) => ({
-                        label: country.CountryName,
-                        value: country.CountryID.toString(),
-                      }))}
-                      placeholder="Select country"
-                      onChange={handleCountryChange}
-                    />
-                    <FormField
-                      form={supplierForm}
-                      name="CityID"
-                      label="City"
-                      type="select"
-                      options={cities.map((city) => ({
-                        label: city.CityName,
-                        value: city.CityID.toString(),
-                      }))}
-                      placeholder="Select city"
-                      disabled={!supplierForm.watch("CountryID")}
-                    />
-                  </div>
-
-                  <FormField form={supplierForm} name="Remarks" label="Remarks" type="textarea" placeholder="Enter remarks" />
-                </TabsContent>
-
-                <TabsContent value="contacts" className="p-6 pt-4 space-y-6">
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                      <h3 className="text-lg font-medium mb-4">Current Contacts</h3>
-                      {contacts.length === 0 ? (
-                        <p className="text-muted-foreground">No contacts have been added for this supplier.</p>
-                      ) : (
-                        <div className="border rounded-md overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Phone</TableHead>
-                                <TableHead>Default</TableHead>
-                                <TableHead className="w-20">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {contacts.map((contact) => (
-                                <TableRow key={contact.SupplierContactID}>
-                                  <TableCell>{contact.ContactName}</TableCell>
-                                  <TableCell>{contact.ContactTypeDescription || "N/A"}</TableCell>
-                                  <TableCell>{contact.EmailID || "-"}</TableCell>
-                                  <TableCell>{contact.PhoneNo || contact.MobileNo || "-"}</TableCell>
-                                  <TableCell>{contact.IsDefault ? "Yes" : "No"}</TableCell>
-                                  <TableCell>
-                                    <Button variant="ghost" size="icon" disabled={isBusy} onClick={() => handleDeleteContact(contact.SupplierContactID)}>
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
+                  {form.watch("HasCreditFacility") && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField form={form} name="CreditLimit" label="Credit Limit" type="number" placeholder="0.00" />
+                      <FormField form={form} name="CreditDays" label="Credit Days" type="number" placeholder="0" />
                     </div>
-
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                      <h3 className="text-lg font-medium mb-4">Add Contact</h3>
-                      <Form {...contactForm}>
-                        <form onSubmit={contactForm.handleSubmit(handleAddContact)} className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              form={contactForm}
-                              name="ContactTypeID"
-                              label="Contact Type"
-                              type="select"
-                              options={contactTypes.map((type) => ({
-                                label: type.ContactTypeDescription,
-                                value: type.ContactTypeID.toString(),
-                              }))}
-                              placeholder="Select contact type"
-                              required
-                            />
-                            <FormField form={contactForm} name="ContactName" label="Contact Name" placeholder="Enter contact name" required />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={contactForm} name="Designation" label="Designation" placeholder="Enter designation" />
-                            <FormField form={contactForm} name="EmailID" label="Email" type="email" placeholder="Enter email" />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={contactForm} name="PhoneNo" label="Phone" placeholder="Enter phone number" />
-                            <FormField form={contactForm} name="MobileNo" label="Mobile" placeholder="Enter mobile number" />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              form={contactForm}
-                              name="CountryID"
-                              label="Country"
-                              type="select"
-                              options={countries.map((country) => ({
-                                label: country.CountryName,
-                                value: country.CountryID.toString(),
-                              }))}
-                              placeholder="Select country"
-                            />
-                            <FormField
-                              form={contactForm}
-                              name="CityID"
-                              label="City"
-                              type="select"
-                              options={cities.map((city) => ({
-                                label: city.CityName,
-                                value: city.CityID.toString(),
-                              }))}
-                              placeholder="Select city"
-                            />
-                          </div>
-                          <FormField form={contactForm} name="Address" label="Address" type="textarea" placeholder="Enter address" />
-                          <FormField form={contactForm} name="Remarks" label="Remarks" type="textarea" placeholder="Enter remarks" />
-                          <div className="flex items-center space-x-2">
-                            <Switch id="contact-default" checked={contactForm.watch("IsDefault")} onCheckedChange={(checked) => contactForm.setValue("IsDefault", checked)} />
-                            <Label htmlFor="contact-default" className="cursor-pointer">
-                              Set as default contact
-                            </Label>
-                          </div>
-                          <div className="flex justify-end">
-                            <Button type="submit" disabled={isBusy}>
-                              {isBusy ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Adding...
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="mr-2 h-4 w-4" />
-                                  Add Contact
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </form>
-                      </Form>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="banking" className="p-6 pt-4 space-y-6">
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                      <h3 className="text-lg font-medium mb-4">Current Bank Details</h3>
-                      {bankDetails.length === 0 ? (
-                        <p className="text-muted-foreground">No bank details have been added for this supplier.</p>
-                      ) : (
-                        <div className="border rounded-md overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Account No</TableHead>
-                                <TableHead>Bank Name</TableHead>
-                                <TableHead>Branch</TableHead>
-                                <TableHead>SWIFT</TableHead>
-                                <TableHead>Default</TableHead>
-                                <TableHead className="w-20">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {bankDetails.map((bank) => (
-                                <TableRow key={bank.SupplierBankID}>
-                                  <TableCell>{bank.AccountNo}</TableCell>
-                                  <TableCell>{bank.BankName || "N/A"}</TableCell>
-                                  <TableCell>{bank.BranchName || "-"}</TableCell>
-                                  <TableCell>{bank.SwiftCode || "-"}</TableCell>
-                                  <TableCell>{bank.IsDefault ? "Yes" : "No"}</TableCell>
-                                  <TableCell>
-                                    <Button variant="ghost" size="icon" disabled={isBusy} onClick={() => handleDeleteBankDetails(bank.SupplierBankID)}>
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                      <h3 className="text-lg font-medium mb-4">Add Bank Details</h3>
-                      <Form {...bankForm}>
-                        <form onSubmit={bankForm.handleSubmit(handleAddBankDetails)} className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={bankForm} name="AccountNo" label="Account Number" placeholder="Enter account number" required />
-                            <FormField
-                              form={bankForm}
-                              name="BankID"
-                              label="Bank"
-                              type="select"
-                              options={banks.map((bank) => ({
-                                label: bank.BankName,
-                                value: bank.BankID.toString(),
-                              }))}
-                              placeholder="Select bank"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={bankForm} name="BranchName" label="Branch Name" placeholder="Enter branch name" />
-                            <FormField form={bankForm} name="SwiftCode" label="SWIFT Code" placeholder="Enter SWIFT code" />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={bankForm} name="IBAN" label="IBAN" placeholder="Enter IBAN" />
-                            <FormField
-                              form={bankForm}
-                              name="CategoryID"
-                              label="Category"
-                              type="select"
-                              options={bankCategories.map((category) => ({
-                                label: category.CategoryName,
-                                value: category.CategoryID.toString(),
-                              }))}
-                              placeholder="Select category"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              form={bankForm}
-                              name="CountryID"
-                              label="Country"
-                              type="select"
-                              options={countries.map((country) => ({
-                                label: country.CountryName,
-                                value: country.CountryID.toString(),
-                              }))}
-                              placeholder="Select country"
-                            />
-                            <FormField
-                              form={bankForm}
-                              name="CityID"
-                              label="City"
-                              type="select"
-                              options={cities.map((city) => ({
-                                label: city.CityName,
-                                value: city.CityID.toString(),
-                              }))}
-                              placeholder="Select city"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField form={bankForm} name="ContactPerson" label="Contact Person" placeholder="Enter contact person" />
-                            <FormField form={bankForm} name="ContactNo" label="Contact Number" placeholder="Enter contact number" />
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Switch id="bank-default" checked={bankForm.watch("IsDefault")} onCheckedChange={(checked) => bankForm.setValue("IsDefault", checked)} />
-                            <Label htmlFor="bank-default" className="cursor-pointer">
-                              Set as default bank
-                            </Label>
-                          </div>
-                          <div className="flex justify-end">
-                            <Button type="submit" disabled={isBusy}>
-                              {isBusy ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Adding...
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="mr-2 h-4 w-4" />
-                                  Add Bank Details
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </form>
-                      </Form>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="gl-account" className="p-6 pt-4 space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="create-account"
-                        checked={supplierForm.watch("CreateNewAccount")}
-                        onCheckedChange={(checked) => supplierForm.setValue("CreateNewAccount", checked)}
-                      />
-                      <Label htmlFor="create-account" className="cursor-pointer">
-                        Create new GL account for this supplier
-                      </Label>
-                    </div>
-
-                    {supplierForm.watch("CreateNewAccount") ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField form={supplierForm} name="AccountCode" label="Account Code" placeholder="Enter account code" />
-                        <FormField form={supplierForm} name="AccountName" label="Account Name" placeholder="Enter account name" />
-                        <FormField
-                          form={supplierForm}
-                          name="AccountTypeID"
-                          label="Account Type"
-                          type="select"
-                          options={accountTypes.map((type) => ({
-                            label: type.AccountTypeName,
-                            value: type.AccountTypeID.toString(),
-                          }))}
-                          placeholder="Select account type"
-                        />
-                        <FormField
-                          form={supplierForm}
-                          name="GLCurrencyID"
-                          label="Currency"
-                          type="select"
-                          options={currencies.map((currency) => ({
-                            label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
-                            value: currency.CurrencyID.toString(),
-                          }))}
-                          placeholder="Select currency"
-                        />
-                        <FormField
-                          form={supplierForm}
-                          name="GLCompanyID"
-                          label="Company"
-                          type="select"
-                          options={companies.map((company) => ({
-                            label: company.CompanyName,
-                            value: company.CompanyID.toString(),
-                          }))}
-                          placeholder="Select company"
-                        />
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField
-                          form={supplierForm}
-                          name="AccountID"
-                          label="Existing Account"
-                          type="select"
-                          options={accounts.map((account) => ({
-                            label: `${account.AccountCode} - ${account.AccountName}`,
-                            value: account.AccountID.toString(),
-                          }))}
-                          placeholder="Select existing account"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <CardFooter className="flex justify-between border-t p-6">
-                <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Supplier
-                    </>
                   )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <FormField form={form} name="VatRegNo" label="VAT Registration No" placeholder="Enter VAT number" />
+                  <FormField form={form} name="TaxID" label="Tax ID" placeholder="Enter tax ID" />
+                  <FormField form={form} name="DiscountPercentage" label="Discount %" type="number" placeholder="0.00" min="0" max="100" />
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <FormField form={form} name="PhoneNo" label="Phone Number" placeholder="Enter phone number" />
+                  <FormField form={form} name="FaxNo" label="Fax Number" placeholder="Enter fax number" />
+                  <FormField form={form} name="MobileNo" label="Mobile Number" placeholder="Enter mobile number" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField form={form} name="Email" label="Email" type="email" placeholder="Enter email address" />
+                  <FormField form={form} name="Website" label="Website" placeholder="Enter website URL" />
+                </div>
+
+                <FormField form={form} name="Address" label="Address" type="textarea" placeholder="Enter address" />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    form={form}
+                    name="CountryID"
+                    label="Country"
+                    type="select"
+                    options={countries.map((country) => ({
+                      label: country.CountryName,
+                      value: country.CountryID.toString(),
+                    }))}
+                    placeholder="Select country"
+                    onChange={handleCountryChange}
+                  />
+                  <FormField
+                    form={form}
+                    name="CityID"
+                    label="City"
+                    type="select"
+                    options={cities.map((city) => ({
+                      label: city.CityName,
+                      value: city.CityID.toString(),
+                    }))}
+                    placeholder="Select city"
+                    disabled={!form.watch("CountryID")}
+                  />
+                </div>
+
+                <FormField form={form} name="Remarks" label="Remarks" type="textarea" placeholder="Enter remarks" />
+              </TabsContent>
+
+              <TabsContent value="contacts" className="p-6 pt-4 space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Contact Information</h3>
+                  <Button type="button" onClick={handleAddContact}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Contact
+                  </Button>
+                </div>
+
+                {contacts.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">No contacts have been added for this supplier.</div>
+                ) : (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Designation</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Default</TableHead>
+                          <TableHead className="w-20">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {contacts.map((contact, index) => (
+                          <TableRow key={contact.SupplierContactID || index}>
+                            <TableCell>{contact.ContactName}</TableCell>
+                            <TableCell>{contact.Designation || "-"}</TableCell>
+                            <TableCell>{contact.EmailID || "-"}</TableCell>
+                            <TableCell>{contact.PhoneNo || contact.MobileNo || "-"}</TableCell>
+                            <TableCell>{contact.IsDefault && <Badge variant="default">Default</Badge>}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(contact)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteContact(index)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="banking" className="p-6 pt-4 space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Banking Information</h3>
+                  <Button type="button" onClick={handleAddBank}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Bank Details
+                  </Button>
+                </div>
+
+                {bankDetails.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">No bank details have been added for this supplier.</div>
+                ) : (
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Account Number</TableHead>
+                          <TableHead>Bank</TableHead>
+                          <TableHead>Branch</TableHead>
+                          <TableHead>IBAN</TableHead>
+                          <TableHead>Default</TableHead>
+                          <TableHead className="w-20">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bankDetails.map((bank, index) => (
+                          <TableRow key={bank.SupplierBankID || index}>
+                            <TableCell>{bank.AccountNo}</TableCell>
+                            <TableCell>{bank.BankName || "-"}</TableCell>
+                            <TableCell>{bank.BranchName || "-"}</TableCell>
+                            <TableCell>{bank.IBAN || "-"}</TableCell>
+                            <TableCell>{bank.IsDefault && <Badge variant="default">Default</Badge>}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleEditBank(bank)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteBank(index)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="gl-account" className="p-6 pt-4 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch id="create-account" checked={form.watch("CreateNewAccount")} onCheckedChange={(checked) => form.setValue("CreateNewAccount", checked)} />
+                    <Label htmlFor="create-account" className="cursor-pointer">
+                      Create new GL account for this supplier
+                    </Label>
+                  </div>
+
+                  {form.watch("CreateNewAccount") ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField form={form} name="AccountCode" label="Account Code" placeholder="Enter account code" />
+                      <FormField form={form} name="AccountName" label="Account Name" placeholder="Enter account name" />
+                      <FormField
+                        form={form}
+                        name="AccountTypeID"
+                        label="Account Type"
+                        type="select"
+                        options={accountTypes.map((type) => ({
+                          label: type.AccountTypeName,
+                          value: type.AccountTypeID.toString(),
+                        }))}
+                        placeholder="Select account type"
+                      />
+                      <FormField
+                        form={form}
+                        name="GLCurrencyID"
+                        label="Currency"
+                        type="select"
+                        options={currencies.map((currency) => ({
+                          label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
+                          value: currency.CurrencyID.toString(),
+                        }))}
+                        placeholder="Select currency"
+                      />
+                      <FormField
+                        form={form}
+                        name="GLCompanyID"
+                        label="Company"
+                        type="select"
+                        options={companies.map((company) => ({
+                          label: company.CompanyName,
+                          value: company.CompanyID.toString(),
+                        }))}
+                        placeholder="Select company"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        form={form}
+                        name="AccountID"
+                        label="Existing Account"
+                        type="select"
+                        options={accounts.map((account) => ({
+                          label: `${account.AccountCode} - ${account.AccountName}`,
+                          value: account.AccountID.toString(),
+                        }))}
+                        placeholder="Select existing account"
+                      />
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="attachments" className="p-6 pt-4 space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Attachments</h3>
+                  <Button type="button" onClick={handleAddAttachment}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Attachment
+                  </Button>
+                </div>
+
+                {attachments.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">No attachments have been added for this supplier.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {attachments.map((attachment, index) => (
+                      <Card key={attachment.SupplierAttachmentID || index} className="p-4">
+                        <div className="flex items-start space-x-3">
+                          <AttachmentThumbnail
+                            fileUrl={attachment.fileUrl}
+                            fileName={attachment.DocumentName || "Document"}
+                            fileType={attachment.FileContentType}
+                            onClick={() => handlePreviewAttachment(attachment)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium truncate">{attachment.DocumentName}</h4>
+                            <p className="text-xs text-muted-foreground">{attachment.DocTypeName}</p>
+                            {attachment.FileSize && <p className="text-xs text-muted-foreground">{Math.round(attachment.FileSize / 1024)} KB</p>}
+                            <div className="flex space-x-2 mt-2">
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handlePreviewAttachment(attachment)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handleEditAttachment(attachment)}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteAttachment(index)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            <CardFooter className="flex justify-between border-t p-6">
+              <Button type="button" variant="outline" onClick={() => navigate("/suppliers")} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Supplier
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
         </form>
       </Form>
+
+      {/* Contact Dialog */}
+      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingContact?.SupplierContactID ? "Edit Contact" : "Add Contact"}</DialogTitle>
+            <DialogDescription>Enter the contact information for this supplier.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="contact-name">Contact Name *</Label>
+              <Input
+                id="contact-name"
+                value={editingContact?.ContactName || ""}
+                onChange={(e) => setEditingContact((prev) => ({ ...prev, ContactName: e.target.value }))}
+                placeholder="Enter contact name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-designation">Designation</Label>
+              <Input
+                id="contact-designation"
+                value={editingContact?.Designation || ""}
+                onChange={(e) => setEditingContact((prev) => ({ ...prev, Designation: e.target.value }))}
+                placeholder="Enter designation"
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-email">Email</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                value={editingContact?.EmailID || ""}
+                onChange={(e) => setEditingContact((prev) => ({ ...prev, EmailID: e.target.value }))}
+                placeholder="Enter email"
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-phone">Phone</Label>
+              <Input
+                id="contact-phone"
+                value={editingContact?.PhoneNo || ""}
+                onChange={(e) => setEditingContact((prev) => ({ ...prev, PhoneNo: e.target.value }))}
+                placeholder="Enter phone number"
+              />
+            </div>
+            <div className="col-span-2">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="contact-default"
+                  checked={editingContact?.IsDefault || false}
+                  onCheckedChange={(checked) => setEditingContact((prev) => ({ ...prev, IsDefault: checked }))}
+                />
+                <Label htmlFor="contact-default">Set as default contact</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setContactDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveContact}>
+              Save Contact
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bank Dialog */}
+      <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingBank?.SupplierBankID ? "Edit Bank Details" : "Add Bank Details"}</DialogTitle>
+            <DialogDescription>Enter the banking information for this supplier.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="bank-account">Account Number *</Label>
+              <Input
+                id="bank-account"
+                value={editingBank?.AccountNo || ""}
+                onChange={(e) => setEditingBank((prev) => ({ ...prev, AccountNo: e.target.value }))}
+                placeholder="Enter account number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-name">Bank</Label>
+              <Select value={editingBank?.BankID?.toString() || ""} onValueChange={(value) => setEditingBank((prev) => ({ ...prev, BankID: parseInt(value) }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  {banks.map((bank) => (
+                    <SelectItem key={bank.BankID} value={bank.BankID.toString()}>
+                      {bank.BankName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="bank-branch">Branch Name</Label>
+              <Input
+                id="bank-branch"
+                value={editingBank?.BranchName || ""}
+                onChange={(e) => setEditingBank((prev) => ({ ...prev, BranchName: e.target.value }))}
+                placeholder="Enter branch name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-iban">IBAN</Label>
+              <Input id="bank-iban" value={editingBank?.IBAN || ""} onChange={(e) => setEditingBank((prev) => ({ ...prev, IBAN: e.target.value }))} placeholder="Enter IBAN" />
+            </div>
+            <div className="col-span-2">
+              <div className="flex items-center space-x-2">
+                <Switch id="bank-default" checked={editingBank?.IsDefault || false} onCheckedChange={(checked) => setEditingBank((prev) => ({ ...prev, IsDefault: checked }))} />
+                <Label htmlFor="bank-default">Set as default bank</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBankDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveBank}>
+              Save Bank Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Dialog */}
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingAttachment?.SupplierAttachmentID ? "Edit Attachment" : "Add Attachment"}</DialogTitle>
+            <DialogDescription>Upload and configure attachment details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="attachment-name">Document Name *</Label>
+              <Input
+                id="attachment-name"
+                value={editingAttachment?.DocumentName || ""}
+                onChange={(e) => setEditingAttachment((prev) => ({ ...prev, DocumentName: e.target.value }))}
+                placeholder="Enter document name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="attachment-type">Document Type</Label>
+              <Select value={editingAttachment?.DocTypeID?.toString() || ""} onValueChange={(value) => setEditingAttachment((prev) => ({ ...prev, DocTypeID: parseInt(value) }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {documentTypes.map((type) => (
+                    <SelectItem key={type.DocTypeID} value={type.DocTypeID.toString()}>
+                      {type.Description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="issue-date">Issue Date</Label>
+                <DatePicker
+                  value={editingAttachment?.DocIssueDate ? new Date(editingAttachment.DocIssueDate) : undefined}
+                  onChange={(date) => setEditingAttachment((prev) => ({ ...prev, DocIssueDate: date }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="expiry-date">Expiry Date</Label>
+                <DatePicker
+                  value={editingAttachment?.DocExpiryDate ? new Date(editingAttachment.DocExpiryDate) : undefined}
+                  onChange={(date) => setEditingAttachment((prev) => ({ ...prev, DocExpiryDate: date }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="attachment-file">File</Label>
+              <Input id="attachment-file" type="file" onChange={handleFileUpload} accept="*/*" />
+              {editingAttachment?.file && <p className="text-sm text-muted-foreground mt-1">Selected: {editingAttachment.file.name}</p>}
+            </div>
+            <div>
+              <Label htmlFor="attachment-remarks">Remarks</Label>
+              <Textarea
+                id="attachment-remarks"
+                value={editingAttachment?.Remarks || ""}
+                onChange={(e) => setEditingAttachment((prev) => ({ ...prev, Remarks: e.target.value }))}
+                placeholder="Enter remarks"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAttachmentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveAttachment}>
+              Save Attachment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      {previewAttachment && (
+        <AttachmentPreview
+          isOpen={previewDialogOpen}
+          onClose={() => setPreviewDialogOpen(false)}
+          fileUrl={previewAttachment.fileUrl}
+          fileName={previewAttachment.DocumentName || "Document"}
+          fileType={previewAttachment.FileContentType}
+          fileSize={previewAttachment.FileSize}
+          uploadDate={previewAttachment.CreatedOn}
+          uploadedBy={previewAttachment.CreatedBy}
+          description={previewAttachment.Remarks}
+          documentType={previewAttachment.DocTypeName}
+          issueDate={previewAttachment.DocIssueDate}
+          expiryDate={previewAttachment.DocExpiryDate}
+        />
+      )}
     </div>
   );
 };

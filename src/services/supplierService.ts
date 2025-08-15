@@ -8,6 +8,7 @@ import {
   SupplierType,
   SupplierAttachment,
   SupplierOutstandingBalance,
+  ExpiringDocument,
   BankCategory,
   Bank,
   PaymentTerm,
@@ -23,7 +24,6 @@ import {
  */
 class SupplierService extends BaseService {
   constructor() {
-    // Pass the endpoint to the base service
     super("/Master/supplierManagement");
   }
 
@@ -37,9 +37,7 @@ class SupplierService extends BaseService {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
-        // Extract the base64 string from the Data URL
         const base64String = reader.result as string;
-        // Remove the Data URL prefix (e.g., "data:application/pdf;base64,")
         const base64Content = base64String.split(",")[1];
         resolve(base64Content);
       };
@@ -53,16 +51,13 @@ class SupplierService extends BaseService {
    * @returns Processed attachment ready for API
    */
   private async processAttachmentFile(attachment: Partial<SupplierAttachment>): Promise<Partial<SupplierAttachment>> {
-    // Clone the attachment to avoid modifying the original
     const processedAttachment = { ...attachment };
 
-    // If there's a file object, convert it to base64
     if (attachment.file) {
       processedAttachment.FileContent = await this.fileToBase64(attachment.file);
       processedAttachment.FileContentType = attachment.file.type;
       processedAttachment.FileSize = attachment.file.size;
 
-      // Remove the file object as it's not needed for the API
       delete processedAttachment.file;
       delete processedAttachment.fileUrl;
     }
@@ -71,12 +66,38 @@ class SupplierService extends BaseService {
   }
 
   /**
-   * Create a new supplier with optional GL account, contacts, and bank details
+   * Process attachments array for JSON parameter
+   * @param attachments - Array of attachments
+   * @returns JSON string for attachments parameter
+   */
+  private async processAttachmentsForJSON(attachments: Partial<SupplierAttachment>[]): Promise<string> {
+    const processedAttachments = await Promise.all(
+      attachments.map(async (attachment) => {
+        const processed = await this.processAttachmentFile(attachment);
+        return {
+          DocTypeID: processed.DocTypeID,
+          DocumentName: processed.DocumentName,
+          FilePath: processed.FilePath,
+          FileContent: processed.FileContent,
+          FileContentType: processed.FileContentType,
+          FileSize: processed.FileSize,
+          DocIssueDate: processed.DocIssueDate,
+          DocExpiryDate: processed.DocExpiryDate,
+          Remarks: processed.Remarks,
+          SupplierAttachmentID: processed.SupplierAttachmentID,
+        };
+      })
+    );
+
+    return JSON.stringify(processedAttachments);
+  }
+
+  /**
+   * Create a new supplier with optional GL account, contacts, bank details, and attachments
    * @param data - The supplier request data
    * @returns Response with status and newly created supplier ID
    */
   async createSupplier(data: SupplierRequest): Promise<ApiResponse> {
-    // Prepare parameters for GL account
     let glAccountParams: any = {};
 
     if (data.glAccountDetails) {
@@ -92,9 +113,14 @@ class SupplierService extends BaseService {
       };
     }
 
-    // Prepare parameters
+    // Process attachments for JSON parameter
+    let attachmentsJSON = null;
+    if (data.attachments && data.attachments.length > 0) {
+      attachmentsJSON = await this.processAttachmentsForJSON(data.attachments);
+    }
+
     const request: BaseRequest = {
-      mode: 1, // Mode 1: Insert New Supplier
+      mode: 1,
       parameters: {
         // Supplier details
         SupplierNo: data.supplier.SupplierNo,
@@ -156,6 +182,9 @@ class SupplierService extends BaseService {
             }
           : {}),
 
+        // Attachments JSON
+        AttachmentsJSON: attachmentsJSON,
+
         // Audit parameters
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
@@ -180,12 +209,11 @@ class SupplierService extends BaseService {
   }
 
   /**
-   * Update an existing supplier with optional GL account updates
+   * Update an existing supplier with optional GL account updates and attachments
    * @param data - The supplier request data
    * @returns Response with status
    */
   async updateSupplier(data: SupplierUpdateRequest): Promise<ApiResponse> {
-    // Prepare parameters for GL account
     let glAccountParams: any = {};
 
     if (data.glAccountDetails) {
@@ -201,8 +229,14 @@ class SupplierService extends BaseService {
       };
     }
 
+    // Process attachments for JSON parameter
+    let attachmentsJSON = null;
+    if (data.attachments && data.attachments.length > 0) {
+      attachmentsJSON = await this.processAttachmentsForJSON(data.attachments);
+    }
+
     const request: BaseRequest = {
-      mode: 2, // Mode 2: Update Existing Supplier
+      mode: 2,
       parameters: {
         SupplierID: data.supplier.SupplierID,
 
@@ -232,6 +266,9 @@ class SupplierService extends BaseService {
         // GL Account parameters
         ...glAccountParams,
 
+        // Attachments JSON
+        AttachmentsJSON: attachmentsJSON,
+
         // Audit parameters
         CurrentUserID: this.getCurrentUserId(),
         CurrentUserName: this.getCurrentUser(),
@@ -260,7 +297,7 @@ class SupplierService extends BaseService {
    */
   async getAllSuppliers(): Promise<Supplier[]> {
     const request: BaseRequest = {
-      mode: 3, // Mode 3: Fetch All Active Suppliers
+      mode: 3,
       parameters: {},
     };
 
@@ -271,16 +308,17 @@ class SupplierService extends BaseService {
   /**
    * Get supplier by ID with all related data
    * @param supplierId - The ID of the supplier to fetch
-   * @returns Supplier with contacts, bank details, and GL details
+   * @returns Supplier with contacts, bank details, GL details, and attachments
    */
   async getSupplierById(supplierId: number): Promise<{
     supplier: Supplier | null;
     contacts: SupplierContact[];
     bankDetails: SupplierBankDetails[];
     glDetails: SupplierGLDetails[];
+    attachments: SupplierAttachment[];
   }> {
     const request: BaseRequest = {
-      mode: 4, // Mode 4: Fetch Supplier by ID
+      mode: 4,
       parameters: {
         SupplierID: supplierId,
       },
@@ -289,15 +327,23 @@ class SupplierService extends BaseService {
     const response = await this.execute(request);
 
     if (response.success) {
+      const attachments = (response.table5 || []).map((attachment: SupplierAttachment) => {
+        if (attachment.FileContent && attachment.FileContentType) {
+          // Create a data URL for display
+          attachment.fileUrl = `data:${attachment.FileContentType};base64,${attachment.FileContent}`;
+        }
+        return attachment;
+      });
       return {
         supplier: response.table1 && response.table1.length > 0 ? response.table1[0] : null,
         contacts: response.table2 || [],
         bankDetails: response.table3 || [],
         glDetails: response.table4 || [],
+        attachments: attachments || [],
       };
     }
 
-    return { supplier: null, contacts: [], bankDetails: [], glDetails: [] };
+    return { supplier: null, contacts: [], bankDetails: [], glDetails: [], attachments: [] };
   }
 
   /**
@@ -307,7 +353,7 @@ class SupplierService extends BaseService {
    */
   async deleteSupplier(supplierId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 5, // Mode 5: Soft Delete Supplier
+      mode: 5,
       parameters: {
         SupplierID: supplierId,
         CurrentUserID: this.getCurrentUserId(),
@@ -338,7 +384,7 @@ class SupplierService extends BaseService {
    */
   async searchSuppliers(params: SupplierSearchParams = {}): Promise<Supplier[]> {
     const request: BaseRequest = {
-      mode: 6, // Mode 6: Search Suppliers with Filters
+      mode: 6,
       parameters: {
         SearchText: params.searchText,
         FilterSupplierTypeID: params.supplierTypeID,
@@ -360,7 +406,7 @@ class SupplierService extends BaseService {
    */
   async saveSupplierContact(contact: Partial<SupplierContact> & { SupplierID: number }): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 7, // Mode 7: Add/Update Supplier Contact
+      mode: 7,
       parameters: {
         SupplierID: contact.SupplierID,
         SupplierContactID: contact.SupplierContactID,
@@ -404,7 +450,7 @@ class SupplierService extends BaseService {
    */
   async saveSupplierBankDetails(bankDetails: Partial<SupplierBankDetails> & { SupplierID: number }): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 8, // Mode 8: Add/Update Supplier Bank Details
+      mode: 8,
       parameters: {
         SupplierID: bankDetails.SupplierID,
         SupplierBankID: bankDetails.SupplierBankID,
@@ -448,7 +494,7 @@ class SupplierService extends BaseService {
    */
   async createSupplierType(supplierType: Partial<SupplierType>): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 9, // Mode 9: Create New Supplier Type
+      mode: 9,
       parameters: {
         SupplierTypeCode: supplierType.SupplierTypeCode,
         SupplierTypeName: supplierType.SupplierTypeName,
@@ -482,7 +528,7 @@ class SupplierService extends BaseService {
    */
   async getAllSupplierTypes(): Promise<SupplierType[]> {
     const request: BaseRequest = {
-      mode: 10, // Mode 10: Get All Supplier Types
+      mode: 10,
       parameters: {},
     };
 
@@ -498,7 +544,7 @@ class SupplierService extends BaseService {
    */
   async getSupplierOutstandingBalances(asOfDate: Date | string, supplierId?: number): Promise<SupplierOutstandingBalance[]> {
     const request: BaseRequest = {
-      mode: 11, // Mode 11: Get Supplier Outstanding Balances
+      mode: 11,
       parameters: {
         BalanceAsOfDate: asOfDate,
         SupplierID: supplierId,
@@ -516,7 +562,7 @@ class SupplierService extends BaseService {
    */
   async getSupplierContacts(supplierId: number): Promise<SupplierContact[]> {
     const request: BaseRequest = {
-      mode: 12, // Mode 12: Get Supplier Contacts
+      mode: 12,
       parameters: {
         SupplierID: supplierId,
       },
@@ -533,7 +579,7 @@ class SupplierService extends BaseService {
    */
   async getSupplierBankDetails(supplierId: number): Promise<SupplierBankDetails[]> {
     const request: BaseRequest = {
-      mode: 13, // Mode 13: Get Supplier Bank Details
+      mode: 13,
       parameters: {
         SupplierID: supplierId,
       },
@@ -550,7 +596,7 @@ class SupplierService extends BaseService {
    */
   async deleteSupplierContact(contactId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 14, // Mode 14: Delete Supplier Contact
+      mode: 14,
       parameters: {
         SupplierContactID: contactId,
         CurrentUserID: this.getCurrentUserId(),
@@ -581,7 +627,7 @@ class SupplierService extends BaseService {
    */
   async deleteSupplierBankDetails(bankId: number): Promise<ApiResponse> {
     const request: BaseRequest = {
-      mode: 15, // Mode 15: Delete Supplier Bank Details
+      mode: 15,
       parameters: {
         SupplierBankID: bankId,
         CurrentUserID: this.getCurrentUserId(),
@@ -603,6 +649,155 @@ class SupplierService extends BaseService {
       Status: 0,
       Message: response.message || "Failed to delete bank details",
     };
+  }
+
+  /**
+   * Add single attachment to supplier
+   * @param supplierId - The supplier ID
+   * @param attachment - The attachment data
+   * @returns Response with status and attachment ID
+   */
+  async addSupplierAttachment(supplierId: number, attachment: Partial<SupplierAttachment>): Promise<ApiResponse> {
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
+    const request: BaseRequest = {
+      mode: 16,
+      parameters: {
+        SupplierID: supplierId,
+        DocTypeID: processedAttachment.DocTypeID,
+        DocumentName: processedAttachment.DocumentName,
+        FilePath: processedAttachment.FilePath,
+        FileContent: processedAttachment.FileContent,
+        FileContentType: processedAttachment.FileContentType,
+        FileSize: processedAttachment.FileSize,
+        DocIssueDate: processedAttachment.DocIssueDate,
+        DocExpiryDate: processedAttachment.DocExpiryDate,
+        AttachmentRemarks: processedAttachment.Remarks,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment added successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment added successfully",
+        NewAttachmentID: response.NewAttachmentID,
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to add attachment",
+    };
+  }
+
+  /**
+   * Update single attachment
+   * @param attachmentId - The attachment ID to update
+   * @param attachment - The attachment data
+   * @returns Response with status
+   */
+  async updateSupplierAttachment(attachmentId: number, attachment: Partial<SupplierAttachment>): Promise<ApiResponse> {
+    const processedAttachment = await this.processAttachmentFile(attachment);
+
+    const request: BaseRequest = {
+      mode: 17,
+      parameters: {
+        SupplierAttachmentID: attachmentId,
+        DocTypeID: processedAttachment.DocTypeID,
+        DocumentName: processedAttachment.DocumentName,
+        FilePath: processedAttachment.FilePath,
+        FileContent: processedAttachment.FileContent,
+        FileContentType: processedAttachment.FileContentType,
+        FileSize: processedAttachment.FileSize,
+        DocIssueDate: processedAttachment.DocIssueDate,
+        DocExpiryDate: processedAttachment.DocExpiryDate,
+        AttachmentRemarks: processedAttachment.Remarks,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment updated successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment updated successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to update attachment",
+    };
+  }
+
+  /**
+   * Delete single attachment
+   * @param attachmentId - The attachment ID to delete
+   * @returns Response with status
+   */
+  async deleteSupplierAttachment(attachmentId: number): Promise<ApiResponse> {
+    const request: BaseRequest = {
+      mode: 18,
+      parameters: {
+        SupplierAttachmentID: attachmentId,
+        CurrentUserID: this.getCurrentUserId(),
+        CurrentUserName: this.getCurrentUser(),
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Attachment deleted successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Attachment deleted successfully",
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to delete attachment",
+    };
+  }
+
+  /**
+   * Get attachments by supplier ID
+   * @param supplierId - The supplier ID
+   * @returns Array of supplier attachments
+   */
+  async getSupplierAttachments(supplierId: number): Promise<SupplierAttachment[]> {
+    const request: BaseRequest = {
+      mode: 19,
+      parameters: {
+        SupplierID: supplierId,
+      },
+    };
+
+    const response = await this.execute<SupplierAttachment[]>(request);
+    return response.success ? response.data || [] : [];
+  }
+
+  /**
+   * Get expiring documents for notifications
+   * @returns Array of expiring documents
+   */
+  async getExpiringDocuments(): Promise<ExpiringDocument[]> {
+    const request: BaseRequest = {
+      mode: 20,
+      parameters: {},
+    };
+
+    const response = await this.execute<ExpiringDocument[]>(request);
+    return response.success ? response.data || [] : [];
   }
 
   /**
