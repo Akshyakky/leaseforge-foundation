@@ -298,21 +298,24 @@ const ContractInvoiceForm: React.FC = () => {
       setPaymentTerms(paymentTermsData);
       setTaxes(taxesData);
 
-      // Set default values
-      if (companiesData.length > 0) {
-        const defaultCompany = companiesData[0];
-        form.setValue("CompanyID", defaultCompany.CompanyID.toString());
-      }
+      setTimeout(() => {
+        if (!isEdit) {
+          if (companiesData.length > 0) {
+            const defaultCompany = companiesData[0];
+            form.setValue("CompanyID", defaultCompany.CompanyID.toString());
+          }
 
-      if (fiscalYearsData.length > 0) {
-        const activeFY = fiscalYearsData.find((fy) => fy.IsActive) || fiscalYearsData[0];
-        form.setValue("FiscalYearID", activeFY.FiscalYearID.toString());
-      }
+          if (fiscalYearsData.length > 0) {
+            const activeFY = fiscalYearsData.find((fy) => fy.IsActive) || fiscalYearsData[0];
+            form.setValue("FiscalYearID", activeFY.FiscalYearID.toString());
+          }
 
-      if (currenciesData.length > 0) {
-        const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
-        form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
-      }
+          if (currenciesData.length > 0) {
+            const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
+            form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+          }
+        }
+      }, 0);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");
