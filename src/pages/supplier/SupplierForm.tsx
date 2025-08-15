@@ -105,6 +105,11 @@ const SupplierForm = () => {
   const [attachments, setAttachments] = useState<SupplierAttachment[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  // Track original data for comparison during updates
+  const [originalContacts, setOriginalContacts] = useState<SupplierContact[]>([]);
+  const [originalBankDetails, setOriginalBankDetails] = useState<SupplierBankDetails[]>([]);
+  const [originalAttachments, setOriginalAttachments] = useState<SupplierAttachment[]>([]);
+
   // Dialog states
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [bankDialogOpen, setBankDialogOpen] = useState(false);
@@ -219,6 +224,11 @@ const SupplierForm = () => {
             setBankDetails(data.bankDetails || []);
             setAttachments(data.attachments || []);
 
+            // Store original data for comparison
+            setOriginalContacts(data.contacts || []);
+            setOriginalBankDetails(data.bankDetails || []);
+            setOriginalAttachments(data.attachments || []);
+
             // Set form values
             form.reset({
               SupplierNo: data.supplier.SupplierNo || "",
@@ -289,6 +299,141 @@ const SupplierForm = () => {
     }
   };
 
+  // Helper function to determine if an item is new (has negative or undefined ID)
+  const isNewItem = (id?: number): boolean => {
+    return !id || id < 0;
+  };
+
+  // Helper function to identify deleted items
+  const getDeletedItems = <T extends { SupplierContactID?: number } | { SupplierBankID?: number }>(original: T[], current: T[]): T[] => {
+    return original.filter((originalItem) => {
+      const idField = "SupplierContactID" in originalItem ? "SupplierContactID" : "SupplierBankID";
+      const originalId = originalItem[idField as keyof T] as number;
+      return !current.some((currentItem) => (currentItem[idField as keyof T] as number) === originalId);
+    });
+  };
+
+  // Handle contact updates in edit mode
+  const handleContactUpdates = async (supplierId: number) => {
+    try {
+      // Delete removed contacts
+      const deletedContacts = getDeletedItems(originalContacts, contacts);
+      for (const deletedContact of deletedContacts) {
+        if (deletedContact.SupplierContactID) {
+          await supplierService.deleteSupplierContact(deletedContact.SupplierContactID);
+        }
+      }
+
+      // Add or update contacts
+      for (const contact of contacts) {
+        const contactData = {
+          ...contact,
+          SupplierID: supplierId,
+        };
+
+        if (isNewItem(contact.SupplierContactID)) {
+          // New contact - remove the temporary ID
+          delete contactData.SupplierContactID;
+          await supplierService.saveSupplierContact(contactData);
+        } else {
+          // Existing contact - check if it was modified
+          const originalContact = originalContacts.find((oc) => oc.SupplierContactID === contact.SupplierContactID);
+
+          if (originalContact && JSON.stringify(originalContact) !== JSON.stringify(contact)) {
+            await supplierService.saveSupplierContact(contactData);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error updating contacts:", error);
+      throw new Error("Failed to update contacts");
+    }
+  };
+
+  // Handle bank details updates in edit mode
+  const handleBankDetailsUpdates = async (supplierId: number) => {
+    try {
+      // Delete removed bank details
+      const deletedBankDetails = getDeletedItems(originalBankDetails, bankDetails);
+      for (const deletedBank of deletedBankDetails) {
+        if (deletedBank.SupplierBankID) {
+          await supplierService.deleteSupplierBankDetails(deletedBank.SupplierBankID);
+        }
+      }
+
+      // Add or update bank details
+      for (const bank of bankDetails) {
+        const bankData = {
+          ...bank,
+          SupplierID: supplierId,
+        };
+
+        if (isNewItem(bank.SupplierBankID)) {
+          // New bank details - remove the temporary ID
+          delete bankData.SupplierBankID;
+          await supplierService.saveSupplierBankDetails(bankData);
+        } else {
+          // Existing bank details - check if it was modified
+          const originalBank = originalBankDetails.find((ob) => ob.SupplierBankID === bank.SupplierBankID);
+
+          if (originalBank && JSON.stringify(originalBank) !== JSON.stringify(bank)) {
+            await supplierService.saveSupplierBankDetails(bankData);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error updating bank details:", error);
+      throw new Error("Failed to update bank details");
+    }
+  };
+
+  // Handle attachment updates in edit mode
+  const handleAttachmentUpdates = async (supplierId: number) => {
+    try {
+      // Delete removed attachments
+      const deletedAttachments = originalAttachments.filter(
+        (originalAttachment) => !attachments.some((currentAttachment) => currentAttachment.SupplierAttachmentID === originalAttachment.SupplierAttachmentID)
+      );
+
+      for (const deletedAttachment of deletedAttachments) {
+        if (deletedAttachment.SupplierAttachmentID && deletedAttachment.SupplierAttachmentID > 0) {
+          await supplierService.deleteSupplierAttachment(deletedAttachment.SupplierAttachmentID);
+        }
+      }
+
+      // Add or update attachments
+      for (const attachment of attachments) {
+        if (isNewItem(attachment.SupplierAttachmentID)) {
+          // New attachment - remove the temporary ID and add
+          const attachmentData = { ...attachment };
+          delete attachmentData.SupplierAttachmentID;
+          await supplierService.addSupplierAttachment(supplierId, attachmentData);
+        } else {
+          // Existing attachment - check if it was modified
+          const originalAttachment = originalAttachments.find((oa) => oa.SupplierAttachmentID === attachment.SupplierAttachmentID);
+
+          if (originalAttachment) {
+            // Compare relevant fields to detect changes
+            const isModified =
+              originalAttachment.DocumentName !== attachment.DocumentName ||
+              originalAttachment.DocTypeID !== attachment.DocTypeID ||
+              originalAttachment.DocIssueDate !== attachment.DocIssueDate ||
+              originalAttachment.DocExpiryDate !== attachment.DocExpiryDate ||
+              originalAttachment.Remarks !== attachment.Remarks ||
+              attachment.file; // If a new file was uploaded
+
+            if (isModified && attachment.SupplierAttachmentID) {
+              await supplierService.updateSupplierAttachment(attachment.SupplierAttachmentID, attachment);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error updating attachments:", error);
+      throw new Error("Failed to update attachments");
+    }
+  };
+
   // Submit handler for the supplier form
   const onSubmitSupplier = async (data: SupplierFormValues) => {
     setLoading(true);
@@ -338,29 +483,46 @@ const SupplierForm = () => {
         };
       }
 
-      // Prepare the request
-      const requestData: SupplierRequest | SupplierUpdateRequest = {
-        supplier: supplierData,
-        contacts: contacts,
-        bankDetails: bankDetails,
-        attachments: attachments,
-        glAccountDetails: glAccountDetails,
-      };
-
       if (isEdit && supplier) {
         // Update existing supplier
-        (requestData as SupplierUpdateRequest).supplier.SupplierID = supplier.SupplierID;
-        const result = await supplierService.updateSupplier(requestData as SupplierUpdateRequest);
+        supplierData.SupplierID = supplier.SupplierID;
 
-        if (result.Status === 1) {
-          toast.success(result.Message);
-          navigate("/suppliers");
-        } else {
-          toast.error(result.Message);
+        // Step 1: Update supplier basic data (without attachments in edit mode)
+        const supplierUpdateRequest: SupplierUpdateRequest = {
+          supplier: { SupplierID: supplier.SupplierID, ...supplierData },
+          attachments: attachments,
+          glAccountDetails: glAccountDetails,
+        };
+
+        const supplierResult = await supplierService.updateSupplier(supplierUpdateRequest);
+
+        if (supplierResult.Status !== 1) {
+          toast.error(supplierResult.Message);
+          return;
         }
+
+        // Step 2: Handle contacts
+        await handleContactUpdates(supplier.SupplierID);
+
+        // Step 3: Handle bank details
+        await handleBankDetailsUpdates(supplier.SupplierID);
+
+        // Step 4: Handle attachments
+        await handleAttachmentUpdates(supplier.SupplierID);
+
+        toast.success("Supplier updated successfully");
+        navigate("/suppliers");
       } else {
         // Create new supplier
-        const result = await supplierService.createSupplier(requestData as SupplierRequest);
+        const requestData: SupplierRequest = {
+          supplier: supplierData,
+          contacts: contacts,
+          bankDetails: bankDetails,
+          attachments: attachments,
+          glAccountDetails: glAccountDetails,
+        };
+
+        const result = await supplierService.createSupplier(requestData);
 
         if (result.Status === 1) {
           toast.success(result.Message);
@@ -459,6 +621,11 @@ const SupplierForm = () => {
     if (editingContact && editingContact.ContactName) {
       const existingIndex = contacts.findIndex((c) => c.SupplierContactID === editingContact.SupplierContactID);
 
+      // If this contact is set as default, unset others
+      if (editingContact.IsDefault) {
+        setContacts((prevContacts) => prevContacts.map((c) => ({ ...c, IsDefault: false })));
+      }
+
       if (existingIndex >= 0) {
         const updatedContacts = [...contacts];
         updatedContacts[existingIndex] = editingContact as SupplierContact;
@@ -503,6 +670,11 @@ const SupplierForm = () => {
   const handleSaveBank = () => {
     if (editingBank && editingBank.AccountNo) {
       const existingIndex = bankDetails.findIndex((b) => b.SupplierBankID === editingBank.SupplierBankID);
+
+      // If this bank is set as default, unset others
+      if (editingBank.IsDefault) {
+        setBankDetails((prevBanks) => prevBanks.map((b) => ({ ...b, IsDefault: false })));
+      }
 
       if (existingIndex >= 0) {
         const updatedBanks = [...bankDetails];
