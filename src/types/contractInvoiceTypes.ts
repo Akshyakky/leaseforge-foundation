@@ -139,6 +139,7 @@ export interface ContractUnitForInvoice {
   PeriodFromDate: string | Date;
   PeriodToDate: string | Date;
   InvoiceAmount: number;
+  TaxID?: number;
   TaxPercentage?: number;
   TaxAmount?: number;
   DiscountAmount?: number;

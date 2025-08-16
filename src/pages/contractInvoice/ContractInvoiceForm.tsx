@@ -1,4 +1,4 @@
-// src/pages/contractInvoice/ContractInvoiceForm.tsx - Updated with Approval Protection
+// src/pages/contractInvoice/ContractInvoiceForm.tsx - Updated with API-driven Tax Selection
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -61,7 +61,7 @@ import {
 } from "@/types/contractInvoiceTypes";
 import { paymentTermsService } from "@/services/paymentTermsService";
 
-// Enhanced schema for invoice generation form
+// Enhanced schema for invoice generation form with API-driven tax selection
 const contractUnitInvoiceSchema = z.object({
   ContractUnitID: z.number().optional(),
   UnitID: z.string().min(1, "Unit is required"),
@@ -69,6 +69,7 @@ const contractUnitInvoiceSchema = z.object({
   PeriodFromDate: z.date({ required_error: "Period from date is required" }),
   PeriodToDate: z.date({ required_error: "Period to date is required" }),
   InvoiceAmount: z.coerce.number().min(0, "Invoice amount must be 0 or greater"),
+  TaxID: z.string().optional(), // API-driven tax selection
   TaxPercentage: z.coerce.number().min(0).max(100).optional().nullable(),
   TaxAmount: z.coerce.number().min(0).optional().nullable(),
   DiscountAmount: z.coerce.number().min(0).optional().nullable(),
@@ -345,7 +346,8 @@ const ContractInvoiceForm: React.FC = () => {
       PeriodFromDate: invoiceData.PeriodFromDate ? new Date(invoiceData.PeriodFromDate) : new Date(),
       PeriodToDate: invoiceData.PeriodToDate ? new Date(invoiceData.PeriodToDate) : new Date(),
       InvoiceAmount: invoiceData.SubTotal || 0,
-      TaxPercentage: 0,
+      TaxID: invoiceData.TaxID?.toString() || "",
+      TaxPercentage: 0, // This will be auto-populated when TaxID is set
       TaxAmount: invoiceData.TaxAmount || 0,
       DiscountAmount: invoiceData.DiscountAmount || 0,
       TotalAmount: invoiceData.TotalAmount || 0,
@@ -398,51 +400,67 @@ const ContractInvoiceForm: React.FC = () => {
     }
   };
 
-  // Auto-calculation effects
+  // Enhanced auto-calculation effects with API-driven tax selection
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
       if (!name) return;
 
       const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-      const getTaxDetails = (taxId: string) => {
-        if (!taxId || taxId === "0") return null;
-        return taxes.find((tax) => tax.TaxID.toString() === taxId);
-      };
+      // Auto-calculation when tax selection changes (API-driven)
+      if (name.includes("contractUnits.") && name.includes("TaxID")) {
+        const index = parseInt(name.split(".")[1]);
+        const units = form.getValues("contractUnits");
 
-      // Auto-calculation for contract units
+        if (units && units[index]) {
+          const selectedTaxId = units[index].TaxID;
+          const selectedTax = taxes.find((tax) => tax.TaxID.toString() === selectedTaxId);
+
+          const invoiceAmount = units[index].InvoiceAmount || 0;
+          const discountAmount = units[index].DiscountAmount || 0;
+
+          if (selectedTax) {
+            const taxPercentage = selectedTax.TaxRate;
+            const taxAmount = roundToTwo((invoiceAmount * taxPercentage) / 100);
+            const totalAmount = roundToTwo(invoiceAmount + taxAmount - discountAmount);
+
+            form.setValue(`contractUnits.${index}.TaxPercentage`, taxPercentage);
+            form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
+            form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+          } else {
+            // Clear tax values if no tax selected
+            form.setValue(`contractUnits.${index}.TaxPercentage`, 0);
+            form.setValue(`contractUnits.${index}.TaxAmount`, 0);
+
+            const totalAmount = roundToTwo(invoiceAmount - discountAmount);
+            form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+          }
+        }
+      }
+
+      // Auto-calculation for contract units when invoice amount changes
       if (name.includes("contractUnits.") && name.includes("InvoiceAmount")) {
         const index = parseInt(name.split(".")[1]);
         const units = form.getValues("contractUnits");
 
         if (units && units[index]) {
           const invoiceAmount = units[index].InvoiceAmount || 0;
-          const taxPercentage = units[index].TaxPercentage || 0;
+          const selectedTaxId = units[index].TaxID;
+          const selectedTax = taxes.find((tax) => tax.TaxID.toString() === selectedTaxId);
           const discountAmount = units[index].DiscountAmount || 0;
 
-          const taxAmount = roundToTwo((invoiceAmount * taxPercentage) / 100);
-          const totalAmount = roundToTwo(invoiceAmount + taxAmount - discountAmount);
+          if (selectedTax) {
+            const taxPercentage = selectedTax.TaxRate;
+            const taxAmount = roundToTwo((invoiceAmount * taxPercentage) / 100);
+            const totalAmount = roundToTwo(invoiceAmount + taxAmount - discountAmount);
 
-          form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
-          form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
-        }
-      }
-
-      // Auto-calculation when tax percentage changes
-      if (name.includes("contractUnits.") && name.includes("TaxPercentage")) {
-        const index = parseInt(name.split(".")[1]);
-        const units = form.getValues("contractUnits");
-
-        if (units && units[index]) {
-          const invoiceAmount = units[index].InvoiceAmount || 0;
-          const taxPercentage = units[index].TaxPercentage || 0;
-          const discountAmount = units[index].DiscountAmount || 0;
-
-          const taxAmount = roundToTwo((invoiceAmount * taxPercentage) / 100);
-          const totalAmount = roundToTwo(invoiceAmount + taxAmount - discountAmount);
-
-          form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
-          form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+            form.setValue(`contractUnits.${index}.TaxPercentage`, taxPercentage);
+            form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
+            form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+          } else {
+            const totalAmount = roundToTwo(invoiceAmount - discountAmount);
+            form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+          }
         }
       }
 
@@ -515,6 +533,14 @@ const ContractInvoiceForm: React.FC = () => {
               form.setValue(`contractUnits.${index}.NoOfInstallments`, unitDetails.NoOfInstallmentLease);
             }
 
+            // Apply default tax if available and no tax currently selected
+            const currentTaxId = form.getValues(`contractUnits.${index}.TaxID`);
+            const defaultTaxId = form.getValues("TaxID");
+
+            if (!currentTaxId && defaultTaxId) {
+              form.setValue(`contractUnits.${index}.TaxID`, defaultTaxId);
+            }
+
             // Trigger amount calculation after setting values
             setTimeout(() => {
               calculateUnitInvoiceAmount(index);
@@ -538,7 +564,7 @@ const ContractInvoiceForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, units, contractUnits]);
+  }, [form, units, contractUnits, taxes]);
 
   // Calculate unit invoice amount based on contract details and period
   const calculateUnitInvoiceAmount = async (index: number) => {
@@ -570,13 +596,22 @@ const ContractInvoiceForm: React.FC = () => {
       form.setValue(`contractUnits.${index}.ContractDays`, daysInPeriod);
       form.setValue(`contractUnits.${index}.ContractID`, contractUnit.ContractID?.toString() || "");
 
-      // Trigger tax calculation
-      const taxPercentage = unit.TaxPercentage || 0;
-      const taxAmount = Math.round(((invoiceAmount * taxPercentage) / 100) * 100) / 100;
-      const totalAmount = Math.round((invoiceAmount + taxAmount - (unit.DiscountAmount || 0)) * 100) / 100;
+      // Trigger tax calculation if tax is selected
+      const selectedTaxId = unit.TaxID;
+      const selectedTax = taxes.find((tax) => tax.TaxID.toString() === selectedTaxId);
 
-      form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
-      form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+      if (selectedTax) {
+        const taxPercentage = selectedTax.TaxRate;
+        const taxAmount = Math.round(((invoiceAmount * taxPercentage) / 100) * 100) / 100;
+        const totalAmount = Math.round((invoiceAmount + taxAmount - (unit.DiscountAmount || 0)) * 100) / 100;
+
+        form.setValue(`contractUnits.${index}.TaxPercentage`, taxPercentage);
+        form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
+        form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+      } else {
+        const totalAmount = Math.round((invoiceAmount - (unit.DiscountAmount || 0)) * 100) / 100;
+        form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+      }
     } catch (error) {
       console.error("Error calculating unit invoice amount:", error);
     }
@@ -601,7 +636,7 @@ const ContractInvoiceForm: React.FC = () => {
     form.setValue("DueDate", dueDate);
   };
 
-  // Add new contract unit
+  // Add new contract unit with API-driven tax field
   const addContractUnit = () => {
     if (!canEditInvoice) {
       toast.error("Cannot modify approved invoices.");
@@ -617,6 +652,7 @@ const ContractInvoiceForm: React.FC = () => {
       PeriodFromDate: fromDate,
       PeriodToDate: toDate,
       InvoiceAmount: 0,
+      TaxID: "", // API-driven tax selection
       TaxPercentage: 0,
       TaxAmount: 0,
       DiscountAmount: 0,
@@ -626,7 +662,7 @@ const ContractInvoiceForm: React.FC = () => {
     });
   };
 
-  // Handle form submission
+  // Handle form submission with enhanced tax data
   const onSubmit = async (data: InvoiceFormValues) => {
     if (!user) {
       toast.error("User information not available");
@@ -650,12 +686,13 @@ const ContractInvoiceForm: React.FC = () => {
     try {
       const totals = calculateTotals();
 
-      // Prepare contract units data
+      // Prepare contract units data with tax information
       const contractUnitsData: ContractUnitForInvoice[] = data.contractUnits.map((unit) => ({
         ContractUnitID: parseInt(unit.UnitID) || 0,
         PeriodFromDate: unit.PeriodFromDate,
         PeriodToDate: unit.PeriodToDate,
         InvoiceAmount: unit.InvoiceAmount,
+        TaxID: unit.TaxID ? parseInt(unit.TaxID) : undefined,
         TaxPercentage: unit.TaxPercentage,
         TaxAmount: unit.TaxAmount,
         DiscountAmount: unit.DiscountAmount,
@@ -683,7 +720,7 @@ const ContractInvoiceForm: React.FC = () => {
           CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
           ExchangeRate: data.ExchangeRate,
           PaymentTermID: data.PaymentTermID ? parseInt(data.PaymentTermID) : undefined,
-          TaxID: data.TaxID ? parseInt(data.TaxID) : undefined,
+          TaxID: contractUnitsData[0]?.TaxID, // Use the unit-level tax ID
           IsRecurring: data.IsRecurring,
           RecurrencePattern: data.RecurrencePattern,
           NextInvoiceDate: data.NextInvoiceDate,
@@ -724,7 +761,7 @@ const ContractInvoiceForm: React.FC = () => {
           CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
           ExchangeRate: data.ExchangeRate,
           PaymentTermID: data.PaymentTermID ? parseInt(data.PaymentTermID) : undefined,
-          TaxID: data.TaxID ? parseInt(data.TaxID) : undefined,
+          TaxID: contractUnitsData[0]?.TaxID, // Use the unit-level tax ID
           IsRecurring: data.IsRecurring,
           RecurrencePattern: data.RecurrencePattern,
           NextInvoiceDate: data.NextInvoiceDate,
@@ -825,6 +862,12 @@ const ContractInvoiceForm: React.FC = () => {
   const getContractDetails = (contractId: string) => {
     if (!contractId) return null;
     return contracts.find((contract) => contract.ContractID === parseInt(contractId));
+  };
+
+  // Get selected tax details
+  const getSelectedTax = (taxId: string) => {
+    if (!taxId) return null;
+    return taxes.find((tax) => tax.TaxID.toString() === taxId);
   };
 
   if (initialLoading) {
@@ -1024,12 +1067,15 @@ const ContractInvoiceForm: React.FC = () => {
                   name="TaxID"
                   label="Default Tax"
                   type="select"
-                  options={taxes.map((tax) => ({
-                    label: `${tax.TaxName} (${tax.TaxRate}%)`,
-                    value: tax.TaxID.toString(),
-                  }))}
+                  options={[
+                    { label: "No Default Tax", value: "0" },
+                    ...taxes.map((tax) => ({
+                      label: `${tax.TaxName} (${tax.TaxRate}%)`,
+                      value: tax.TaxID.toString(),
+                    })),
+                  ]}
                   placeholder="Select default tax"
-                  description="Default tax rate for units"
+                  description="Default tax rate for new units"
                   disabled={!canEditInvoice}
                 />
               </div>
@@ -1222,7 +1268,7 @@ const ContractInvoiceForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Contract Units */}
+          {/* Contract Units with API-driven Tax Selection */}
           <Card className={isApproved ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -1255,8 +1301,10 @@ const ContractInvoiceForm: React.FC = () => {
                   {contractUnitsFieldArray.fields.map((field, index) => {
                     const unitId = form.watch(`contractUnits.${index}.UnitID`);
                     const contractId = form.watch(`contractUnits.${index}.ContractID`);
+                    const taxId = form.watch(`contractUnits.${index}.TaxID`);
                     const unitDetails = getUnitDetails(unitId);
                     const contractDetails = getContractDetails(contractId);
+                    const selectedTax = getSelectedTax(taxId);
 
                     return (
                       <AccordionItem key={field.id} value={`unit-${index}`} className="border rounded-lg mb-4">
@@ -1266,7 +1314,10 @@ const ContractInvoiceForm: React.FC = () => {
                               <Building className="h-5 w-5 text-muted-foreground" />
                               <div className="text-left">
                                 <div className="font-medium">{unitDetails ? `${unitDetails.UnitNo} - ${unitDetails.PropertyName}` : `Unit ${index + 1}`}</div>
-                                <div className="text-sm text-muted-foreground">{contractDetails && `Contract: ${contractDetails.ContractNo}`}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {contractDetails && `Contract: ${contractDetails.ContractNo}`}
+                                  {selectedTax && ` • Tax: ${selectedTax.TaxName} (${selectedTax.TaxRate}%)`}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
@@ -1356,16 +1407,39 @@ const ContractInvoiceForm: React.FC = () => {
                                 description="Base invoice amount (auto-calculated)"
                                 disabled={!canEditInvoice}
                               />
+
+                              {/* API-driven Tax Selection */}
+                              <FormField
+                                form={form}
+                                name={`contractUnits.${index}.TaxID`}
+                                label="Tax"
+                                type="select"
+                                options={[
+                                  { label: "No Tax", value: "0" },
+                                  ...taxes.map((tax) => ({
+                                    label: `${tax.TaxName} (${tax.TaxRate}%)`,
+                                    value: tax.TaxID.toString(),
+                                  })),
+                                ]}
+                                placeholder="Select tax"
+                                description="Select applicable tax"
+                                disabled={!canEditInvoice}
+                              />
+
+                              {/* Tax Percentage Display (Read-only) */}
                               <FormField
                                 form={form}
                                 name={`contractUnits.${index}.TaxPercentage`}
-                                label="Tax %"
+                                label="Tax Rate (%)"
                                 type="number"
                                 step="0.01"
                                 placeholder="0.00"
-                                description="Tax percentage"
-                                disabled={!canEditInvoice}
+                                description="Tax rate from selected tax"
+                                disabled={true}
                               />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <FormField
                                 form={form}
                                 name={`contractUnits.${index}.TaxAmount`}
@@ -1376,9 +1450,6 @@ const ContractInvoiceForm: React.FC = () => {
                                 description="Auto-calculated tax amount"
                                 disabled
                               />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <FormField
                                 form={form}
                                 name={`contractUnits.${index}.DiscountAmount`}
@@ -1419,6 +1490,14 @@ const ContractInvoiceForm: React.FC = () => {
                                     <div>{form.watch(`contractUnits.${index}.RentPerMonth`)?.toLocaleString() || "0"}</div>
                                   </div>
                                 </div>
+                                {selectedTax && (
+                                  <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                                    <div className="text-sm font-medium text-blue-900">Selected Tax Information</div>
+                                    <div className="text-sm text-blue-700 mt-1">
+                                      {selectedTax.TaxName} - {selectedTax.TaxRate}% {selectedTax.TaxCategory && `(${selectedTax.TaxCategory})`}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
