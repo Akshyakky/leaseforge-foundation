@@ -1,5 +1,5 @@
-// src/pages/contractInvoice/ContractInvoiceForm.tsx - Updated with API-driven Tax Selection
-import React, { useState, useEffect } from "react";
+// src/pages/contractInvoice/ContractInvoiceForm.tsx - Updated with API-driven Tax Selection and Fixed Discount Calculation
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,35 +7,13 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  ArrowLeft,
-  Loader2,
-  Save,
-  Plus,
-  Trash2,
-  FileText,
-  Building,
-  Users,
-  HandCoins,
-  Calendar,
-  Calculator,
-  AlertCircle,
-  CheckCircle,
-  Info,
-  RotateCcw,
-  PlusCircle,
-  Send,
-  Copy,
-  Lock,
-  Shield,
-} from "lucide-react";
+import { ArrowLeft, Loader2, Save, Plus, Trash2, FileText, Building, HandCoins, Calculator, CheckCircle, RotateCcw, Lock, Shield } from "lucide-react";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
 import { contractService } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
@@ -48,7 +26,7 @@ import { taxService } from "@/services/taxService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { useAppSelector } from "@/lib/hooks";
-import { differenceInDays, differenceInMonths, addDays, addMonths, format } from "date-fns";
+import { differenceInDays, addDays, format } from "date-fns";
 import {
   InvoiceGenerationRequest,
   ContractUnitForInvoice,
@@ -121,6 +99,14 @@ const ContractInvoiceForm: React.FC = () => {
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [invoice, setInvoice] = useState<ContractInvoice | null>(null);
 
+  // State for totals tracking
+  const [totals, setTotals] = useState({
+    subTotal: 0,
+    taxTotal: 0,
+    discountTotal: 0,
+    grandTotal: 0,
+  });
+
   // Reference data
   const [companies, setCompanies] = useState<any[]>([]);
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
@@ -172,8 +158,8 @@ const ContractInvoiceForm: React.FC = () => {
     name: "contractUnits",
   });
 
-  // Calculate totals
-  const calculateTotals = () => {
+  // Calculate totals with state update
+  const calculateTotals = useCallback(() => {
     const formValues = form.getValues();
     let subTotal = 0;
     let taxTotal = 0;
@@ -184,10 +170,10 @@ const ContractInvoiceForm: React.FC = () => {
 
     if (formValues.contractUnits && formValues.contractUnits.length > 0) {
       formValues.contractUnits.forEach((unit) => {
-        const invoiceAmount = unit.InvoiceAmount || 0;
-        const taxAmount = unit.TaxAmount || 0;
-        const discountAmount = unit.DiscountAmount || 0;
-        const totalAmount = unit.TotalAmount || 0;
+        const invoiceAmount = parseFloat(String(unit.InvoiceAmount)) || 0;
+        const taxAmount = parseFloat(String(unit.TaxAmount)) || 0;
+        const discountAmount = parseFloat(String(unit.DiscountAmount)) || 0;
+        const totalAmount = parseFloat(String(unit.TotalAmount)) || 0;
 
         subTotal += invoiceAmount;
         taxTotal += taxAmount;
@@ -196,13 +182,25 @@ const ContractInvoiceForm: React.FC = () => {
       });
     }
 
-    return {
+    const calculatedTotals = {
       subTotal: roundToTwo(subTotal),
       taxTotal: roundToTwo(taxTotal),
       discountTotal: roundToTwo(discountTotal),
       grandTotal: roundToTwo(grandTotal),
     };
-  };
+
+    setTotals(calculatedTotals);
+    return calculatedTotals;
+  }, [form]);
+
+  // Watch for form changes and recalculate totals
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      calculateTotals();
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, calculateTotals]);
 
   // Validate form before submission
   const validateFormBeforeSubmit = (data: InvoiceFormValues): string[] => {
@@ -272,7 +270,7 @@ const ContractInvoiceForm: React.FC = () => {
     };
 
     initializeForm();
-  }, [id, isEdit, navigate, form]);
+  }, [id, isEdit, navigate]);
 
   // Fetch reference data
   const fetchReferenceData = async () => {
@@ -359,6 +357,11 @@ const ContractInvoiceForm: React.FC = () => {
       ...formattedInvoice,
       contractUnits: [contractUnit],
     });
+
+    // Trigger totals calculation after form reset
+    setTimeout(() => {
+      calculateTotals();
+    }, 100);
   };
 
   // Enhanced fetchContractUnits function
@@ -416,8 +419,8 @@ const ContractInvoiceForm: React.FC = () => {
           const selectedTaxId = units[index].TaxID;
           const selectedTax = taxes.find((tax) => tax.TaxID.toString() === selectedTaxId);
 
-          const invoiceAmount = units[index].InvoiceAmount || 0;
-          const discountAmount = units[index].DiscountAmount || 0;
+          const invoiceAmount = parseFloat(String(units[index].InvoiceAmount)) || 0;
+          const discountAmount = parseFloat(String(units[index].DiscountAmount)) || 0;
 
           if (selectedTax) {
             const taxPercentage = selectedTax.TaxRate;
@@ -435,6 +438,9 @@ const ContractInvoiceForm: React.FC = () => {
             const totalAmount = roundToTwo(invoiceAmount - discountAmount);
             form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
           }
+
+          // Trigger totals recalculation
+          calculateTotals();
         }
       }
 
@@ -444,10 +450,10 @@ const ContractInvoiceForm: React.FC = () => {
         const units = form.getValues("contractUnits");
 
         if (units && units[index]) {
-          const invoiceAmount = units[index].InvoiceAmount || 0;
+          const invoiceAmount = parseFloat(String(units[index].InvoiceAmount)) || 0;
           const selectedTaxId = units[index].TaxID;
           const selectedTax = taxes.find((tax) => tax.TaxID.toString() === selectedTaxId);
-          const discountAmount = units[index].DiscountAmount || 0;
+          const discountAmount = parseFloat(String(units[index].DiscountAmount)) || 0;
 
           if (selectedTax) {
             const taxPercentage = selectedTax.TaxRate;
@@ -461,6 +467,9 @@ const ContractInvoiceForm: React.FC = () => {
             const totalAmount = roundToTwo(invoiceAmount - discountAmount);
             form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
           }
+
+          // Trigger totals recalculation
+          calculateTotals();
         }
       }
 
@@ -470,12 +479,15 @@ const ContractInvoiceForm: React.FC = () => {
         const units = form.getValues("contractUnits");
 
         if (units && units[index]) {
-          const invoiceAmount = units[index].InvoiceAmount || 0;
-          const taxAmount = units[index].TaxAmount || 0;
-          const discountAmount = units[index].DiscountAmount || 0;
+          const invoiceAmount = parseFloat(String(units[index].InvoiceAmount)) || 0;
+          const taxAmount = parseFloat(String(units[index].TaxAmount)) || 0;
+          const discountAmount = parseFloat(String(units[index].DiscountAmount)) || 0;
 
           const totalAmount = roundToTwo(invoiceAmount + taxAmount - discountAmount);
           form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
+
+          // Trigger totals recalculation
+          calculateTotals();
         }
       }
 
@@ -500,7 +512,7 @@ const ContractInvoiceForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, taxes]);
+  }, [form, taxes, calculateTotals]);
 
   // Enhanced auto-populate unit rent values
   useEffect(() => {
@@ -603,15 +615,20 @@ const ContractInvoiceForm: React.FC = () => {
       if (selectedTax) {
         const taxPercentage = selectedTax.TaxRate;
         const taxAmount = Math.round(((invoiceAmount * taxPercentage) / 100) * 100) / 100;
-        const totalAmount = Math.round((invoiceAmount + taxAmount - (unit.DiscountAmount || 0)) * 100) / 100;
+        const discountAmount = parseFloat(String(unit.DiscountAmount)) || 0;
+        const totalAmount = Math.round((invoiceAmount + taxAmount - discountAmount) * 100) / 100;
 
         form.setValue(`contractUnits.${index}.TaxPercentage`, taxPercentage);
         form.setValue(`contractUnits.${index}.TaxAmount`, taxAmount);
         form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
       } else {
-        const totalAmount = Math.round((invoiceAmount - (unit.DiscountAmount || 0)) * 100) / 100;
+        const discountAmount = parseFloat(String(unit.DiscountAmount)) || 0;
+        const totalAmount = Math.round((invoiceAmount - discountAmount) * 100) / 100;
         form.setValue(`contractUnits.${index}.TotalAmount`, totalAmount);
       }
+
+      // Trigger totals recalculation
+      calculateTotals();
     } catch (error) {
       console.error("Error calculating unit invoice amount:", error);
     }
@@ -684,7 +701,7 @@ const ContractInvoiceForm: React.FC = () => {
     setLoading(true);
 
     try {
-      const totals = calculateTotals();
+      const currentTotals = calculateTotals();
 
       // Prepare contract units data with tax information
       const contractUnitsData: ContractUnitForInvoice[] = data.contractUnits.map((unit) => ({
@@ -713,10 +730,10 @@ const ContractInvoiceForm: React.FC = () => {
           InvoiceStatus: data.InvoiceStatus,
           PeriodFromDate: contractUnitsData[0]?.PeriodFromDate,
           PeriodToDate: contractUnitsData[0]?.PeriodToDate,
-          SubTotal: totals.subTotal,
-          TaxAmount: totals.taxTotal,
-          DiscountAmount: totals.discountTotal,
-          TotalAmount: totals.grandTotal,
+          SubTotal: currentTotals.subTotal,
+          TaxAmount: currentTotals.taxTotal,
+          DiscountAmount: currentTotals.discountTotal,
+          TotalAmount: currentTotals.grandTotal,
           CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
           ExchangeRate: data.ExchangeRate,
           PaymentTermID: data.PaymentTermID ? parseInt(data.PaymentTermID) : undefined,
@@ -754,10 +771,10 @@ const ContractInvoiceForm: React.FC = () => {
           ContractUnitID: contractUnitId,
           PeriodFromDate: contractUnitsData[0]?.PeriodFromDate,
           PeriodToDate: contractUnitsData[0]?.PeriodToDate,
-          SubTotal: totals.subTotal,
-          TaxAmount: totals.taxTotal,
-          DiscountAmount: totals.discountTotal,
-          TotalAmount: totals.grandTotal,
+          SubTotal: currentTotals.subTotal,
+          TaxAmount: currentTotals.taxTotal,
+          DiscountAmount: currentTotals.discountTotal,
+          TotalAmount: currentTotals.grandTotal,
           CurrencyID: data.CurrencyID ? parseInt(data.CurrencyID) : undefined,
           ExchangeRate: data.ExchangeRate,
           PaymentTermID: data.PaymentTermID ? parseInt(data.PaymentTermID) : undefined,
@@ -816,7 +833,7 @@ const ContractInvoiceForm: React.FC = () => {
     }
 
     if (isEdit && invoice) {
-      form.reset();
+      populateFormWithInvoiceData(invoice);
     } else {
       form.reset({
         InvoiceNo: "",
@@ -838,6 +855,14 @@ const ContractInvoiceForm: React.FC = () => {
         AutoNumbering: true,
         AutoPost: false,
         contractUnits: [],
+      });
+
+      // Reset totals
+      setTotals({
+        subTotal: 0,
+        taxTotal: 0,
+        discountTotal: 0,
+        grandTotal: 0,
       });
     }
   };
@@ -877,8 +902,6 @@ const ContractInvoiceForm: React.FC = () => {
       </div>
     );
   }
-
-  const { subTotal, taxTotal, discountTotal, grandTotal } = calculateTotals();
 
   return (
     <div className="space-y-6">
@@ -1237,7 +1260,7 @@ const ContractInvoiceForm: React.FC = () => {
                     <Building className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Sub Total</span>
                   </div>
-                  <div className="text-2xl font-bold">{subTotal.toLocaleString()}</div>
+                  <div className="text-2xl font-bold">{totals.subTotal.toLocaleString()}</div>
                   <div className="text-sm text-muted-foreground">{contractUnitsFieldArray.fields.length} units</div>
                 </div>
                 <div className="space-y-2">
@@ -1245,7 +1268,7 @@ const ContractInvoiceForm: React.FC = () => {
                     <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Tax Amount</span>
                   </div>
-                  <div className="text-2xl font-bold">{taxTotal.toLocaleString()}</div>
+                  <div className="text-2xl font-bold">{totals.taxTotal.toLocaleString()}</div>
                   <div className="text-sm text-muted-foreground">Total tax</div>
                 </div>
                 <div className="space-y-2">
@@ -1253,7 +1276,7 @@ const ContractInvoiceForm: React.FC = () => {
                     <HandCoins className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Discount</span>
                   </div>
-                  <div className="text-2xl font-bold">{discountTotal.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-red-600">{totals.discountTotal > 0 ? `(${totals.discountTotal.toLocaleString()})` : "0"}</div>
                   <div className="text-sm text-muted-foreground">Total discount</div>
                 </div>
                 <div className="space-y-2">
@@ -1261,7 +1284,7 @@ const ContractInvoiceForm: React.FC = () => {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <span className="text-sm font-medium text-muted-foreground">Grand Total</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{grandTotal.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-green-600">{totals.grandTotal.toLocaleString()}</div>
                   <div className="text-sm text-muted-foreground">Final amount</div>
                 </div>
               </div>

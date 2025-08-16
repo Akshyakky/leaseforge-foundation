@@ -230,7 +230,7 @@ const ContractInvoiceList: React.FC = () => {
   });
 
   // Invoice status and type options
-  const invoiceStatusOptions = ["Draft", "Pending", "Approved", "Active", "Paid", "Cancelled", "Voided"];
+  const invoiceStatusOptions = ["Draft", "Pending", "Active", "Paid", "Cancelled", "Voided"];
   const approvalStatusOptions = ["Pending", "Approved", "Rejected"];
   const invoiceTypeOptions = ["Rent", "Security Deposit", "Admin Fee", "Utilities", "Maintenance", "Custom"];
   const paymentMethodOptions = ["Cash", "Cheque", "Bank Transfer", "Credit Card", "Online"];

@@ -192,13 +192,41 @@ export const ContractInvoiceDetails = () => {
   // Render status badge
   const renderStatusBadge = (status: string, isPosted?: boolean, isOverdue?: boolean) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
-      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Paid: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Voided: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+      },
+      Approved: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+      },
+      Active: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      },
+      Paid: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      },
+      Cancelled: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      },
+      Voided: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -211,7 +239,7 @@ export const ContractInvoiceDetails = () => {
           {status}
         </Badge>
         {isPosted && (
-          <Badge variant="outline" className="bg-green-50 text-green-700">
+          <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
             <CheckCircle className="w-3 h-3 mr-1" />
             Posted
           </Badge>
@@ -229,13 +257,13 @@ export const ContractInvoiceDetails = () => {
   const getApprovalStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
       case "Rejected":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
       case "Pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
     }
   };
 
@@ -713,10 +741,10 @@ export const ContractInvoiceDetails = () => {
           <Alert
             className={`border-l-4 ${
               invoice.ApprovalStatus === "Approved"
-                ? "border-l-green-500 bg-green-50"
+                ? "border-l-green-500 bg-green-50 dark:bg-green-900/20"
                 : invoice.ApprovalStatus === "Rejected"
-                ? "border-l-red-500 bg-red-50"
-                : "border-l-yellow-500 bg-yellow-50"
+                ? "border-l-red-500 bg-red-50 dark:bg-red-900/20"
+                : "border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
             }`}
           >
             <ApprovalIcon className="h-4 w-4" />
@@ -769,7 +797,7 @@ export const ContractInvoiceDetails = () => {
                       </Badge>
                     )}
                     {isApproved && (
-                      <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                      <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300">
                         <Lock className="h-3 w-3 mr-1" />
                         Protected
                       </Badge>
@@ -1234,7 +1262,7 @@ export const ContractInvoiceDetails = () => {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-start gap-3 p-3 border rounded-lg">
-                    <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center dark:bg-blue-900/30">
                       <FileText className="h-4 w-4 text-blue-600" />
                     </div>
                     <div className="flex-1">
@@ -1248,7 +1276,7 @@ export const ContractInvoiceDetails = () => {
 
                   {invoice.ApprovalStatus === "Approved" && invoice.ApprovedBy && (
                     <div className="flex items-start gap-3 p-3 border rounded-lg">
-                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center dark:bg-green-900/30">
                         <CheckCircle className="h-4 w-4 text-green-600" />
                       </div>
                       <div className="flex-1">
@@ -1261,7 +1289,7 @@ export const ContractInvoiceDetails = () => {
 
                   {invoice.ApprovalStatus === "Rejected" && invoice.RejectedBy && (
                     <div className="flex items-start gap-3 p-3 border rounded-lg">
-                      <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center dark:bg-red-900/30">
                         <XCircle className="h-4 w-4 text-red-600" />
                       </div>
                       <div className="flex-1">
@@ -1275,7 +1303,7 @@ export const ContractInvoiceDetails = () => {
 
                   {invoice.IsPosted && (
                     <div className="flex items-start gap-3 p-3 border rounded-lg">
-                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center dark:bg-green-900/30">
                         <Send className="h-4 w-4 text-green-600" />
                       </div>
                       <div className="flex-1">
@@ -1287,7 +1315,7 @@ export const ContractInvoiceDetails = () => {
 
                   {payments.map((payment, index) => (
                     <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
-                      <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center dark:bg-purple-900/30">
                         <CreditCard className="h-4 w-4 text-purple-600" />
                       </div>
                       <div className="flex-1">
