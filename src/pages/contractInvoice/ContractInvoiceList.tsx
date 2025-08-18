@@ -943,13 +943,41 @@ const ContractInvoiceList: React.FC = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
-      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Paid: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Voided: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+      },
+      Approved: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+      },
+      Active: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      },
+      Paid: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      },
+      Cancelled: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      },
+      Voided: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -964,11 +992,21 @@ const ContractInvoiceList: React.FC = () => {
   };
 
   // Render approval status badge
+  // Current problematic code
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -1059,7 +1097,11 @@ const ContractInvoiceList: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
@@ -1067,7 +1109,7 @@ const ContractInvoiceList: React.FC = () => {
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300">
                     <Lock className="mr-2 h-4 w-4" />
                     {stats.approvedProtected} Protected
                   </Button>
@@ -1116,7 +1158,7 @@ const ContractInvoiceList: React.FC = () => {
                     <Clock className="h-4 w-4 text-yellow-600" />
                     <span className="text-sm text-muted-foreground">Unposted</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.unposted}</div>
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.unposted}</div>
                 </CardContent>
               </Card>
 
@@ -1126,7 +1168,7 @@ const ContractInvoiceList: React.FC = () => {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <span className="text-sm text-muted-foreground">Posted</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.posted}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.posted}</div>
                 </CardContent>
               </Card>
 
@@ -1136,7 +1178,7 @@ const ContractInvoiceList: React.FC = () => {
                     <AlertCircle className="h-4 w-4 text-red-600" />
                     <span className="text-sm text-muted-foreground">Overdue</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.overdue}</div>
                 </CardContent>
               </Card>
 
@@ -1146,7 +1188,7 @@ const ContractInvoiceList: React.FC = () => {
                     <CheckCircle className="h-4 w-4 text-blue-600" />
                     <span className="text-sm text-muted-foreground">Paid</span>
                   </div>
-                  <div className="text-2xl font-bold text-blue-600">{stats.paid}</div>
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.paid}</div>
                 </CardContent>
               </Card>
 
@@ -1156,7 +1198,7 @@ const ContractInvoiceList: React.FC = () => {
                     <HandCoins className="h-4 w-4 text-purple-600" />
                     <span className="text-sm text-muted-foreground">Outstanding</span>
                   </div>
-                  <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.outstandingAmount)}</div>
+                  <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.outstandingAmount)}</div>
                 </CardContent>
               </Card>
 
@@ -1168,7 +1210,7 @@ const ContractInvoiceList: React.FC = () => {
                         <Clock className="h-4 w-4 text-yellow-600" />
                         <span className="text-sm text-muted-foreground">Approval Pending</span>
                       </div>
-                      <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
                     </CardContent>
                   </Card>
 
@@ -1178,7 +1220,7 @@ const ContractInvoiceList: React.FC = () => {
                         <CheckCircle className="h-4 w-4 text-green-600" />
                         <span className="text-sm text-muted-foreground">Approved</span>
                       </div>
-                      <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
                     </CardContent>
                   </Card>
 
@@ -1188,7 +1230,7 @@ const ContractInvoiceList: React.FC = () => {
                         <Lock className="h-4 w-4 text-green-600" />
                         <span className="text-sm text-muted-foreground">Protected</span>
                       </div>
-                      <div className="text-2xl font-bold text-green-600">{stats.approvedProtected}</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvedProtected}</div>
                     </CardContent>
                   </Card>
 
@@ -1198,7 +1240,7 @@ const ContractInvoiceList: React.FC = () => {
                         <XCircle className="h-4 w-4 text-red-600" />
                         <span className="text-sm text-muted-foreground">Rejected</span>
                       </div>
-                      <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+                      <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
                     </CardContent>
                   </Card>
                 </>
@@ -1439,7 +1481,11 @@ const ContractInvoiceList: React.FC = () => {
                           return (
                             <TableRow
                               key={invoice.LeaseInvoiceID}
-                              className={cn("hover:bg-muted/50 transition-colors", selectedInvoices.has(invoice.LeaseInvoiceID) && "bg-accent/50", isApproved && "bg-green-50/30")}
+                              className={cn(
+                                "hover:bg-muted/50 transition-colors",
+                                selectedInvoices.has(invoice.LeaseInvoiceID) && "bg-accent/50",
+                                isApproved && "bg-green-50/30 dark:bg-green-900/20"
+                              )}
                             >
                               <TableCell>
                                 <Checkbox
@@ -1513,7 +1559,7 @@ const ContractInvoiceList: React.FC = () => {
                                 <div className="space-y-1">
                                   {renderStatusBadge(invoice.InvoiceStatus)}
                                   {invoice.IsPosted && (
-                                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
+                                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                                       <CheckCircle className="h-3 w-3 mr-1" />
                                       Posted
                                     </Badge>
@@ -1525,7 +1571,7 @@ const ContractInvoiceList: React.FC = () => {
                                   {invoice.RequiresApproval ? (
                                     renderApprovalBadge(invoice.ApprovalStatus)
                                   ) : (
-                                    <Badge variant="outline" className="bg-gray-50">
+                                    <Badge variant="outline" className="bg-gray-50 dark:bg-gray-800">
                                       No Approval Required
                                     </Badge>
                                   )}

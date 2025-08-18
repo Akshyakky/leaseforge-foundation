@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
+
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -22,22 +22,15 @@ import {
   Trash2,
   Receipt,
   Building,
-  Users,
   HandCoins,
-  Calendar,
   Calculator,
-  AlertCircle,
   CheckCircle,
-  Info,
   RotateCcw,
-  PlusCircle,
   Send,
   CreditCard,
-  Banknote,
   Lock,
   Shield,
   AlertTriangle,
-  FileText,
 } from "lucide-react";
 import { leaseReceiptService } from "@/services/contractReceiptService";
 import { contractInvoiceService } from "@/services/contractInvoiceService";
@@ -50,7 +43,6 @@ import { bankService } from "@/services/bankService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { useAppSelector } from "@/lib/hooks";
-import { format, addDays } from "date-fns";
 import {
   ContractReceipt,
   ReceiptCreateRequest,
@@ -328,21 +320,24 @@ const ContractReceiptForm: React.FC = () => {
       setBanks(banksData);
       setUsers(usersData);
 
-      // Set default values
-      if (companiesData.length > 0) {
-        const defaultCompany = companiesData[0];
-        form.setValue("CompanyID", defaultCompany.CompanyID.toString());
-      }
+      setTimeout(() => {
+        if (!isEdit) {
+          if (companiesData.length > 0) {
+            const defaultCompany = companiesData[0];
+            form.setValue("CompanyID", defaultCompany.CompanyID.toString());
+          }
 
-      if (fiscalYearsData.length > 0) {
-        const activeFY = fiscalYearsData.find((fy) => fy.IsActive) || fiscalYearsData[0];
-        form.setValue("FiscalYearID", activeFY.FiscalYearID.toString());
-      }
+          if (fiscalYearsData.length > 0) {
+            const activeFY = fiscalYearsData.find((fy) => fy.IsActive) || fiscalYearsData[0];
+            form.setValue("FiscalYearID", activeFY.FiscalYearID.toString());
+          }
 
-      if (currenciesData.length > 0) {
-        const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
-        form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
-      }
+          if (currenciesData.length > 0) {
+            const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
+            form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+          }
+        }
+      }, 0);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");
@@ -384,7 +379,6 @@ const ContractReceiptForm: React.FC = () => {
     try {
       const invoices = await contractInvoiceService.searchInvoices({
         FilterCustomerID: parseInt(customerId),
-        FilterInvoiceStatus: "Active", // Only active invoices
       });
 
       // Filter invoices with balance > 0
