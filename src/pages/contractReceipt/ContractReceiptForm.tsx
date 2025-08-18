@@ -1,7 +1,7 @@
-// src/pages/contractReceipt/ContractReceiptForm.tsx - Enhanced with Comprehensive Approval Protection
-import React, { useState, useEffect } from "react";
+// src/pages/contractReceipt/ContractReceiptForm.tsx - Fixed Calculations
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -81,9 +81,9 @@ const receiptSchema = z.object({
   DepositDate: z.date().optional().nullable(),
   ClearanceDate: z.date().optional().nullable(),
   IsAdvancePayment: z.boolean().default(false),
-  SecurityDepositAmount: z.coerce.number().min(0).optional().default(0),
-  PenaltyAmount: z.coerce.number().min(0).optional().default(0),
-  DiscountAmount: z.coerce.number().min(0).optional().default(0),
+  SecurityDepositAmount: z.coerce.number().min(0).default(0),
+  PenaltyAmount: z.coerce.number().min(0).default(0),
+  DiscountAmount: z.coerce.number().min(0).default(0),
   ReceivedByUserID: z.string().optional(),
   AccountID: z.string().optional(),
   Notes: z.string().optional(),
@@ -173,35 +173,56 @@ const ContractReceiptForm: React.FC = () => {
     name: "invoiceAllocations",
   });
 
-  // Calculate totals
-  const calculateTotals = () => {
-    const formValues = form.getValues();
-    const receivedAmount = formValues.ReceivedAmount || 0;
-    const securityDepositAmount = formValues.SecurityDepositAmount || 0;
-    const penaltyAmount = formValues.PenaltyAmount || 0;
-    const discountAmount = formValues.DiscountAmount || 0;
+  // Watch form values for reactive calculations
+  const watchedValues = useWatch({
+    control: form.control,
+    name: ["ReceivedAmount", "SecurityDepositAmount", "PenaltyAmount", "DiscountAmount", "invoiceAllocations", "AllocationMode", "LeaseInvoiceID"],
+  });
 
+  // Calculate totals using watched values
+  const totals = useMemo(() => {
+    // Get current form values
+    const formValues = form.getValues();
+
+    // Parse amounts with proper number conversion
+    const receivedAmount = parseFloat(String(formValues.ReceivedAmount || 0));
+    const securityDepositAmount = parseFloat(String(formValues.SecurityDepositAmount || 0));
+    const penaltyAmount = parseFloat(String(formValues.PenaltyAmount || 0));
+    const discountAmount = parseFloat(String(formValues.DiscountAmount || 0));
+
+    // Helper to round to 2 decimal places
     const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-    const netAmount = roundToTwo(receivedAmount + securityDepositAmount + penaltyAmount - discountAmount);
+    // Calculate net amount
+    const additionalAmounts = securityDepositAmount + penaltyAmount - discountAmount;
+    const netAmount = roundToTwo(receivedAmount + additionalAmounts);
 
+    // Calculate total allocated - use the same logic for both modes
     let totalAllocated = 0;
+
     if (formValues.invoiceAllocations && formValues.invoiceAllocations.length > 0) {
-      totalAllocated = roundToTwo(formValues.invoiceAllocations.reduce((sum, allocation) => sum + (allocation.AllocationAmount || 0), 0));
+      // Sum up all allocation amounts from the invoiceAllocations array
+      totalAllocated = formValues.invoiceAllocations.reduce((sum, allocation) => {
+        const allocationAmount = parseFloat(String(allocation.AllocationAmount || 0));
+        return sum + allocationAmount;
+      }, 0);
+      totalAllocated = roundToTwo(totalAllocated);
     }
 
-    const unallocatedAmount = roundToTwo(Math.max(0, netAmount - totalAllocated));
+    // Calculate unallocated amount
+    const unallocatedAmount = roundToTwo(netAmount - totalAllocated);
 
     return {
       receivedAmount: roundToTwo(receivedAmount),
       securityDepositAmount: roundToTwo(securityDepositAmount),
       penaltyAmount: roundToTwo(penaltyAmount),
       discountAmount: roundToTwo(discountAmount),
+      additionalAmounts: roundToTwo(additionalAmounts),
       netAmount,
       totalAllocated,
-      unallocatedAmount,
+      unallocatedAmount: Math.max(0, unallocatedAmount),
     };
-  };
+  }, [watchedValues, form]);
 
   // Validate form before submission
   const validateFormBeforeSubmit = (data: ReceiptFormValues): string[] => {
@@ -242,7 +263,6 @@ const ContractReceiptForm: React.FC = () => {
     }
 
     // Validate allocations
-    const totals = calculateTotals();
     if (data.AllocationMode === ALLOCATION_MODE.MULTIPLE && totals.totalAllocated > totals.netAmount) {
       errors.push("Total allocation cannot exceed net received amount");
     }
@@ -297,7 +317,7 @@ const ContractReceiptForm: React.FC = () => {
     };
 
     initializeForm();
-  }, [id, isEdit, navigate, form]);
+  }, [id, isEdit]);
 
   // Fetch reference data
   const fetchReferenceData = async () => {
@@ -316,7 +336,7 @@ const ContractReceiptForm: React.FC = () => {
       setCompanies(companiesData);
       setFiscalYears(fiscalYearsData);
       setCurrencies(currenciesData);
-      setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
+      setAccounts(accountsData.filter((acc: any) => acc.IsActive && acc.IsPostable));
       setBanks(banksData);
       setUsers(usersData);
 
@@ -328,12 +348,12 @@ const ContractReceiptForm: React.FC = () => {
           }
 
           if (fiscalYearsData.length > 0) {
-            const activeFY = fiscalYearsData.find((fy) => fy.IsActive) || fiscalYearsData[0];
+            const activeFY = fiscalYearsData.find((fy: any) => fy.IsActive) || fiscalYearsData[0];
             form.setValue("FiscalYearID", activeFY.FiscalYearID.toString());
           }
 
           if (currenciesData.length > 0) {
-            const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
+            const defaultCurrency = currenciesData.find((c: any) => c.IsDefault) || currenciesData[0];
             form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
           }
         }
@@ -361,6 +381,10 @@ const ContractReceiptForm: React.FC = () => {
       ReceivedByUserID: receiptData.ReceivedByUserID?.toString() || "",
       AccountID: receiptData.AccountID?.toString() || "",
       LeaseInvoiceID: receiptData.LeaseInvoiceID?.toString() || "",
+      ReceivedAmount: receiptData.ReceivedAmount || 0,
+      SecurityDepositAmount: receiptData.SecurityDepositAmount || 0,
+      PenaltyAmount: receiptData.PenaltyAmount || 0,
+      DiscountAmount: receiptData.DiscountAmount || 0,
     };
 
     form.reset(formattedReceipt);
@@ -382,7 +406,7 @@ const ContractReceiptForm: React.FC = () => {
       });
 
       // Filter invoices with balance > 0
-      const unpaidInvoices = invoices.filter((inv) => inv.BalanceAmount > 0);
+      const unpaidInvoices = invoices.filter((inv: any) => inv.BalanceAmount > 0);
       setAvailableInvoices(unpaidInvoices);
     } catch (error) {
       console.error("Error fetching invoices:", error);
@@ -438,9 +462,8 @@ const ContractReceiptForm: React.FC = () => {
       if (name === "LeaseInvoiceID" && value.AllocationMode === ALLOCATION_MODE.SINGLE) {
         const invoiceId = parseInt(value.LeaseInvoiceID || "0");
         if (invoiceId > 0) {
-          const invoice = availableInvoices.find((inv) => inv.LeaseInvoiceID === invoiceId);
+          const invoice = availableInvoices.find((inv: any) => inv.LeaseInvoiceID === invoiceId);
           if (invoice) {
-            const totals = calculateTotals();
             const allocationAmount = Math.min(totals.netAmount, invoice.BalanceAmount);
 
             // Clear existing allocations and add single allocation
@@ -457,8 +480,8 @@ const ContractReceiptForm: React.FC = () => {
 
       // Auto-set approval requirement based on amount threshold
       if (name === "ReceivedAmount" && isManager) {
-        const amount = value.ReceivedAmount || 0;
-        const threshold = form.getValues("ApprovalThreshold") || 10000; // Default threshold
+        const amount = parseFloat(String(value.ReceivedAmount || 0));
+        const threshold = parseFloat(String(form.getValues("ApprovalThreshold") || 10000)); // Default threshold
 
         if (amount >= threshold) {
           form.setValue("RequiresApproval", true);
@@ -467,7 +490,7 @@ const ContractReceiptForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, availableInvoices, isManager]);
+  }, [form, availableInvoices, isManager, totals]);
 
   // Add new invoice allocation
   const addInvoiceAllocation = () => {
@@ -476,7 +499,6 @@ const ContractReceiptForm: React.FC = () => {
       return;
     }
 
-    const totals = calculateTotals();
     const suggestedAmount = Math.min(totals.unallocatedAmount, 0);
 
     invoiceAllocationsFieldArray.append({
@@ -512,7 +534,6 @@ const ContractReceiptForm: React.FC = () => {
       let invoiceAllocations: InvoiceAllocation[] = [];
 
       if (data.AllocationMode === ALLOCATION_MODE.SINGLE && data.LeaseInvoiceID) {
-        const totals = calculateTotals();
         invoiceAllocations = [
           {
             LeaseInvoiceID: parseInt(data.LeaseInvoiceID),
@@ -633,7 +654,7 @@ const ContractReceiptForm: React.FC = () => {
     }
 
     if (isEdit && receipt) {
-      form.reset();
+      populateFormWithReceiptData(receipt);
     } else {
       form.reset({
         ReceiptNo: "",
@@ -666,7 +687,7 @@ const ContractReceiptForm: React.FC = () => {
 
   // Get invoice details
   const getInvoiceDetails = (invoiceId: number) => {
-    return availableInvoices.find((inv) => inv.LeaseInvoiceID === invoiceId);
+    return availableInvoices.find((inv: any) => inv.LeaseInvoiceID === invoiceId);
   };
 
   if (initialLoading) {
@@ -676,8 +697,6 @@ const ContractReceiptForm: React.FC = () => {
       </div>
     );
   }
-
-  const totals = calculateTotals();
 
   return (
     <TooltipProvider>
@@ -753,7 +772,7 @@ const ContractReceiptForm: React.FC = () => {
                     name="CompanyID"
                     label="Company"
                     type="select"
-                    options={companies.map((company) => ({
+                    options={companies.map((company: any) => ({
                       label: company.CompanyName,
                       value: company.CompanyID.toString(),
                     }))}
@@ -767,7 +786,7 @@ const ContractReceiptForm: React.FC = () => {
                     name="FiscalYearID"
                     label="Fiscal Year"
                     type="select"
-                    options={fiscalYears.map((fy) => ({
+                    options={fiscalYears.map((fy: any) => ({
                       label: fy.FYDescription,
                       value: fy.FiscalYearID.toString(),
                     }))}
@@ -783,7 +802,7 @@ const ContractReceiptForm: React.FC = () => {
                   name="CustomerID"
                   label="Customer"
                   type="select"
-                  options={customers.map((customer) => ({
+                  options={customers.map((customer: any) => ({
                     label: customer.CustomerFullName,
                     value: customer.CustomerID.toString(),
                   }))}
@@ -864,7 +883,7 @@ const ContractReceiptForm: React.FC = () => {
                     name="CurrencyID"
                     label="Currency"
                     type="select"
-                    options={currencies.map((currency) => ({
+                    options={currencies.map((currency: any) => ({
                       label: `${currency.CurrencyCode} - ${currency.CurrencyName}`,
                       value: currency.CurrencyID.toString(),
                     }))}
@@ -919,7 +938,7 @@ const ContractReceiptForm: React.FC = () => {
                         name="BankID"
                         label="Cheque Bank"
                         type="select"
-                        options={banks.map((bank) => ({
+                        options={banks.map((bank: any) => ({
                           label: bank.BankName,
                           value: bank.BankID.toString(),
                         }))}
@@ -941,7 +960,7 @@ const ContractReceiptForm: React.FC = () => {
                         name="BankID"
                         label="Source Bank"
                         type="select"
-                        options={banks.map((bank) => ({
+                        options={banks.map((bank: any) => ({
                           label: bank.BankName,
                           value: bank.BankID.toString(),
                         }))}
@@ -963,7 +982,7 @@ const ContractReceiptForm: React.FC = () => {
                         name="DepositedBankID"
                         label="Deposit Bank"
                         type="select"
-                        options={banks.map((bank) => ({
+                        options={banks.map((bank: any) => ({
                           label: bank.BankName,
                           value: bank.BankID.toString(),
                         }))}
@@ -990,7 +1009,7 @@ const ContractReceiptForm: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Receipt Summary */}
+            {/* Receipt Summary - Fixed Calculations */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1014,7 +1033,7 @@ const ContractReceiptForm: React.FC = () => {
                       <HandCoins className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Additional Amounts</span>
                     </div>
-                    <div className="text-2xl font-bold">{formatCurrency(totals.securityDepositAmount + totals.penaltyAmount - totals.discountAmount)}</div>
+                    <div className="text-2xl font-bold">{formatCurrency(totals.additionalAmounts)}</div>
                     <div className="text-xs text-muted-foreground">Security + Penalty - Discount</div>
                   </div>
                   <div className="space-y-2">
@@ -1072,7 +1091,7 @@ const ContractReceiptForm: React.FC = () => {
                       name="LeaseInvoiceID"
                       label="Select Invoice"
                       type="select"
-                      options={availableInvoices.map((invoice) => ({
+                      options={availableInvoices.map((invoice: any) => ({
                         label: `${invoice.InvoiceNo} - ${formatCurrency(invoice.BalanceAmount)} outstanding`,
                         value: invoice.LeaseInvoiceID.toString(),
                       }))}
@@ -1126,7 +1145,7 @@ const ContractReceiptForm: React.FC = () => {
                                         name={`invoiceAllocations.${index}.LeaseInvoiceID`}
                                         label=""
                                         type="select"
-                                        options={availableInvoices.map((invoice) => ({
+                                        options={availableInvoices.map((invoice: any) => ({
                                           label: invoice.InvoiceNo,
                                           value: invoice.LeaseInvoiceID,
                                         }))}
@@ -1187,7 +1206,7 @@ const ContractReceiptForm: React.FC = () => {
                               {formatCurrency(totals.unallocatedAmount)}
                             </span>
                           </div>
-                          {totals.unallocatedAmount < 0 && (
+                          {totals.totalAllocated > totals.netAmount && (
                             <Alert variant="destructive" className="mt-2">
                               <AlertTriangle className="h-4 w-4" />
                               <AlertDescription>Total allocation exceeds net amount. Please adjust allocation amounts.</AlertDescription>
@@ -1248,8 +1267,8 @@ const ContractReceiptForm: React.FC = () => {
                         label="Debit Account"
                         type="select"
                         options={accounts
-                          .filter((acc) => acc.AccountCode.startsWith("1"))
-                          .map((account) => ({
+                          .filter((acc: any) => acc.AccountCode.startsWith("1"))
+                          .map((account: any) => ({
                             label: `${account.AccountCode} - ${account.AccountName}`,
                             value: account.AccountID.toString(),
                           }))}
@@ -1263,8 +1282,8 @@ const ContractReceiptForm: React.FC = () => {
                         label="Credit Account"
                         type="select"
                         options={accounts
-                          .filter((acc) => acc.AccountCode.startsWith("1"))
-                          .map((account) => ({
+                          .filter((acc: any) => acc.AccountCode.startsWith("1"))
+                          .map((account: any) => ({
                             label: `${account.AccountCode} - ${account.AccountName}`,
                             value: account.AccountID.toString(),
                           }))}
