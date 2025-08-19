@@ -1,5 +1,5 @@
 // src/pages/account/AccountList.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,26 +25,20 @@ const AccountList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
-  const [selectedIsActive, setSelectedIsActive] = useState<string>("");
-  const [selectedIsPostable, setSelectedIsPostable] = useState<string>("");
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("all");
+  const [selectedIsActive, setSelectedIsActive] = useState<string>("all");
+  const [selectedIsPostable, setSelectedIsPostable] = useState<string>("all");
 
-  // Fetch accounts and account types on component mount
-  useEffect(() => {
-    fetchAccounts();
-    fetchAccountTypes();
-  }, []);
-
-  // Fetch all accounts
-  const fetchAccounts = async (search?: string, typeId?: string, isActive?: boolean, isPostable?: boolean) => {
+  // Fetch accounts with filters
+  const fetchAccounts = useCallback(async (search?: string, typeId?: string, isActive?: string, isPostable?: string) => {
     try {
       setLoading(true);
       const searchParams: any = {};
 
       if (search) searchParams.searchText = search;
-      if (typeId) searchParams.accountTypeID = parseInt(typeId);
-      if (isActive !== undefined) searchParams.isActive = isActive;
-      if (isPostable !== undefined) searchParams.isPostable = isPostable;
+      if (typeId && typeId !== "all") searchParams.accountTypeID = parseInt(typeId);
+      if (isActive && isActive !== "all") searchParams.isActive = isActive === "active";
+      if (isPostable && isPostable !== "all") searchParams.isPostable = isPostable === "yes";
 
       const accountsData = await accountService.searchAccounts(searchParams);
       setAccounts(accountsData);
@@ -54,7 +48,16 @@ const AccountList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Create debounced search for text input only
+  const debouncedSearchText = useMemo(
+    () =>
+      debounce((search: string, typeId: string, isActive: string, isPostable: string) => {
+        fetchAccounts(search, typeId, isActive, isPostable);
+      }, 500),
+    [fetchAccounts]
+  );
 
   // Fetch account types for filtering
   const fetchAccountTypes = async () => {
@@ -66,35 +69,35 @@ const AccountList = () => {
     }
   };
 
-  // Debounced search function
-  const debouncedSearch = debounce(() => {
-    const isActive = selectedIsActive === "" ? undefined : selectedIsActive === "active";
-    const isPostable = selectedIsPostable === "" ? undefined : selectedIsPostable === "yes";
-    fetchAccounts(searchTerm, selectedTypeId, isActive, isPostable);
-  }, 500);
+  // Fetch accounts and account types on component mount
+  useEffect(() => {
+    fetchAccounts("", "all", "all", "all");
+    fetchAccountTypes();
+  }, [fetchAccounts]);
 
-  // Handle search input change
+  // Handle search input change (debounced)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    debouncedSearch();
+    const newSearchTerm = e.target.value;
+    setSearchTerm(newSearchTerm);
+    debouncedSearchText(newSearchTerm, selectedTypeId, selectedIsActive, selectedIsPostable);
   };
 
-  // Handle account type filter change
+  // Handle account type filter change (immediate)
   const handleTypeChange = (value: string) => {
     setSelectedTypeId(value);
-    debouncedSearch();
+    fetchAccounts(searchTerm, value, selectedIsActive, selectedIsPostable);
   };
 
-  // Handle active status filter change
+  // Handle active status filter change (immediate)
   const handleActiveChange = (value: string) => {
     setSelectedIsActive(value);
-    debouncedSearch();
+    fetchAccounts(searchTerm, selectedTypeId, value, selectedIsPostable);
   };
 
-  // Handle postable filter change
+  // Handle postable filter change (immediate)
   const handlePostableChange = (value: string) => {
     setSelectedIsPostable(value);
-    debouncedSearch();
+    fetchAccounts(searchTerm, selectedTypeId, selectedIsActive, value);
   };
 
   // Navigation handlers
@@ -144,10 +147,10 @@ const AccountList = () => {
   // Reset all filters
   const resetFilters = () => {
     setSearchTerm("");
-    setSelectedTypeId("");
-    setSelectedIsActive("");
-    setSelectedIsPostable("");
-    fetchAccounts();
+    setSelectedTypeId("all");
+    setSelectedIsActive("all");
+    setSelectedIsPostable("all");
+    fetchAccounts("", "all", "all", "all");
   };
 
   // View account hierarchy
@@ -155,10 +158,13 @@ const AccountList = () => {
     navigate("/accounts/hierarchy");
   };
 
+  // Check if any filters are active
+  const hasActiveFilters = searchTerm || selectedTypeId !== "all" || selectedIsActive !== "all" || selectedIsPostable !== "all";
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Chart of Accounts</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Chart of Accounts</h1>
         <div className="flex space-x-2">
           <Button variant="outline" onClick={viewHierarchy}>
             View Hierarchy
@@ -187,7 +193,7 @@ const AccountList = () => {
                   <SelectValue placeholder="Account Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   {accountTypes.map((type) => (
                     <SelectItem key={type.AccountTypeID} value={type.AccountTypeID.toString()}>
                       {type.AccountTypeName}
@@ -201,7 +207,7 @@ const AccountList = () => {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
@@ -212,16 +218,18 @@ const AccountList = () => {
                   <SelectValue placeholder="Postable" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   <SelectItem value="yes">Postable</SelectItem>
                   <SelectItem value="no">Non-Postable</SelectItem>
                 </SelectContent>
               </Select>
 
-              <Button variant="ghost" onClick={resetFilters} className="h-9">
-                <Filter className="h-4 w-4 mr-1" />
-                Reset
-              </Button>
+              {hasActiveFilters && (
+                <Button variant="ghost" onClick={resetFilters} className="h-9">
+                  <Filter className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+              )}
             </div>
           </div>
 
@@ -231,12 +239,10 @@ const AccountList = () => {
             </div>
           ) : accounts.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
-              {searchTerm || selectedTypeId || selectedIsActive || selectedIsPostable
-                ? "No accounts found matching your criteria."
-                : "No accounts found. Create your first account."}
+              {hasActiveFilters ? "No accounts found matching your criteria." : "No accounts found. Create your first account."}
             </div>
           ) : (
-            <div className="border rounded-md">
+            <div className="border border-border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -257,12 +263,12 @@ const AccountList = () => {
                       <TableCell>{account.AccountTypeName || "Unknown"}</TableCell>
                       <TableCell>
                         {account.IsActive ? (
-                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100">
+                          <Badge variant="default" className="bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 border-green-200 dark:border-green-800">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Active
                           </Badge>
                         ) : (
-                          <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
+                          <Badge variant="destructive" className="bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 border-red-200 dark:border-red-800">
                             <XCircle className="h-3 w-3 mr-1" />
                             Inactive
                           </Badge>
@@ -270,11 +276,11 @@ const AccountList = () => {
                       </TableCell>
                       <TableCell>
                         {account.IsPostable ? (
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 border-blue-200 dark:border-blue-800">
                             Yes
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                          <Badge variant="outline" className="bg-muted text-muted-foreground">
                             No
                           </Badge>
                         )}
@@ -291,7 +297,7 @@ const AccountList = () => {
                             <DropdownMenuItem onClick={() => handleViewAccount(account.AccountID)}>View details</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleEditAccount(account.AccountID)}>Edit</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(account)}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDeleteDialog(account)}>
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>

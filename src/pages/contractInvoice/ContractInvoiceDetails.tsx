@@ -56,6 +56,7 @@ import { ContractInvoice, InvoicePayment, InvoicePosting, InvoicePostingRequest,
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
 import { useAppSelector } from "@/lib/hooks";
+import { accountService } from "@/services";
 
 export const ContractInvoiceDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -66,6 +67,7 @@ export const ContractInvoiceDetails = () => {
   const [invoice, setInvoice] = useState<ContractInvoice | null>(null);
   const [payments, setPayments] = useState<InvoicePayment[]>([]);
   const [postings, setPostings] = useState<InvoicePosting[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,15 +124,18 @@ export const ContractInvoiceDetails = () => {
   const canEditInvoice = invoice && invoice.ApprovalStatus !== "Approved";
   const isApproved = invoice?.ApprovalStatus === "Approved";
 
-  // Mock reference data
-  const accounts = [
-    { AccountID: 1, AccountCode: "1200", AccountName: "Accounts Receivable" },
-    { AccountID: 2, AccountCode: "4100", AccountName: "Rental Revenue" },
-    { AccountID: 3, AccountCode: "4200", AccountName: "Service Revenue" },
-  ];
-
   const paymentMethods = ["Cash", "Cheque", "Bank Transfer", "Credit Card", "Online"];
   const invoiceStatusOptions = ["Draft", "Pending", "Approved", "Active", "Paid", "Cancelled", "Voided"];
+
+  const fetchAccounts = async () => {
+    try {
+      const accountsData = await accountService.getAllAccounts();
+      setAccounts(accountsData.filter((acc: any) => acc.IsActive && acc.IsPostable));
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      toast.error("Failed to load accounts");
+    }
+  };
 
   useEffect(() => {
     const fetchInvoiceDetails = async () => {
@@ -141,6 +146,7 @@ export const ContractInvoiceDetails = () => {
 
       setLoading(true);
       try {
+        // Fetch invoice details
         const data = await contractInvoiceService.getInvoiceById(parseInt(id));
 
         if (data.invoice) {
@@ -157,6 +163,9 @@ export const ContractInvoiceDetails = () => {
           setError("Invoice not found");
           toast.error("Invoice not found");
         }
+
+        // Fetch accounts for posting
+        await fetchAccounts();
       } catch (err) {
         console.error("Error fetching invoice details:", err);
         setError("Failed to load invoice details");
@@ -543,7 +552,10 @@ export const ContractInvoiceDetails = () => {
       if (response.Status === 1) {
         setInvoice({ ...invoice, IsPosted: true });
 
-        // Add new posting entries
+        // Add new posting entries - updated to handle potential undefined fields
+        const debitAccount = accounts.find((a) => a.AccountID?.toString() === postingForm.debitAccountId);
+        const creditAccount = accounts.find((a) => a.AccountID?.toString() === postingForm.creditAccountId);
+
         const debitPosting: InvoicePosting = {
           PostingID: Math.random(),
           VoucherNo: response.VoucherNo || `VOL-${Date.now()}`,
@@ -553,8 +565,8 @@ export const ContractInvoiceDetails = () => {
           CreditAmount: 0,
           Description: postingForm.narration || `Invoice ${invoice.InvoiceNo}`,
           Narration: postingForm.narration || "",
-          AccountCode: accounts.find((a) => a.AccountID.toString() === postingForm.debitAccountId)?.AccountCode || "",
-          AccountName: accounts.find((a) => a.AccountID.toString() === postingForm.debitAccountId)?.AccountName || "",
+          AccountCode: debitAccount?.AccountCode || "",
+          AccountName: debitAccount?.AccountName || "",
           IsReversed: false,
         };
 
@@ -567,8 +579,8 @@ export const ContractInvoiceDetails = () => {
           CreditAmount: invoice.TotalAmount,
           Description: postingForm.narration || `Invoice ${invoice.InvoiceNo}`,
           Narration: postingForm.narration || "",
-          AccountCode: accounts.find((a) => a.AccountID.toString() === postingForm.creditAccountId)?.AccountCode || "",
-          AccountName: accounts.find((a) => a.AccountID.toString() === postingForm.creditAccountId)?.AccountName || "",
+          AccountCode: creditAccount?.AccountCode || "",
+          AccountName: creditAccount?.AccountName || "",
           IsReversed: false,
         };
 
@@ -1561,36 +1573,54 @@ export const ContractInvoiceDetails = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Debit Account</Label>
+                  <Label>Debit Account (Receivable)</Label>
                   <Select value={postingForm.debitAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, debitAccountId: value }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select debit account" />
                     </SelectTrigger>
                     <SelectContent>
-                      {accounts
-                        .filter((acc) => acc.AccountCode.startsWith("1"))
-                        .map((account) => (
-                          <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                            {account.AccountCode} - {account.AccountName}
-                          </SelectItem>
-                        ))}
+                      {accounts.length === 0 ? (
+                        <SelectItem value="loading" disabled>
+                          Loading accounts...
+                        </SelectItem>
+                      ) : (
+                        accounts
+                          .filter((acc) => acc.AccountType === "Asset" || acc.AccountCode?.startsWith("1") || acc.AccountName?.toLowerCase().includes("receivable"))
+                          .map((account) => (
+                            <SelectItem key={account.AccountID} value={account.AccountID?.toString()}>
+                              {account.AccountCode} - {account.AccountName}
+                            </SelectItem>
+                          ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Credit Account</Label>
+                  <Label>Credit Account (Revenue)</Label>
                   <Select value={postingForm.creditAccountId} onValueChange={(value) => setPostingForm((prev) => ({ ...prev, creditAccountId: value }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select credit account" />
                     </SelectTrigger>
                     <SelectContent>
-                      {accounts
-                        .filter((acc) => acc.AccountCode.startsWith("4"))
-                        .map((account) => (
-                          <SelectItem key={account.AccountID} value={account.AccountID.toString()}>
-                            {account.AccountCode} - {account.AccountName}
-                          </SelectItem>
-                        ))}
+                      {accounts.length === 0 ? (
+                        <SelectItem value="loading" disabled>
+                          Loading accounts...
+                        </SelectItem>
+                      ) : (
+                        accounts
+                          .filter(
+                            (acc) =>
+                              acc.AccountType === "Revenue" ||
+                              acc.AccountCode?.startsWith("4") ||
+                              acc.AccountName?.toLowerCase().includes("revenue") ||
+                              acc.AccountName?.toLowerCase().includes("income")
+                          )
+                          .map((account) => (
+                            <SelectItem key={account.AccountID} value={account.AccountID?.toString()}>
+                              {account.AccountCode} - {account.AccountName}
+                            </SelectItem>
+                          ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1610,7 +1640,7 @@ export const ContractInvoiceDetails = () => {
               <Button variant="outline" onClick={() => setPostingDialogOpen(false)} disabled={actionLoading}>
                 Cancel
               </Button>
-              <Button onClick={handlePostInvoice} disabled={actionLoading || !postingForm.debitAccountId || !postingForm.creditAccountId}>
+              <Button onClick={handlePostInvoice} disabled={actionLoading || !postingForm.debitAccountId || !postingForm.creditAccountId || accounts.length === 0}>
                 {actionLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
