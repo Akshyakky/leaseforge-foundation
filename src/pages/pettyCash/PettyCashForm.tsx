@@ -7,14 +7,14 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   ArrowLeft,
@@ -22,7 +22,6 @@ import {
   Save,
   Plus,
   Trash2,
-  Upload,
   FileText,
   AlertCircle,
   Calculator,
@@ -35,11 +34,8 @@ import {
   PlusCircle,
   Edit2,
   Download,
-  Eye,
-  Calendar,
   HandCoins,
   Receipt,
-  Info,
 } from "lucide-react";
 import { pettyCashService } from "@/services/pettyCashService";
 import { accountService } from "@/services/accountService";
@@ -54,7 +50,7 @@ import { docTypeService } from "@/services/docTypeService";
 import { costCenterService } from "@/services/costCenterService";
 import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
-import { PettyCashVoucher, PettyCashVoucherLine, PettyCashAttachment, TransactionType, VoucherStatus, ApprovalStatus } from "@/types/pettyCashTypes";
+import { PettyCashVoucher, TransactionType, VoucherStatus, ApprovalStatus } from "@/types/pettyCashTypes";
 import { Account } from "@/types/accountTypes";
 import { Company } from "@/services/companyService";
 import { FiscalYear } from "@/types/fiscalYearTypes";
@@ -538,22 +534,6 @@ const PettyCashForm: React.FC = () => {
         }
       }
 
-      // Handle tax calculations for voucher lines
-      // if (name.includes("taxPercentage") && name.includes("lines.")) {
-      //   const index = parseInt(name.split(".")[1]);
-      //   const lines = form.getValues("lines");
-
-      //   if (lines && lines[index]) {
-      //     const taxPercentage = lines[index].taxPercentage || 0;
-      //     const debitAmount = lines[index].debitAmount || 0;
-      //     const creditAmount = lines[index].creditAmount || 0;
-      //     const amount = debitAmount || creditAmount;
-
-      //     const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-      //     form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
-      //   }
-      // }
-
       // Auto-calculate tax when amounts change
       if ((name.includes("debitAmount") || name.includes("creditAmount")) && name.includes("lines.")) {
         const index = parseInt(name.split(".")[1]);
@@ -587,19 +567,20 @@ const PettyCashForm: React.FC = () => {
     let totalDebits = 0;
     let totalCredits = 0;
 
-    const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-
     if (formValues.lines && formValues.lines.length > 0) {
       totalDebits = formValues.lines.reduce((sum, line) => {
-        const amount = line.debitAmount || 0;
-        return roundToTwo(sum + amount);
+        const amount = parseFloat(String(line.debitAmount || 0));
+        return sum + amount;
       }, 0);
 
       totalCredits = formValues.lines.reduce((sum, line) => {
-        const amount = line.creditAmount || 0;
-        return roundToTwo(sum + amount);
+        const amount = parseFloat(String(line.creditAmount || 0));
+        return sum + amount;
       }, 0);
     }
+
+    // Round only the final values
+    const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
     return {
       totalDebits: roundToTwo(totalDebits),
@@ -662,16 +643,35 @@ const PettyCashForm: React.FC = () => {
       // Prepare lines data with line-level cost centers
       const linesData = data.lines.map((line) => {
         const selectedTax = line.taxId ? taxes.find((t) => t.TaxID.toString() === line.taxId) : null;
+        const debitAmount = line.debitAmount || 0;
+        const creditAmount = line.creditAmount || 0;
+        const totalAmount = debitAmount || creditAmount;
+        const taxAmount = line.lineTaxAmount || 0;
+
+        // Calculate BaseAmount based on tax inclusivity and presence of tax
+        let baseAmount: number;
+
+        if (!selectedTax || taxAmount === 0) {
+          // No tax case: BaseAmount = Total Amount
+          baseAmount = totalAmount;
+        } else if (data.isTaxInclusive) {
+          // Tax inclusive: BaseAmount = Total Amount - Tax Amount
+          baseAmount = totalAmount - taxAmount;
+        } else {
+          // Tax exclusive: BaseAmount = Total Amount - Tax Amount
+          // (The total amount entered should be the base, tax is added on top)
+          baseAmount = totalAmount - taxAmount;
+        }
 
         return {
           AccountID: parseInt(line.accountId),
           TransactionType: line.transactionType as TransactionType,
-          DebitAmount: line.debitAmount || 0,
-          CreditAmount: line.creditAmount || 0,
-          BaseAmount: (line.debitAmount || 0) + (line.creditAmount || 0),
+          DebitAmount: debitAmount,
+          CreditAmount: creditAmount,
+          BaseAmount: Math.round(baseAmount * 100) / 100, // Round to 2 decimal places
           TaxID: line.taxId ? parseInt(line.taxId) : undefined,
-          TaxPercentage: selectedTax ? selectedTax.TaxRate : 0,
-          LineTaxAmount: line.lineTaxAmount || 0,
+          TaxPercentage: selectedTax ? selectedTax.TaxRate : undefined,
+          LineTaxAmount: taxAmount,
           LineDescription: line.description?.trim() || undefined,
           CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
           SupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,

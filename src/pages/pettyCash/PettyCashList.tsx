@@ -1,4 +1,4 @@
-// src/pages/pettyCash/PettyCashList.tsx - Enhanced with improved filtering, sorting, and bulk operations
+// src/pages/pettyCash/PettyCashList.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -24,21 +23,17 @@ import {
   Trash2,
   Calendar,
   RefreshCw,
-  Download,
   Filter,
   X,
   ChevronDown,
-  Settings,
   BarChart3,
   TrendingUp,
   SortAsc,
   SortDesc,
   ArrowUpDown,
   Shield,
-  UserCheck,
   RotateCcw,
   Lock,
-  AlertTriangle,
   AlertCircle,
   Building,
   HandCoins,
@@ -47,7 +42,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Separator } from "@/components/ui/separator";
 import { pettyCashService } from "@/services/pettyCashService";
 import { companyService, Company } from "@/services/companyService";
 import { fiscalYearService } from "@/services/fiscalYearService";
@@ -532,11 +526,31 @@ const PettyCashList: React.FC = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      [VoucherStatus.DRAFT]: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      [VoucherStatus.PENDING]: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      [VoucherStatus.POSTED]: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      [VoucherStatus.REJECTED]: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      [VoucherStatus.REVERSED]: { variant: "secondary" as const, icon: XCircle, className: "bg-purple-100 text-purple-800" },
+      [VoucherStatus.DRAFT]: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+      },
+      [VoucherStatus.PENDING]: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      [VoucherStatus.POSTED]: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      [VoucherStatus.REJECTED]: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
+      [VoucherStatus.REVERSED]: {
+        variant: "secondary" as const,
+        icon: XCircle,
+        className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig[VoucherStatus.DRAFT];
@@ -553,9 +567,18 @@ const PettyCashList: React.FC = () => {
   // Render approval status badge
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      [ApprovalStatus.PENDING]: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      [ApprovalStatus.APPROVED]: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      [ApprovalStatus.REJECTED]: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      [ApprovalStatus.PENDING]: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      [ApprovalStatus.APPROVED]: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      [ApprovalStatus.REJECTED]: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig[ApprovalStatus.PENDING];
@@ -636,7 +659,11 @@ const PettyCashList: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
@@ -672,40 +699,40 @@ const PettyCashList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600" />
+                <FileText className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                 <span className="text-sm text-muted-foreground">Draft</span>
               </div>
-              <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">{stats.draft}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600" />
+                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-muted-foreground">Pending</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm text-muted-foreground">Posted</span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{stats.posted}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.posted}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-red-600" />
+                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 <span className="text-sm text-muted-foreground">Rejected</span>
               </div>
-              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.rejected}</div>
             </CardContent>
           </Card>
 
@@ -714,30 +741,30 @@ const PettyCashList: React.FC = () => {
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <span className="text-sm text-muted-foreground">Approval Pending</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Approved</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <span className="text-sm text-muted-foreground">Rejected</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
                 </CardContent>
               </Card>
             </>
@@ -746,20 +773,20 @@ const PettyCashList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <HandCoins className="h-4 w-4 text-blue-600" />
+                <HandCoins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Total Amount</span>
               </div>
-              <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalAmount)}</div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalAmount)}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-600" />
+                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 <span className="text-sm text-muted-foreground">Average</span>
               </div>
-              <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageAmount)}</div>
+              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageAmount)}</div>
             </CardContent>
           </Card>
         </div>
@@ -796,11 +823,11 @@ const PettyCashList: React.FC = () => {
                           <DropdownMenuSeparator />
                           <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                            <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                             Approve Selected
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
-                            <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                            <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                             Reject Selected
                           </DropdownMenuItem>
                         </>
@@ -1069,7 +1096,11 @@ const PettyCashList: React.FC = () => {
                       return (
                         <TableRow
                           key={voucher.VoucherNo}
-                          className={cn("hover:bg-muted/50 transition-colors", selectedVouchers.has(voucher.VoucherNo) && "bg-accent/50", isApproved && "bg-green-50/30")}
+                          className={cn(
+                            "hover:bg-muted/50 transition-colors",
+                            selectedVouchers.has(voucher.VoucherNo) && "bg-accent/50",
+                            isApproved && "bg-green-50/30 dark:bg-green-900/10"
+                          )}
                         >
                           <TableCell>
                             <Checkbox
@@ -1087,7 +1118,7 @@ const PettyCashList: React.FC = () => {
                               {!canEdit && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Lock className="h-3 w-3 text-gray-600" />
+                                    <Lock className="h-3 w-3 text-muted-foreground" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Cannot modify posted or rejected vouchers</p>
@@ -1125,14 +1156,14 @@ const PettyCashList: React.FC = () => {
                               {voucher.RequiresApproval ? (
                                 renderApprovalBadge(voucher.ApprovalStatus || ApprovalStatus.PENDING)
                               ) : (
-                                <Badge variant="outline" className="bg-gray-50">
+                                <Badge variant="outline" className="bg-gray-50 dark:bg-gray-800">
                                   No Approval Required
                                 </Badge>
                               )}
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Shield className="h-3 w-3 text-green-600 ml-1" />
+                                    <Shield className="h-3 w-3 text-green-600 dark:text-green-400 ml-1" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Approved and protected</p>
@@ -1189,11 +1220,11 @@ const PettyCashList: React.FC = () => {
                                     {voucher.ApprovalStatus === ApprovalStatus.PENDING && (
                                       <>
                                         <DropdownMenuItem onClick={() => handleApproveVoucher(voucher)}>
-                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                                           Approve
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleRejectVoucher(voucher)}>
-                                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                          <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                                           Reject
                                         </DropdownMenuItem>
                                       </>
@@ -1201,7 +1232,7 @@ const PettyCashList: React.FC = () => {
 
                                     {voucher.ApprovalStatus !== ApprovalStatus.PENDING && (
                                       <DropdownMenuItem onClick={() => navigate(`/petty-cash/${voucher.VoucherNo}`)}>
-                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                                         Reset Approval
                                       </DropdownMenuItem>
                                     )}
@@ -1211,7 +1242,7 @@ const PettyCashList: React.FC = () => {
                                 <DropdownMenuSeparator />
 
                                 {canEdit ? (
-                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(voucher)}>
+                                  <DropdownMenuItem className="text-red-500 dark:text-red-400" onClick={() => openDeleteDialog(voucher)}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete
                                   </DropdownMenuItem>
