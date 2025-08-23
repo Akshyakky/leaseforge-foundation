@@ -69,6 +69,7 @@ import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnai
 import { AttachmentPreview } from "@/components/attachments/AttachmentPreview";
 import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
+import { Switch } from "@/components/ui/switch";
 
 // Enhanced schema with better validation
 const voucherLineSchema = z
@@ -421,18 +422,22 @@ const PettyCashForm: React.FC = () => {
       setTaxes(taxesData);
       setDocTypes(docTypesData);
       setCostCenters1(costCenters1Data as CostCenter1[]);
-      if (companiesData && !isEdit) {
-        const defaultCompany = companiesData[0];
-        form.setValue("companyId", defaultCompany.CompanyID.toString());
-      }
-      if (currenciesData && !isEdit) {
-        const defaultCurrency = currenciesData[0];
-        form.setValue("currencyId", defaultCurrency.CurrencyID.toString());
-      }
-      if (fiscalYearsData && !isEdit) {
-        const defaultFiscalYear = fiscalYearsData[0];
-        form.setValue("fiscalYearId", defaultFiscalYear.FiscalYearID.toString());
-      }
+      setTimeout(() => {
+        if (!isEdit) {
+          if (companiesData && !isEdit) {
+            const defaultCompany = companiesData[0];
+            form.setValue("companyId", defaultCompany.CompanyID.toString());
+          }
+          if (currenciesData && !isEdit) {
+            const defaultCurrency = currenciesData[0];
+            form.setValue("currencyId", defaultCurrency.CurrencyID.toString());
+          }
+          if (fiscalYearsData && !isEdit) {
+            const defaultFiscalYear = fiscalYearsData[0];
+            form.setValue("fiscalYearId", defaultFiscalYear.FiscalYearID.toString());
+          }
+        }
+      }, 0);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");
@@ -1114,7 +1119,24 @@ const PettyCashForm: React.FC = () => {
                       description="Applicable tax"
                       disabled={!canEditVoucher}
                     />
-                    <FormField form={form} name="isTaxInclusive" label="Tax Inclusive" type="switch" description="Whether amounts include tax" disabled={!canEditVoucher} />
+
+                    <div className="space-y-2">
+                      <Label htmlFor="isTaxInclusive" className="text-sm font-medium">
+                        Tax Inclusive
+                      </Label>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="isTaxInclusive"
+                          checked={form.watch("isTaxInclusive")}
+                          onCheckedChange={(checked) => form.setValue("isTaxInclusive", checked)}
+                          disabled={!canEditVoucher}
+                        />
+                        <Label htmlFor="isTaxInclusive" className="text-sm text-muted-foreground cursor-pointer">
+                          {form.watch("isTaxInclusive") ? "Tax is included in amounts" : "Tax is excluded from amounts"}
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Whether the entered amounts already include tax</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>

@@ -85,6 +85,7 @@ export interface PettyCashVoucherLine extends BasePettyCash {
   DebitAmount?: number;
   CreditAmount?: number;
   BaseAmount?: number;
+  TaxID?: number;
   TaxPercentage?: number;
   LineTaxAmount?: number;
   LineDescription?: string;
