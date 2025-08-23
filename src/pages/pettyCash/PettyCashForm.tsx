@@ -81,6 +81,7 @@ const voucherLineSchema = z
     description: z.string().optional(),
     customerId: z.string().optional(),
     supplierId: z.string().optional(),
+    taxId: z.string().optional(),
     taxPercentage: z.coerce.number().min(0).max(100).optional(),
     lineTaxAmount: z.coerce.number().min(0).optional(),
     // Line-level cost centers
@@ -357,7 +358,7 @@ const PettyCashForm: React.FC = () => {
               description: line.LineDescription || "",
               customerId: line.CustomerID?.toString() || "",
               supplierId: line.SupplierID?.toString() || "",
-              taxPercentage: line.TaxPercentage || 0,
+              taxId: line.TaxID?.toString() || "",
               lineTaxAmount: line.LineTaxAmount || 0,
               // Line-level cost centers
               lineCostCenter1Id: line.LineCostCenter1ID?.toString() || "",
@@ -513,21 +514,45 @@ const PettyCashForm: React.FC = () => {
         }
       }
 
-      // Handle tax calculations for voucher lines
-      if (name.includes("taxPercentage") && name.includes("lines.")) {
+      if (name.includes("taxId") && name.includes("lines.")) {
         const index = parseInt(name.split(".")[1]);
         const lines = form.getValues("lines");
 
         if (lines && lines[index]) {
-          const taxPercentage = lines[index].taxPercentage || 0;
-          const debitAmount = lines[index].debitAmount || 0;
-          const creditAmount = lines[index].creditAmount || 0;
-          const amount = debitAmount || creditAmount;
+          const selectedTaxId = lines[index].taxId;
 
-          const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-          form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
+          if (selectedTaxId) {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const debitAmount = lines[index].debitAmount || 0;
+              const creditAmount = lines[index].creditAmount || 0;
+              const amount = debitAmount || creditAmount;
+              const taxRate = selectedTax.TaxRate || 0;
+
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
+            }
+          } else {
+            form.setValue(`lines.${index}.lineTaxAmount`, 0);
+          }
         }
       }
+
+      // Handle tax calculations for voucher lines
+      // if (name.includes("taxPercentage") && name.includes("lines.")) {
+      //   const index = parseInt(name.split(".")[1]);
+      //   const lines = form.getValues("lines");
+
+      //   if (lines && lines[index]) {
+      //     const taxPercentage = lines[index].taxPercentage || 0;
+      //     const debitAmount = lines[index].debitAmount || 0;
+      //     const creditAmount = lines[index].creditAmount || 0;
+      //     const amount = debitAmount || creditAmount;
+
+      //     const taxAmount = roundToTwo((amount * taxPercentage) / 100);
+      //     form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
+      //   }
+      // }
 
       // Auto-calculate tax when amounts change
       if ((name.includes("debitAmount") || name.includes("creditAmount")) && name.includes("lines.")) {
@@ -535,21 +560,26 @@ const PettyCashForm: React.FC = () => {
         const lines = form.getValues("lines");
 
         if (lines && lines[index]) {
-          const taxPercentage = lines[index].taxPercentage || 0;
-          const debitAmount = lines[index].debitAmount || 0;
-          const creditAmount = lines[index].creditAmount || 0;
-          const amount = debitAmount || creditAmount;
+          const selectedTaxId = lines[index].taxId;
 
-          if (taxPercentage > 0) {
-            const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-            form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
+          if (selectedTaxId) {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const debitAmount = lines[index].debitAmount || 0;
+              const creditAmount = lines[index].creditAmount || 0;
+              const amount = debitAmount || creditAmount;
+              const taxRate = selectedTax.TaxRate || 0;
+
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`lines.${index}.lineTaxAmount`, taxAmount);
+            }
           }
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, taxes]);
 
   // Calculate totals
   const calculateTotals = () => {
@@ -630,23 +660,28 @@ const PettyCashForm: React.FC = () => {
       };
 
       // Prepare lines data with line-level cost centers
-      const linesData = data.lines.map((line) => ({
-        AccountID: parseInt(line.accountId),
-        TransactionType: line.transactionType as TransactionType,
-        DebitAmount: line.debitAmount || 0,
-        CreditAmount: line.creditAmount || 0,
-        BaseAmount: (line.debitAmount || 0) + (line.creditAmount || 0),
-        TaxPercentage: line.taxPercentage || 0,
-        LineTaxAmount: line.lineTaxAmount || 0,
-        LineDescription: line.description?.trim() || undefined,
-        CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
-        SupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
-        // Line-level cost centers (these override voucher-level if specified)
-        LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
-        LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
-        LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
-        LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
-      }));
+      const linesData = data.lines.map((line) => {
+        const selectedTax = line.taxId ? taxes.find((t) => t.TaxID.toString() === line.taxId) : null;
+
+        return {
+          AccountID: parseInt(line.accountId),
+          TransactionType: line.transactionType as TransactionType,
+          DebitAmount: line.debitAmount || 0,
+          CreditAmount: line.creditAmount || 0,
+          BaseAmount: (line.debitAmount || 0) + (line.creditAmount || 0),
+          TaxID: line.taxId ? parseInt(line.taxId) : undefined,
+          TaxPercentage: selectedTax ? selectedTax.TaxRate : 0,
+          LineTaxAmount: line.lineTaxAmount || 0,
+          LineDescription: line.description?.trim() || undefined,
+          CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
+          SupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
+          // Line-level cost centers
+          LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
+          LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
+          LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
+          LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
+        };
+      });
 
       // Prepare attachments data
       const attachmentsData =
@@ -1349,12 +1384,18 @@ const PettyCashForm: React.FC = () => {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
                                   form={form}
-                                  name={`lines.${index}.taxPercentage`}
-                                  label="Tax Percentage"
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  description="Tax rate for this line"
+                                  name={`lines.${index}.taxId`}
+                                  label="Tax"
+                                  type="select"
+                                  options={[
+                                    { label: "No Tax", value: "0" },
+                                    ...taxes.map((tax) => ({
+                                      label: `${tax.TaxCode} - ${tax.TaxName} (${tax.TaxRate}%)`,
+                                      value: tax.TaxID.toString(),
+                                    })),
+                                  ]}
+                                  placeholder="Select tax (optional)"
+                                  description="Select applicable tax from tax master"
                                   disabled={!canEditVoucher}
                                 />
                                 <FormField
@@ -1364,7 +1405,7 @@ const PettyCashForm: React.FC = () => {
                                   type="number"
                                   step="0.01"
                                   disabled
-                                  description="Auto-calculated tax amount"
+                                  description="Auto-calculated based on selected tax"
                                 />
                               </div>
 
