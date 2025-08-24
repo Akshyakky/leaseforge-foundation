@@ -237,6 +237,10 @@ const PettyCashForm: React.FC = () => {
   const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
   const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
 
+  const [lineCostCenters2, setLineCostCenters2] = useState<{ [key: number]: CostCenter2[] }>({});
+  const [lineCostCenters3, setLineCostCenters3] = useState<{ [key: number]: CostCenter3[] }>({});
+  const [lineCostCenters4, setLineCostCenters4] = useState<{ [key: number]: CostCenter4[] }>({});
+
   // Attachment management state
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
   const [editingAttachment, setEditingAttachment] = useState<any>(null);
@@ -469,7 +473,7 @@ const PettyCashForm: React.FC = () => {
 
       const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-      // Handle cost center hierarchy changes
+      // Handle VOUCHER-LEVEL cost center hierarchy changes
       if (name === "costCenter1Id" && value.costCenter1Id) {
         const costCenter1Id = parseInt(value.costCenter1Id);
         loadChildCostCenters(2, { CostCenter1ID: costCenter1Id });
@@ -491,6 +495,54 @@ const PettyCashForm: React.FC = () => {
         const costCenter3Id = parseInt(value.costCenter3Id);
         loadChildCostCenters(4, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id, CostCenter3ID: costCenter3Id });
         form.setValue("costCenter4Id", "");
+      }
+
+      // Handle LINE-LEVEL cost center hierarchy changes
+      if (name.includes("lines.") && name.includes("lineCostCenter")) {
+        const match = name.match(/lines\.(\d+)\.lineCostCenter(\d)Id/);
+        if (match) {
+          const lineIndex = parseInt(match[1]);
+          const costCenterLevel = parseInt(match[2]);
+
+          const lines = form.getValues("lines");
+          if (lines && lines[lineIndex]) {
+            const line = lines[lineIndex];
+
+            if (costCenterLevel === 1 && line.lineCostCenter1Id) {
+              // Load level 2 cost centers for this line
+              loadLineCostCenters(lineIndex, 2, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id),
+              });
+              // Clear dependent fields
+              form.setValue(`lines.${lineIndex}.lineCostCenter2Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter3Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+              // Clear dependent options
+              setLineCostCenters3((prev) => ({ ...prev, [lineIndex]: [] }));
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 2 && line.lineCostCenter2Id) {
+              // Load level 3 cost centers for this line
+              loadLineCostCenters(lineIndex, 3, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id || "0"),
+                CostCenter2ID: parseInt(line.lineCostCenter2Id),
+              });
+              // Clear dependent fields
+              form.setValue(`lines.${lineIndex}.lineCostCenter3Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+              // Clear dependent options
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 3 && line.lineCostCenter3Id) {
+              // Load level 4 cost centers for this line
+              loadLineCostCenters(lineIndex, 4, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id || "0"),
+                CostCenter2ID: parseInt(line.lineCostCenter2Id || "0"),
+                CostCenter3ID: parseInt(line.lineCostCenter3Id),
+              });
+              // Clear dependent field
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+            }
+          }
+        }
       }
 
       // Handle transaction type changes for voucher lines
@@ -559,8 +611,44 @@ const PettyCashForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, taxes]);
+  }, [form, taxes, costCenters1]);
 
+  const loadLineCostCenters = async (
+    lineIndex: number,
+    level: number,
+    parentIds: {
+      CostCenter1ID?: number;
+      CostCenter2ID?: number;
+      CostCenter3ID?: number;
+    }
+  ) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setLineCostCenters2((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter2[],
+          }));
+          break;
+        case 3:
+          setLineCostCenters3((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter3[],
+          }));
+          break;
+        case 4:
+          setLineCostCenters4((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter4[],
+          }));
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading line cost centers level ${level}:`, error);
+    }
+  };
   // Calculate totals
   const calculateTotals = () => {
     const formValues = form.getValues();
@@ -587,6 +675,82 @@ const PettyCashForm: React.FC = () => {
       totalCredits: roundToTwo(totalCredits),
       difference: roundToTwo(totalDebits - totalCredits),
     };
+  };
+
+  const applyVoucherCostCentersToLines = async () => {
+    if (!canEditVoucher) {
+      toast.error("Cannot modify posted or reversed vouchers.");
+      return;
+    }
+
+    const voucherCC1 = form.getValues("costCenter1Id");
+    const voucherCC2 = form.getValues("costCenter2Id");
+    const voucherCC3 = form.getValues("costCenter3Id");
+    const voucherCC4 = form.getValues("costCenter4Id");
+
+    if (!voucherCC1) {
+      toast.error("Please select at least Cost Center Level 1 before applying");
+      return;
+    }
+
+    const lines = form.getValues("lines");
+
+    // Apply to all lines
+    for (let i = 0; i < lines.length; i++) {
+      // Set Level 1
+      form.setValue(`lines.${i}.lineCostCenter1Id`, voucherCC1);
+
+      // Load Level 2 options if Level 1 is set
+      if (voucherCC1) {
+        await loadLineCostCenters(i, 2, {
+          CostCenter1ID: parseInt(voucherCC1),
+        });
+
+        // Set Level 2 if available
+        if (voucherCC2) {
+          form.setValue(`lines.${i}.lineCostCenter2Id`, voucherCC2);
+
+          // Load Level 3 options if Level 2 is set
+          await loadLineCostCenters(i, 3, {
+            CostCenter1ID: parseInt(voucherCC1),
+            CostCenter2ID: parseInt(voucherCC2),
+          });
+
+          // Set Level 3 if available
+          if (voucherCC3) {
+            form.setValue(`lines.${i}.lineCostCenter3Id`, voucherCC3);
+
+            // Load Level 4 options if Level 3 is set
+            await loadLineCostCenters(i, 4, {
+              CostCenter1ID: parseInt(voucherCC1),
+              CostCenter2ID: parseInt(voucherCC2),
+              CostCenter3ID: parseInt(voucherCC3),
+            });
+
+            // Set Level 4 if available
+            if (voucherCC4) {
+              form.setValue(`lines.${i}.lineCostCenter4Id`, voucherCC4);
+            }
+          } else {
+            // Clear Level 3 and 4 if not set at voucher level
+            form.setValue(`lines.${i}.lineCostCenter3Id`, "");
+            form.setValue(`lines.${i}.lineCostCenter4Id`, "");
+            setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+            setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+          }
+        } else {
+          // Clear Level 2, 3, and 4 if not set at voucher level
+          form.setValue(`lines.${i}.lineCostCenter2Id`, "");
+          form.setValue(`lines.${i}.lineCostCenter3Id`, "");
+          form.setValue(`lines.${i}.lineCostCenter4Id`, "");
+          setLineCostCenters2((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+        }
+      }
+    }
+
+    toast.success(`Cost centers applied to ${lines.length} line${lines.length > 1 ? "s" : ""}`);
   };
 
   // Submit handler for the voucher form
@@ -854,16 +1018,6 @@ const PettyCashForm: React.FC = () => {
     }
   };
 
-  // Format date for display
-  const formatDate = (date?: Date | null) => {
-    if (!date) return "";
-    try {
-      return format(date, "dd MMM yyyy");
-    } catch (error) {
-      return "";
-    }
-  };
-
   if (initialLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -1039,10 +1193,18 @@ const PettyCashForm: React.FC = () => {
                 {/* Cost Center Section */}
                 <Separator />
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Network className="h-5 w-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Cost Centers</h3>
-                    <Badge variant="secondary">Voucher Level</Badge>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Network className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-semibold">Cost Centers</h3>
+                      <Badge variant="secondary">Voucher Level</Badge>
+                    </div>
+                    {lineFields.length > 0 && (
+                      <Button type="button" variant="outline" size="sm" onClick={applyVoucherCostCentersToLines} disabled={!canEditVoucher || !form.watch("costCenter1Id")}>
+                        <Network className="h-4 w-4 mr-2" />
+                        Apply to All Lines
+                      </Button>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <FormField
@@ -1098,6 +1260,14 @@ const PettyCashForm: React.FC = () => {
                       disabled={!form.watch("costCenter3Id") || !canEditVoucher}
                     />
                   </div>
+                  {lineFields.length > 0 && form.watch("costCenter1Id") && (
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        Click "Apply to All Lines" to copy these cost centers to all voucher lines. Lines can still have their own cost centers that override these defaults.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
 
                 {/* Bank and Cheque Details */}
@@ -1438,39 +1608,39 @@ const PettyCashForm: React.FC = () => {
                                     name={`lines.${index}.lineCostCenter2Id`}
                                     label="Level 2"
                                     type="select"
-                                    options={costCenters2.map((cc) => ({
+                                    options={(lineCostCenters2[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter2ID.toString(),
                                     }))}
                                     placeholder="Select level 2"
                                     className="text-sm"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter1Id`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.lineCostCenter3Id`}
                                     label="Level 3"
                                     type="select"
-                                    options={costCenters3.map((cc) => ({
+                                    options={(lineCostCenters3[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter3ID.toString(),
                                     }))}
                                     placeholder="Select level 3"
                                     className="text-sm"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter2Id`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.lineCostCenter4Id`}
                                     label="Level 4"
                                     type="select"
-                                    options={costCenters4.map((cc) => ({
+                                    options={(lineCostCenters4[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter4ID.toString(),
                                     }))}
                                     placeholder="Select level 4"
                                     className="text-sm"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter3Id`) || !canEditVoucher}
                                   />
                                 </div>
                               </div>

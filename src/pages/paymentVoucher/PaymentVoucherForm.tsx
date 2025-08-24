@@ -461,18 +461,20 @@ const PaymentVoucherForm: React.FC = () => {
       setTaxes(taxesData);
       setDocTypes(docTypesData);
       setCostCenters1(costCenters1Data as CostCenter1[]);
-      if (companiesData && !isEdit) {
-        const defaultCompany = companiesData[0];
-        form.setValue("companyId", defaultCompany.CompanyID.toString());
-      }
-      if (currenciesData && !isEdit) {
-        const defaultCurrency = currenciesData[0];
-        form.setValue("currencyId", defaultCurrency.CurrencyID.toString());
-      }
-      if (fiscalYearsData && !isEdit) {
-        const defaultFiscalYear = fiscalYearsData[0];
-        form.setValue("fiscalYearId", defaultFiscalYear.FiscalYearID.toString());
-      }
+      setTimeout(() => {
+        if (companiesData && !isEdit) {
+          const defaultCompany = companiesData[0];
+          form.setValue("companyId", defaultCompany.CompanyID.toString());
+        }
+        if (currenciesData && !isEdit) {
+          const defaultCurrency = currenciesData[0];
+          form.setValue("currencyId", defaultCurrency.CurrencyID.toString());
+        }
+        if (fiscalYearsData && !isEdit) {
+          const defaultFiscalYear = fiscalYearsData[0];
+          form.setValue("fiscalYearId", defaultFiscalYear.FiscalYearID.toString());
+        }
+      }, 0);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");
