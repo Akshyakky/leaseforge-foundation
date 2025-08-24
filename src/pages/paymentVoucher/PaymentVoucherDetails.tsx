@@ -1,8 +1,8 @@
-// src/pages/paymentVoucher/PaymentVoucherDetails.tsx - Enhanced with Advanced Features
+// src/pages/paymentVoucher/PaymentVoucherDetails.tsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { paymentVoucherService } from "@/services/paymentVoucherService";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,29 +16,20 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
-  Edit,
   Trash2,
   Receipt,
   Calendar,
-  Building2,
   CreditCard,
   FileText,
   Download,
-  Eye,
-  Check,
-  X,
   RotateCcw,
   Send,
-  Printer,
   Copy,
-  AlertCircle,
   CheckCircle,
   Clock,
   XCircle,
-  User,
   HandCoins,
   Building,
-  Users,
   Network,
   ChevronDown,
   Lock,
@@ -47,10 +38,6 @@ import {
   Loader2,
   Edit2,
   Plus,
-  Home,
-  Tag,
-  Image,
-  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PaymentVoucher, PaymentVoucherLine, PaymentVoucherAttachment, PaymentStatus, PaymentType, ApprovalAction, ApprovalStatus } from "@/types/paymentVoucherTypes";
@@ -445,12 +432,36 @@ const PaymentVoucherDetails: React.FC = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Paid: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Cancelled: { variant: "secondary" as const, icon: XCircle, className: "bg-orange-100 text-orange-800" },
-      Reversed: { variant: "secondary" as const, icon: RotateCcw, className: "bg-purple-100 text-purple-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Paid: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
+      Cancelled: {
+        variant: "secondary" as const,
+        icon: XCircle,
+        className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+      },
+      Reversed: {
+        variant: "secondary" as const,
+        icon: RotateCcw,
+        className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -467,9 +478,18 @@ const PaymentVoucherDetails: React.FC = () => {
   // Render approval status badge
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -486,13 +506,34 @@ const PaymentVoucherDetails: React.FC = () => {
   // Render payment type badge
   const renderPaymentTypeBadge = (paymentType: string) => {
     const paymentTypeConfig = {
-      Cash: { icon: HandCoins, className: "bg-green-100 text-green-800" },
-      Cheque: { icon: FileText, className: "bg-blue-100 text-blue-800" },
-      "Bank Transfer": { icon: Building, className: "bg-purple-100 text-purple-800" },
-      Online: { icon: CreditCard, className: "bg-orange-100 text-orange-800" },
-      "Wire Transfer": { icon: Building, className: "bg-indigo-100 text-indigo-800" },
-      "Credit Card": { icon: CreditCard, className: "bg-red-100 text-red-800" },
-      "Debit Card": { icon: CreditCard, className: "bg-teal-100 text-teal-800" },
+      Cash: {
+        icon: HandCoins,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800",
+      },
+      Cheque: {
+        icon: FileText,
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+      },
+      "Bank Transfer": {
+        icon: Building,
+        className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+      },
+      Online: {
+        icon: CreditCard,
+        className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800",
+      },
+      "Wire Transfer": {
+        icon: Building,
+        className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800",
+      },
+      "Credit Card": {
+        icon: CreditCard,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
+      },
+      "Debit Card": {
+        icon: CreditCard,
+        className: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800",
+      },
     };
 
     const config = paymentTypeConfig[paymentType as keyof typeof paymentTypeConfig] || paymentTypeConfig.Cash;
@@ -509,13 +550,13 @@ const PaymentVoucherDetails: React.FC = () => {
   const getApprovalStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
       case "Rejected":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
       case "Pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
     }
   };
 
@@ -586,7 +627,7 @@ const PaymentVoucherDetails: React.FC = () => {
                 </Badge>
               )}
               {(isPaid || isReversed) && (
-                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">
                   <Lock className="h-3 w-3 mr-1" />
                   Protected
                 </Badge>
@@ -620,18 +661,18 @@ const PaymentVoucherDetails: React.FC = () => {
                   {voucher.ApprovalStatus === "Pending" && (
                     <>
                       <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-500" />
                         Approve Voucher
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                        <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-500" />
                         Reject Voucher
                       </DropdownMenuItem>
                     </>
                   )}
                   {voucher.ApprovalStatus !== "Pending" && (
                     <DropdownMenuItem onClick={handleResetApproval}>
-                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-500" />
                       Reset Approval
                     </DropdownMenuItem>
                   )}
@@ -717,10 +758,10 @@ const PaymentVoucherDetails: React.FC = () => {
           <Alert
             className={`border-l-4 ${
               voucher.ApprovalStatus === "Approved"
-                ? "border-l-green-500 bg-green-50"
+                ? "border-l-green-500 bg-green-50 dark:bg-green-900/20"
                 : voucher.ApprovalStatus === "Rejected"
-                ? "border-l-red-500 bg-red-50"
-                : "border-l-yellow-500 bg-yellow-50"
+                ? "border-l-red-500 bg-red-50 dark:bg-red-900/20"
+                : "border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
             }`}
           >
             <ApprovalIcon className="h-4 w-4" />
@@ -730,7 +771,7 @@ const PaymentVoucherDetails: React.FC = () => {
                 <div className="text-sm text-muted-foreground mt-1">
                   Approved by {voucher.ApprovedByName} on {formatDate(voucher.ApprovedOn)}
                   {voucher.ApprovalComments && <div className="mt-1">Comments: {voucher.ApprovalComments}</div>}
-                  <div className="mt-2 text-green-700 font-medium flex items-center">
+                  <div className="mt-2 text-green-700 dark:text-green-400 font-medium flex items-center">
                     <Shield className="h-4 w-4 mr-1" />
                     This voucher is ready for payment processing.
                   </div>
@@ -739,7 +780,7 @@ const PaymentVoucherDetails: React.FC = () => {
               {voucher.ApprovalStatus === "Rejected" && voucher.RejectedByName && (
                 <div className="text-sm text-muted-foreground mt-1">
                   Rejected by {voucher.RejectedByName} on {formatDate(voucher.RejectedOn)}
-                  {voucher.RejectionReason && <div className="mt-1 text-red-700">Reason: {voucher.RejectionReason}</div>}
+                  {voucher.RejectionReason && <div className="mt-1 text-red-700 dark:text-red-400">Reason: {voucher.RejectionReason}</div>}
                 </div>
               )}
               {(!voucher.ApprovalStatus || voucher.ApprovalStatus === "Pending") && (
@@ -751,7 +792,7 @@ const PaymentVoucherDetails: React.FC = () => {
 
         {/* Reversal Status Alert */}
         {voucher.IsReversed && (
-          <Alert className="border-l-4 border-l-purple-500 bg-purple-50">
+          <Alert className="border-l-4 border-l-purple-500 bg-purple-50 dark:bg-purple-900/20">
             <RotateCcw className="h-4 w-4" />
             <AlertDescription>
               <div className="font-medium">This payment voucher has been reversed</div>
@@ -926,13 +967,13 @@ const PaymentVoucherDetails: React.FC = () => {
                       {voucher.Description && (
                         <div>
                           <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
-                          <p className="text-base mt-1 bg-muted/20 p-3 rounded-lg">{voucher.Description}</p>
+                          <p className="text-base mt-1 bg-muted/20 dark:bg-muted/10 p-3 rounded-lg">{voucher.Description}</p>
                         </div>
                       )}
                       {voucher.Narration && (
                         <div>
                           <h3 className="text-sm font-medium text-muted-foreground">Narration</h3>
-                          <p className="text-base mt-1 bg-muted/20 p-3 rounded-lg">{voucher.Narration}</p>
+                          <p className="text-base mt-1 bg-muted/20 dark:bg-muted/10 p-3 rounded-lg">{voucher.Narration}</p>
                         </div>
                       )}
                     </div>
@@ -1066,7 +1107,7 @@ const PaymentVoucherDetails: React.FC = () => {
                             </TableCell>
                           </TableRow>
                         ))}
-                        <TableRow className="font-semibold bg-muted/20">
+                        <TableRow className="font-semibold bg-muted/20 dark:bg-muted/10">
                           <TableCell colSpan={2}>Total</TableCell>
                           <TableCell className="text-right">{formatCurrency(totalDebits, voucher.CurrencyName)}</TableCell>
                           <TableCell colSpan={2}></TableCell>
@@ -1109,7 +1150,7 @@ const PaymentVoucherDetails: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {attachments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900/20 rounded-md">
                     <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground mb-4">No documents have been attached to this voucher.</p>
                     {canEditVoucher ? (
@@ -1146,7 +1187,11 @@ const PaymentVoucherDetails: React.FC = () => {
                               <div className="flex-1 space-y-2">
                                 <div className="flex items-center">
                                   <span className="font-medium">{attachment.DocumentName}</span>
-                                  {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                                  {attachment.DocTypeName && (
+                                    <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400">
+                                      {attachment.DocTypeName}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-sm space-y-1">
                                   {attachment.UploadedDate && (

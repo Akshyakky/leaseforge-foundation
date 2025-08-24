@@ -7,7 +7,6 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -15,14 +14,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft,
   Loader2,
   Save,
   Plus,
   Trash2,
-  Upload,
   FileText,
   AlertCircle,
   Calculator,
@@ -31,16 +30,13 @@ import {
   CreditCard,
   Receipt,
   HandCoins,
-  Users,
   CheckCircle,
-  Info,
   RotateCcw,
   PlusCircle,
   Edit2,
   Download,
   Lock,
   Shield,
-  Calendar,
 } from "lucide-react";
 import { paymentVoucherService } from "@/services/paymentVoucherService";
 import { accountService } from "@/services/accountService";
@@ -57,7 +53,7 @@ import { FormField } from "@/components/forms/FormField";
 import { toast } from "sonner";
 import { useAppSelector } from "@/lib/hooks";
 import { format } from "date-fns";
-import { PaymentVoucher, PaymentVoucherLine, PaymentVoucherAttachment, PaymentType, PaymentStatus, TransactionType } from "@/types/paymentVoucherTypes";
+import { PaymentVoucher, PaymentType, PaymentStatus, TransactionType } from "@/types/paymentVoucherTypes";
 import { Account } from "@/types/accountTypes";
 import { Company } from "@/services/companyService";
 import { FiscalYear } from "@/types/fiscalYearTypes";
@@ -80,7 +76,7 @@ const voucherLineSchema = z.object({
   description: z.string().optional(),
   customerId: z.string().optional(),
   supplierId: z.string().optional(),
-  taxPercentage: z.coerce.number().min(0).max(100).optional(),
+  taxId: z.string().optional(), // Changed from taxPercentage to taxId
   taxAmount: z.coerce.number().min(0).optional(),
   // Line-level cost centers
   lineCostCenter1Id: z.string().optional(),
@@ -133,7 +129,6 @@ const paymentVoucherSchema = z
     costCenter2Id: z.string().optional(),
     costCenter3Id: z.string().optional(),
     costCenter4Id: z.string().optional(),
-    copyCostCenters: z.boolean().optional(),
 
     lines: z.array(voucherLineSchema).min(1, "At least one voucher line is required"),
     attachments: z.array(attachmentSchema).optional(),
@@ -266,6 +261,11 @@ const PaymentVoucherForm: React.FC = () => {
   const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
   const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
 
+  // Line-level cost center data
+  const [lineCostCenters2, setLineCostCenters2] = useState<{ [key: number]: CostCenter2[] }>({});
+  const [lineCostCenters3, setLineCostCenters3] = useState<{ [key: number]: CostCenter3[] }>({});
+  const [lineCostCenters4, setLineCostCenters4] = useState<{ [key: number]: CostCenter4[] }>({});
+
   // Attachment management state
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
   const [editingAttachment, setEditingAttachment] = useState<any>(null);
@@ -305,7 +305,6 @@ const PaymentVoucherForm: React.FC = () => {
       costCenter2Id: "",
       costCenter3Id: "",
       costCenter4Id: "",
-      copyCostCenters: false,
       lines: [{ accountId: "", amount: 0, description: "" }],
       attachments: [],
     },
@@ -322,6 +321,83 @@ const PaymentVoucherForm: React.FC = () => {
     name: "attachments",
   });
 
+  // Apply voucher-level cost centers to all lines
+  const applyVoucherCostCentersToLines = async () => {
+    if (!canEditVoucher) {
+      toast.error("Cannot modify paid or reversed vouchers.");
+      return;
+    }
+
+    const voucherCC1 = form.getValues("costCenter1Id");
+    const voucherCC2 = form.getValues("costCenter2Id");
+    const voucherCC3 = form.getValues("costCenter3Id");
+    const voucherCC4 = form.getValues("costCenter4Id");
+
+    if (!voucherCC1) {
+      toast.error("Please select at least Cost Center Level 1 before applying");
+      return;
+    }
+
+    const lines = form.getValues("lines");
+
+    // Apply to all lines
+    for (let i = 0; i < lines.length; i++) {
+      // Set Level 1
+      form.setValue(`lines.${i}.lineCostCenter1Id`, voucherCC1);
+
+      // Load Level 2 options if Level 1 is set
+      if (voucherCC1) {
+        await loadLineCostCenters(i, 2, {
+          CostCenter1ID: parseInt(voucherCC1),
+        });
+
+        // Set Level 2 if available
+        if (voucherCC2) {
+          form.setValue(`lines.${i}.lineCostCenter2Id`, voucherCC2);
+
+          // Load Level 3 options if Level 2 is set
+          await loadLineCostCenters(i, 3, {
+            CostCenter1ID: parseInt(voucherCC1),
+            CostCenter2ID: parseInt(voucherCC2),
+          });
+
+          // Set Level 3 if available
+          if (voucherCC3) {
+            form.setValue(`lines.${i}.lineCostCenter3Id`, voucherCC3);
+
+            // Load Level 4 options if Level 3 is set
+            await loadLineCostCenters(i, 4, {
+              CostCenter1ID: parseInt(voucherCC1),
+              CostCenter2ID: parseInt(voucherCC2),
+              CostCenter3ID: parseInt(voucherCC3),
+            });
+
+            // Set Level 4 if available
+            if (voucherCC4) {
+              form.setValue(`lines.${i}.lineCostCenter4Id`, voucherCC4);
+            }
+          } else {
+            // Clear Level 3 and 4 if not set at voucher level
+            form.setValue(`lines.${i}.lineCostCenter3Id`, "");
+            form.setValue(`lines.${i}.lineCostCenter4Id`, "");
+            setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+            setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+          }
+        } else {
+          // Clear Level 2, 3, and 4 if not set at voucher level
+          form.setValue(`lines.${i}.lineCostCenter2Id`, "");
+          form.setValue(`lines.${i}.lineCostCenter3Id`, "");
+          form.setValue(`lines.${i}.lineCostCenter4Id`, "");
+          setLineCostCenters2((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+        }
+      }
+    }
+
+    toast.success(`Cost centers applied to ${lines.length} line${lines.length > 1 ? "s" : ""}`);
+  };
+
   // Calculate totals
   const calculateTotals = () => {
     const formValues = form.getValues();
@@ -331,15 +407,19 @@ const PaymentVoucherForm: React.FC = () => {
 
     if (formValues.lines && formValues.lines.length > 0) {
       lineTotal = formValues.lines.reduce((sum, line) => {
-        const amount = line.amount || 0;
-        return roundToTwo(sum + amount);
+        // Ensure amount is converted to number
+        const amount = parseFloat(String(line.amount)) || 0;
+        return sum + amount; // Don't round in the loop
       }, 0);
     }
 
+    // Ensure totalAmount is converted to number
+    const totalAmount = parseFloat(String(formValues.totalAmount)) || 0;
+
     return {
       lineTotal: roundToTwo(lineTotal),
-      totalAmount: formValues.totalAmount || 0,
-      difference: Math.abs(roundToTwo(lineTotal) - (formValues.totalAmount || 0)),
+      totalAmount: roundToTwo(totalAmount),
+      difference: Math.abs(roundToTwo(lineTotal - totalAmount)),
     };
   };
 
@@ -387,7 +467,6 @@ const PaymentVoucherForm: React.FC = () => {
               costCenter2Id: voucherData.voucher.CostCenter2ID?.toString() || "",
               costCenter3Id: voucherData.voucher.CostCenter3ID?.toString() || "",
               costCenter4Id: voucherData.voucher.CostCenter4ID?.toString() || "",
-              copyCostCenters: false,
             };
 
             const formattedLines = voucherData.lines.map((line) => ({
@@ -397,7 +476,7 @@ const PaymentVoucherForm: React.FC = () => {
               description: line.LineDescription || "",
               customerId: line.CustomerID?.toString() || "",
               supplierId: line.LineSupplierID?.toString() || "",
-              taxPercentage: line.TaxPercentage || 0,
+              taxId: line.TaxID?.toString() || "",
               taxAmount: line.LineTaxAmount || 0,
               lineCostCenter1Id: line.LineCostCenter1ID?.toString() || "",
               lineCostCenter2Id: line.LineCostCenter2ID?.toString() || "",
@@ -502,6 +581,44 @@ const PaymentVoucherForm: React.FC = () => {
     }
   };
 
+  // Load line-level cost centers
+  const loadLineCostCenters = async (
+    lineIndex: number,
+    level: number,
+    parentIds: {
+      CostCenter1ID?: number;
+      CostCenter2ID?: number;
+      CostCenter3ID?: number;
+    }
+  ) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setLineCostCenters2((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter2[],
+          }));
+          break;
+        case 3:
+          setLineCostCenters3((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter3[],
+          }));
+          break;
+        case 4:
+          setLineCostCenters4((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter4[],
+          }));
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading line cost centers level ${level}:`, error);
+    }
+  };
+
   // Watch for cost center hierarchy changes
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
@@ -527,6 +644,46 @@ const PaymentVoucherForm: React.FC = () => {
         loadChildCostCenters(4, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id, CostCenter3ID: costCenter3Id });
         form.setValue("costCenter4Id", "");
       }
+
+      // Handle LINE-LEVEL cost center hierarchy changes
+      if (name && name.includes("lines.") && name.includes("lineCostCenter")) {
+        const match = name.match(/lines\.(\d+)\.lineCostCenter(\d)Id/);
+        if (match) {
+          const lineIndex = parseInt(match[1]);
+          const costCenterLevel = parseInt(match[2]);
+
+          const lines = form.getValues("lines");
+          if (lines && lines[lineIndex]) {
+            const line = lines[lineIndex];
+
+            if (costCenterLevel === 1 && line.lineCostCenter1Id) {
+              loadLineCostCenters(lineIndex, 2, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id),
+              });
+              form.setValue(`lines.${lineIndex}.lineCostCenter2Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter3Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+              setLineCostCenters3((prev) => ({ ...prev, [lineIndex]: [] }));
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 2 && line.lineCostCenter2Id) {
+              loadLineCostCenters(lineIndex, 3, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id || "0"),
+                CostCenter2ID: parseInt(line.lineCostCenter2Id),
+              });
+              form.setValue(`lines.${lineIndex}.lineCostCenter3Id`, "");
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 3 && line.lineCostCenter3Id) {
+              loadLineCostCenters(lineIndex, 4, {
+                CostCenter1ID: parseInt(line.lineCostCenter1Id || "0"),
+                CostCenter2ID: parseInt(line.lineCostCenter2Id || "0"),
+                CostCenter3ID: parseInt(line.lineCostCenter3Id),
+              });
+              form.setValue(`lines.${lineIndex}.lineCostCenter4Id`, "");
+            }
+          }
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -539,32 +696,25 @@ const PaymentVoucherForm: React.FC = () => {
 
       const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-      // Copy cost centers to lines when copyCostCenters is enabled
-      if (name === "copyCostCenters" && value.copyCostCenters) {
-        const lines = form.getValues("lines");
-        const costCenter1Id = form.getValues("costCenter1Id");
-        const costCenter2Id = form.getValues("costCenter2Id");
-        const costCenter3Id = form.getValues("costCenter3Id");
-        const costCenter4Id = form.getValues("costCenter4Id");
-
-        lines.forEach((_, index) => {
-          if (costCenter1Id) form.setValue(`lines.${index}.lineCostCenter1Id`, costCenter1Id);
-          if (costCenter2Id) form.setValue(`lines.${index}.lineCostCenter2Id`, costCenter2Id);
-          if (costCenter3Id) form.setValue(`lines.${index}.lineCostCenter3Id`, costCenter3Id);
-          if (costCenter4Id) form.setValue(`lines.${index}.lineCostCenter4Id`, costCenter4Id);
-        });
-      }
-
-      // Auto-calculate tax amount for lines
-      if (name.includes("taxPercentage") && name.includes("lines.")) {
+      // Auto-calculate tax amount for lines using taxId
+      if (name.includes("taxId") && name.includes("lines.")) {
         const index = parseInt(name.split(".")[1]);
         const lines = form.getValues("lines");
 
         if (lines && lines[index]) {
-          const amount = lines[index].amount || 0;
-          const taxPercentage = lines[index].taxPercentage || 0;
-          const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-          form.setValue(`lines.${index}.taxAmount`, taxAmount);
+          const selectedTaxId = lines[index].taxId;
+
+          if (selectedTaxId && selectedTaxId !== "0") {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const amount = lines[index].amount || 0;
+              const taxRate = selectedTax.TaxRate || 0;
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`lines.${index}.taxAmount`, taxAmount);
+            }
+          } else {
+            form.setValue(`lines.${index}.taxAmount`, 0);
+          }
         }
       }
 
@@ -574,18 +724,23 @@ const PaymentVoucherForm: React.FC = () => {
         const lines = form.getValues("lines");
 
         if (lines && lines[index]) {
-          const amount = lines[index].amount || 0;
-          const taxPercentage = lines[index].taxPercentage || 0;
-          if (taxPercentage > 0) {
-            const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-            form.setValue(`lines.${index}.taxAmount`, taxAmount);
+          const selectedTaxId = lines[index].taxId;
+
+          if (selectedTaxId && selectedTaxId !== "0") {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const amount = lines[index].amount || 0;
+              const taxRate = selectedTax.TaxRate || 0;
+              const taxAmount = roundToTwo((amount * taxRate) / 100);
+              form.setValue(`lines.${index}.taxAmount`, taxAmount);
+            }
           }
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, taxes]);
 
   // Add new items
   const addVoucherLine = () => {
@@ -600,7 +755,7 @@ const PaymentVoucherForm: React.FC = () => {
       description: "",
       customerId: "",
       supplierId: "",
-      taxPercentage: 0,
+      taxId: "",
       taxAmount: 0,
       lineCostCenter1Id: "",
       lineCostCenter2Id: "",
@@ -715,23 +870,45 @@ const PaymentVoucherForm: React.FC = () => {
           CostCenter3ID: data.costCenter3Id ? parseInt(data.costCenter3Id) : undefined,
           CostCenter4ID: data.costCenter4Id ? parseInt(data.costCenter4Id) : undefined,
         },
-        lines: data.lines.map((line) => ({
-          PostingLineID: line.PostingLineID,
-          AccountID: parseInt(line.accountId),
-          TransactionType: TransactionType.DEBIT,
-          DebitAmount: line.amount,
-          CreditAmount: 0,
-          BaseAmount: line.amount,
-          TaxPercentage: line.taxPercentage || 0,
-          LineTaxAmount: line.taxAmount || 0,
-          LineDescription: line.description?.trim() || undefined,
-          CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
-          LineSupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
-          LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
-          LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
-          LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
-          LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
-        })),
+        lines: data.lines.map((line) => {
+          const selectedTax = line.taxId && line.taxId !== "0" ? taxes.find((t) => t.TaxID.toString() === line.taxId) : null;
+
+          // Calculate base amount correctly based on tax
+          let baseAmount = line.amount;
+          let debitAmount = line.amount;
+          const lineTaxAmount = line.taxAmount || 0;
+
+          if (selectedTax && lineTaxAmount > 0) {
+            if (data.isTaxInclusive) {
+              // If tax is inclusive, base amount is the amount minus tax
+              baseAmount = line.amount - lineTaxAmount;
+              debitAmount = line.amount; // Total already includes tax
+            } else {
+              // If tax is exclusive, base amount is the entered amount
+              baseAmount = line.amount;
+              debitAmount = line.amount + lineTaxAmount; // Add tax to get total
+            }
+          }
+
+          return {
+            PostingLineID: line.PostingLineID,
+            AccountID: parseInt(line.accountId),
+            TransactionType: TransactionType.DEBIT,
+            DebitAmount: debitAmount,
+            CreditAmount: 0,
+            BaseAmount: baseAmount,
+            TaxID: line.taxId && line.taxId !== "0" ? parseInt(line.taxId) : undefined,
+            TaxPercentage: selectedTax ? selectedTax.TaxRate : undefined,
+            LineTaxAmount: lineTaxAmount,
+            LineDescription: line.description?.trim() || undefined,
+            CustomerID: line.customerId ? parseInt(line.customerId) : undefined,
+            LineSupplierID: line.supplierId ? parseInt(line.supplierId) : undefined,
+            LineCostCenter1ID: line.lineCostCenter1Id ? parseInt(line.lineCostCenter1Id) : undefined,
+            LineCostCenter2ID: line.lineCostCenter2Id ? parseInt(line.lineCostCenter2Id) : undefined,
+            LineCostCenter3ID: line.lineCostCenter3Id ? parseInt(line.lineCostCenter3Id) : undefined,
+            LineCostCenter4ID: line.lineCostCenter4Id ? parseInt(line.lineCostCenter4Id) : undefined,
+          };
+        }),
         attachments:
           data.attachments?.map((attachment) => ({
             PostingAttachmentID: attachment.PostingAttachmentID,
@@ -807,7 +984,6 @@ const PaymentVoucherForm: React.FC = () => {
         costCenter2Id: "",
         costCenter3Id: "",
         costCenter4Id: "",
-        copyCostCenters: false,
         lines: [{ accountId: "", amount: 0, description: "" }],
         attachments: [],
       });
@@ -1132,7 +1308,9 @@ const PaymentVoucherForm: React.FC = () => {
                       <HandCoins className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Total Amount</span>
                     </div>
-                    <div className="text-2xl font-bold">{totalAmount.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">
+                      {typeof totalAmount === "number" ? totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
                     <div className="text-sm text-muted-foreground">Payment amount</div>
                   </div>
                   <div className="space-y-2">
@@ -1140,7 +1318,9 @@ const PaymentVoucherForm: React.FC = () => {
                       <Receipt className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-muted-foreground">Line Total</span>
                     </div>
-                    <div className="text-2xl font-bold">{lineTotal.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">
+                      {typeof lineTotal === "number" ? lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
                     <div className="text-sm text-muted-foreground">{linesFieldArray.fields.length} lines</div>
                   </div>
                   <div className="space-y-2">
@@ -1148,7 +1328,9 @@ const PaymentVoucherForm: React.FC = () => {
                       {difference <= 0.01 ? <CheckCircle className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-red-600" />}
                       <span className="text-sm font-medium text-muted-foreground">Difference</span>
                     </div>
-                    <div className={`text-2xl font-bold ${difference <= 0.01 ? "text-green-600" : "text-red-600"}`}>{difference.toLocaleString()}</div>
+                    <div className={`text-2xl font-bold ${difference <= 0.01 ? "text-green-600" : "text-red-600"}`}>
+                      {typeof difference === "number" ? difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
                     <div className="text-sm text-muted-foreground">{difference <= 0.01 ? "Balanced" : "Out of balance"}</div>
                   </div>
                   <div className="space-y-2">
@@ -1166,17 +1348,27 @@ const PaymentVoucherForm: React.FC = () => {
             {/* Cost Center Section */}
             <Card className={isPaidOrReversed ? "opacity-60" : ""}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Network className="h-5 w-5 text-primary" />
-                  Cost Centers
-                  {isPaidOrReversed && <Lock className="h-4 w-4 text-red-500" />}
-                </CardTitle>
-                <CardDescription>
-                  Configure cost center allocation
-                  <Badge variant="secondary" className="ml-2">
-                    Voucher Level
-                  </Badge>
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Network className="h-5 w-5 text-primary" />
+                      Cost Centers
+                      {isPaidOrReversed && <Lock className="h-4 w-4 text-red-500" />}
+                    </CardTitle>
+                    <CardDescription>
+                      Configure cost center allocation
+                      <Badge variant="secondary" className="ml-2">
+                        Voucher Level
+                      </Badge>
+                    </CardDescription>
+                  </div>
+                  {linesFieldArray.fields.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={applyVoucherCostCentersToLines} disabled={!canEditVoucher || !form.watch("costCenter1Id")}>
+                      <Network className="h-4 w-4 mr-2" />
+                      Apply to All Lines
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1234,14 +1426,14 @@ const PaymentVoucherForm: React.FC = () => {
                   />
                 </div>
 
-                <FormField
-                  form={form}
-                  name="copyCostCenters"
-                  label="Copy Cost Centers to Lines"
-                  type="switch"
-                  description="Automatically copy voucher-level cost centers to all lines"
-                  disabled={!canEditVoucher}
-                />
+                {linesFieldArray.fields.length > 0 && form.watch("costCenter1Id") && (
+                  <Alert className="bg-blue-50 border-blue-200">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      Click "Apply to All Lines" to copy these cost centers to all voucher lines. Lines can still have their own cost centers that override these defaults.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
@@ -1270,7 +1462,24 @@ const PaymentVoucherForm: React.FC = () => {
                     description="Applicable tax"
                     disabled={!canEditVoucher}
                   />
-                  <FormField form={form} name="isTaxInclusive" label="Tax Inclusive" type="switch" description="Whether amounts include tax" disabled={!canEditVoucher} />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="isTaxInclusive" className="text-sm font-medium">
+                      Tax Inclusive
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="isTaxInclusive"
+                        checked={form.watch("isTaxInclusive")}
+                        onCheckedChange={(checked) => form.setValue("isTaxInclusive", checked)}
+                        disabled={!canEditVoucher}
+                      />
+                      <Label htmlFor="isTaxInclusive" className="text-sm text-muted-foreground cursor-pointer">
+                        {form.watch("isTaxInclusive") ? "Tax is included in amounts" : "Tax is excluded from amounts"}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Whether the entered amounts already include tax</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1320,7 +1529,13 @@ const PaymentVoucherForm: React.FC = () => {
                                   <div className="text-sm text-muted-foreground">{form.watch(`lines.${index}.description`) || "No description"}</div>
                                 </div>
                               </div>
-                              <div className="font-medium">{form.watch(`lines.${index}.amount`) ? form.watch(`lines.${index}.amount`).toLocaleString() : "0"}</div>
+                              <div className="font-medium">
+                                {(() => {
+                                  const amount = form.watch(`lines.${index}.amount`);
+                                  const numAmount = parseFloat(String(amount)) || 0;
+                                  return numAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                })()}
+                              </div>
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="px-4 pb-4">
@@ -1401,23 +1616,40 @@ const PaymentVoucherForm: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                   <FormField
                                     form={form}
-                                    name={`lines.${index}.taxPercentage`}
-                                    label="Tax Percentage"
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0.00"
+                                    name={`lines.${index}.taxId`}
+                                    label="Tax"
+                                    type="select"
+                                    options={[
+                                      { label: "No Tax", value: "0" },
+                                      ...taxes.map((tax) => ({
+                                        label: `${tax.TaxCode} - ${tax.TaxName} (${tax.TaxRate}%)`,
+                                        value: tax.TaxID.toString(),
+                                      })),
+                                    ]}
+                                    placeholder="Select tax (optional)"
+                                    description="Select applicable tax from tax master"
                                     disabled={!canEditVoucher}
                                   />
-                                  <FormField form={form} name={`lines.${index}.taxAmount`} label="Tax Amount" type="number" step="0.01" disabled description="Auto-calculated" />
+                                  <FormField
+                                    form={form}
+                                    name={`lines.${index}.taxAmount`}
+                                    label="Tax Amount"
+                                    type="number"
+                                    step="0.01"
+                                    disabled
+                                    description="Auto-calculated based on selected tax"
+                                  />
                                 </div>
                               </div>
 
+                              {/* Line-level Cost Centers */}
+                              <Separator />
                               <div className="space-y-4">
                                 <div className="flex items-center gap-2">
                                   <Network className="h-4 w-4 text-purple-500" />
                                   <span className="font-medium">Line-Level Cost Centers</span>
                                   <Badge variant="outline" className="text-xs">
-                                    Overrides voucher level
+                                    Override voucher level
                                   </Badge>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1438,36 +1670,36 @@ const PaymentVoucherForm: React.FC = () => {
                                     name={`lines.${index}.lineCostCenter2Id`}
                                     label="Level 2"
                                     type="select"
-                                    options={costCenters2.map((cc) => ({
+                                    options={(lineCostCenters2[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter2ID.toString(),
                                     }))}
                                     placeholder="Select level 2"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter1Id`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.lineCostCenter3Id`}
                                     label="Level 3"
                                     type="select"
-                                    options={costCenters3.map((cc) => ({
+                                    options={(lineCostCenters3[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter3ID.toString(),
                                     }))}
                                     placeholder="Select level 3"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter2Id`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.lineCostCenter4Id`}
                                     label="Level 4"
                                     type="select"
-                                    options={costCenters4.map((cc) => ({
+                                    options={(lineCostCenters4[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter4ID.toString(),
                                     }))}
                                     placeholder="Select level 4"
-                                    disabled={!canEditVoucher}
+                                    disabled={!form.watch(`lines.${index}.lineCostCenter3Id`) || !canEditVoucher}
                                   />
                                 </div>
                               </div>
@@ -1489,13 +1721,16 @@ const PaymentVoucherForm: React.FC = () => {
                           <span className="text-sm font-medium">Balance Summary:</span>
                         </div>
                         <div className="text-sm">
-                          Total Amount: <span className="font-mono">{totalAmount.toFixed(2)}</span>
+                          Total Amount: <span className="font-mono">{typeof totalAmount === "number" ? totalAmount.toFixed(2) : "0.00"}</span>
                         </div>
                         <div className="text-sm">
-                          Line Total: <span className="font-mono">{lineTotal.toFixed(2)}</span>
+                          Line Total: <span className="font-mono">{typeof lineTotal === "number" ? lineTotal.toFixed(2) : "0.00"}</span>
                         </div>
                         <div className="text-sm">
-                          Difference: <span className={`font-mono ${difference > 0.01 ? "text-red-600" : "text-green-600"}`}>{difference.toFixed(2)}</span>
+                          Difference:{" "}
+                          <span className={`font-mono ${difference > 0.01 ? "text-red-600" : "text-green-600"}`}>
+                            {typeof difference === "number" ? difference.toFixed(2) : "0.00"}
+                          </span>
                         </div>
                       </div>
                       {difference > 0.01 && (
