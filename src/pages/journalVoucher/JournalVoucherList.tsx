@@ -1,4 +1,4 @@
-// src/pages/journalVoucher/JournalVoucherList.tsx - Corrected according to types and service
+// src/pages/journalVoucher/JournalVoucherList.tsx - Dark/Light mode compatible
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -556,13 +556,29 @@ const JournalVoucherList: React.FC = () => {
     }
   };
 
-  // Render status badge
+  // Render status badge - Updated for dark mode
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Posted: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Posted: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -576,12 +592,21 @@ const JournalVoucherList: React.FC = () => {
     );
   };
 
-  // Render approval status badge
+  // Render approval status badge - Updated for dark mode
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -595,13 +620,21 @@ const JournalVoucherList: React.FC = () => {
     );
   };
 
-  // Render journal type badge
+  // Render journal type badge - Updated for dark mode
   const renderJournalTypeBadge = (journalType: string) => {
     const typeConfig = {
-      General: { className: "bg-blue-100 text-blue-800" },
-      Adjusting: { className: "bg-orange-100 text-orange-800" },
-      Closing: { className: "bg-purple-100 text-purple-800" },
-      Reversing: { className: "bg-red-100 text-red-800" },
+      General: {
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      },
+      Adjusting: {
+        className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+      },
+      Closing: {
+        className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      },
+      Reversing: {
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = typeConfig[journalType as keyof typeof typeConfig] || typeConfig.General;
@@ -682,7 +715,11 @@ const JournalVoucherList: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
@@ -690,7 +727,10 @@ const JournalVoucherList: React.FC = () => {
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                  <Button
+                    variant="outline"
+                    className="bg-green-50 border-green-200 text-green-800 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/30"
+                  >
                     <Lock className="mr-2 h-4 w-4" />
                     {stats.approvedProtected} Protected
                   </Button>
@@ -715,9 +755,9 @@ const JournalVoucherList: React.FC = () => {
           </div>
         </div>
 
-        {/* Summary Statistics */}
+        {/* Summary Statistics - Updated for dark mode */}
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-4">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -728,107 +768,107 @@ const JournalVoucherList: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600" />
+                <FileText className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 <span className="text-sm text-muted-foreground">Draft</span>
               </div>
-              <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.draft}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600" />
+                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-muted-foreground">Pending</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm text-muted-foreground">Posted</span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{stats.posted}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.posted}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-red-600" />
+                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 <span className="text-sm text-muted-foreground">Rejected</span>
               </div>
-              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.rejected}</div>
             </CardContent>
           </Card>
 
           {isManager && (
             <>
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <span className="text-sm text-muted-foreground">Approval Pending</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Approved</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-green-600" />
+                    <Lock className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Protected</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.approvedProtected}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvedProtected}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <span className="text-sm text-muted-foreground">Approval Rejected</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
                 </CardContent>
               </Card>
             </>
           )}
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <HandCoins className="h-4 w-4 text-blue-600" />
+                <HandCoins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Total Value</span>
               </div>
-              <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalValue)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-600" />
+                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 <span className="text-sm text-muted-foreground">Average</span>
               </div>
-              <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageValue)}</div>
+              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageValue)}</div>
             </CardContent>
           </Card>
         </div>
@@ -840,7 +880,9 @@ const JournalVoucherList: React.FC = () => {
                 <CardTitle>Journal Vouchers</CardTitle>
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredVouchers.length} of ${vouchers.length} vouchers` : `Showing all ${vouchers.length} vouchers`}
-                  {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved vouchers are protected from modifications</span>}
+                  {stats.approvedProtected > 0 && (
+                    <span className="ml-2 text-green-600 dark:text-green-400">• {stats.approvedProtected} approved vouchers are protected from modifications</span>
+                  )}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -866,11 +908,11 @@ const JournalVoucherList: React.FC = () => {
                           <DropdownMenuSeparator />
                           <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                            <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                             Approve Selected
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
-                            <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                            <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                             Reject Selected
                           </DropdownMenuItem>
                         </>
@@ -901,9 +943,9 @@ const JournalVoucherList: React.FC = () => {
                 <Input type="text" placeholder="Search vouchers..." className="pl-9" defaultValue={filters.searchTerm} onChange={handleSearchChange} />
               </div>
 
-              {/* Advanced Filters */}
+              {/* Advanced Filters - Updated for dark mode */}
               {showFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 p-4 bg-muted/50 rounded-lg dark:bg-muted/20">
                   <Select value={filters.selectedCompanyId || "all"} onValueChange={(value) => handleFilterChange("selectedCompanyId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Company" />
@@ -1175,7 +1217,11 @@ const JournalVoucherList: React.FC = () => {
                       return (
                         <TableRow
                           key={voucher.VoucherNo}
-                          className={cn("hover:bg-muted/50 transition-colors", selectedVouchers.has(voucher.VoucherNo) && "bg-accent/50", isApproved && "bg-green-50/30")}
+                          className={cn(
+                            "hover:bg-muted/50 transition-colors",
+                            selectedVouchers.has(voucher.VoucherNo) && "bg-accent/50",
+                            isApproved && "bg-green-50/30 dark:bg-green-900/10"
+                          )}
                         >
                           <TableCell>
                             <Checkbox
@@ -1193,7 +1239,7 @@ const JournalVoucherList: React.FC = () => {
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Lock className="h-3 w-3 text-green-600" />
+                                    <Lock className="h-3 w-3 text-green-600 dark:text-green-400" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected - Approved vouchers cannot be modified</p>
@@ -1231,14 +1277,14 @@ const JournalVoucherList: React.FC = () => {
                               {voucher.RequiresApproval ? (
                                 renderApprovalBadge(voucher.ApprovalStatus || "Pending")
                               ) : (
-                                <Badge variant="outline" className="bg-gray-50">
+                                <Badge variant="outline" className="bg-gray-50 dark:bg-gray-800/50">
                                   No Approval Required
                                 </Badge>
                               )}
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Shield className="h-3 w-3 text-green-600 ml-1" />
+                                    <Shield className="h-3 w-3 text-green-600 dark:text-green-400 ml-1" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected from modifications</p>
@@ -1295,11 +1341,11 @@ const JournalVoucherList: React.FC = () => {
                                     {voucher.ApprovalStatus === "Pending" && (
                                       <>
                                         <DropdownMenuItem onClick={() => handleApproveVoucher(voucher)}>
-                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                                           Approve
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleRejectVoucher(voucher)}>
-                                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                          <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                                           Reject
                                         </DropdownMenuItem>
                                       </>
@@ -1307,7 +1353,7 @@ const JournalVoucherList: React.FC = () => {
 
                                     {voucher.ApprovalStatus !== "Pending" && (
                                       <DropdownMenuItem onClick={() => navigate(`/journal-vouchers/${voucher.VoucherNo}`)}>
-                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                                         Reset Approval
                                       </DropdownMenuItem>
                                     )}
@@ -1317,7 +1363,11 @@ const JournalVoucherList: React.FC = () => {
                                 <DropdownMenuSeparator />
 
                                 {canEdit ? (
-                                  <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(voucher)} disabled={voucher.PostingStatus === "Posted"}>
+                                  <DropdownMenuItem
+                                    className="text-red-600 dark:text-red-400"
+                                    onClick={() => openDeleteDialog(voucher)}
+                                    disabled={voucher.PostingStatus === "Posted"}
+                                  >
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete
                                   </DropdownMenuItem>

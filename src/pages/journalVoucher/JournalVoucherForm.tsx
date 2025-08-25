@@ -394,13 +394,33 @@ const JournalVoucherForm: React.FC = () => {
             navigate("/journal-vouchers");
           }
         } else {
-          // Initialize with one default line for new vouchers
-          linesFieldArray.append({
-            AccountID: "",
-            TransactionType: TransactionType.DEBIT,
-            DebitAmount: 0,
-            CreditAmount: 0,
-          });
+          // Only add a default line if there are no lines already
+          const currentLines = form.getValues("lines");
+          if (!currentLines || currentLines.length === 0) {
+            // Initialize with one default line for new vouchers
+            form.setValue("lines", [
+              {
+                AccountID: "",
+                TransactionType: TransactionType.DEBIT,
+                DebitAmount: 0,
+                CreditAmount: 0,
+                BaseAmount: 0,
+                TaxPercentage: 0,
+                LineTaxAmount: 0,
+                LineDescription: "",
+                CustomerID: "",
+                LineSupplierID: "",
+                LineInvoiceNo: "",
+                LineInvoiceDate: null,
+                LineTRN: "",
+                LineCity: "",
+                LineCostCenter1ID: "",
+                LineCostCenter2ID: "",
+                LineCostCenter3ID: "",
+                LineCostCenter4ID: "",
+              },
+            ]);
+          }
         }
       } catch (error) {
         console.error("Error initializing form:", error);
@@ -411,7 +431,7 @@ const JournalVoucherForm: React.FC = () => {
     };
 
     initializeForm();
-  }, [id, isEdit, navigate, form, linesFieldArray]);
+  }, [id, isEdit, navigate]);
 
   // Fetch reference data
   const fetchReferenceData = async () => {
@@ -437,18 +457,20 @@ const JournalVoucherForm: React.FC = () => {
       setTaxes(taxesData);
       setDocTypes(docTypesData);
       setCostCenters1(costCenters1Data || []);
-      if (companiesData && !isEdit) {
-        const defaultCompany = companiesData[0];
-        form.setValue("CompanyID", defaultCompany.CompanyID.toString());
-      }
-      if (currenciesData && !isEdit) {
-        const defaultCurrency = currenciesData[0];
-        form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
-      }
-      if (fiscalYearsData && !isEdit) {
-        const defaultFiscalYear = fiscalYearsData[0];
-        form.setValue("FiscalYearID", defaultFiscalYear.FiscalYearID.toString());
-      }
+      setTimeout(() => {
+        if (companiesData && !isEdit) {
+          const defaultCompany = companiesData[0];
+          form.setValue("CompanyID", defaultCompany.CompanyID.toString());
+        }
+        if (currenciesData && !isEdit) {
+          const defaultCurrency = currenciesData[0];
+          form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+        }
+        if (fiscalYearsData && !isEdit) {
+          const defaultFiscalYear = fiscalYearsData[0];
+          form.setValue("FiscalYearID", defaultFiscalYear.FiscalYearID.toString());
+        }
+      }, 0);
     } catch (error) {
       console.error("Error fetching reference data:", error);
       toast.error("Error loading reference data");

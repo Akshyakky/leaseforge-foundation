@@ -1,4 +1,4 @@
-// src/pages/journalVoucher/JournalVoucherDetails.tsx - Corrected according to types and service
+// src/pages/journalVoucher/JournalVoucherDetails.tsx - Dark/Light mode compatible
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -380,13 +380,29 @@ const JournalVoucherDetails: React.FC = () => {
     }).format(amount);
   };
 
-  // Render status badge
+  // Render status badge - Updated for dark mode
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Posted: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Posted: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -400,12 +416,21 @@ const JournalVoucherDetails: React.FC = () => {
     );
   };
 
-  // Render approval status badge
+  // Render approval status badge - Updated for dark mode
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -419,13 +444,21 @@ const JournalVoucherDetails: React.FC = () => {
     );
   };
 
-  // Render journal type badge
+  // Render journal type badge - Updated for dark mode
   const renderJournalTypeBadge = (journalType: string) => {
     const typeConfig = {
-      General: { className: "bg-blue-100 text-blue-800" },
-      Adjusting: { className: "bg-orange-100 text-orange-800" },
-      Closing: { className: "bg-purple-100 text-purple-800" },
-      Reversing: { className: "bg-red-100 text-red-800" },
+      General: {
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      },
+      Adjusting: {
+        className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+      },
+      Closing: {
+        className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      },
+      Reversing: {
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = typeConfig[journalType as keyof typeof typeConfig] || typeConfig.General;
@@ -493,10 +526,10 @@ const JournalVoucherDetails: React.FC = () => {
                 <Badge
                   className={`${
                     voucher.ApprovalStatus === "Approved"
-                      ? "bg-green-100 text-green-800"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
                       : voucher.ApprovalStatus === "Rejected"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-yellow-100 text-yellow-800"
+                      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                   }`}
                 >
                   <ApprovalIcon className="h-3 w-3 mr-1" />
@@ -504,13 +537,13 @@ const JournalVoucherDetails: React.FC = () => {
                 </Badge>
               )}
               {isApproved && (
-                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">
                   <Lock className="h-3 w-3 mr-1" />
                   Protected
                 </Badge>
               )}
               {voucher.IsReversed && (
-                <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
+                <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
                   <RotateCcw className="h-3 w-3 mr-1" />
                   Reversed
                 </Badge>
@@ -544,18 +577,18 @@ const JournalVoucherDetails: React.FC = () => {
                   {voucher.ApprovalStatus === "Pending" && (
                     <>
                       <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                         Approve Voucher
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                        <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                         Reject Voucher
                       </DropdownMenuItem>
                     </>
                   )}
                   {voucher.ApprovalStatus !== "Pending" && (
                     <DropdownMenuItem onClick={() => openApprovalDialog("reset")}>
-                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                       Reset Approval
                     </DropdownMenuItem>
                   )}
@@ -618,15 +651,15 @@ const JournalVoucherDetails: React.FC = () => {
           </div>
         </div>
 
-        {/* Approval Status Alert */}
+        {/* Approval Status Alert - Updated for dark mode */}
         {voucher.RequiresApproval && (
           <Alert
             className={`border-l-4 ${
               voucher.ApprovalStatus === "Approved"
-                ? "border-l-green-500 bg-green-50"
+                ? "border-l-green-500 bg-green-50 dark:bg-green-900/10 dark:border-l-green-400"
                 : voucher.ApprovalStatus === "Rejected"
-                ? "border-l-red-500 bg-red-50"
-                : "border-l-yellow-500 bg-yellow-50"
+                ? "border-l-red-500 bg-red-50 dark:bg-red-900/10 dark:border-l-red-400"
+                : "border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/10 dark:border-l-yellow-400"
             }`}
           >
             <ApprovalIcon className="h-4 w-4" />
@@ -636,7 +669,7 @@ const JournalVoucherDetails: React.FC = () => {
                 <div className="text-sm text-muted-foreground mt-1">
                   Approved by {voucher.ApprovedByName} on {formatDate(voucher.ApprovedOn)}
                   {voucher.ApprovalComments && <div className="mt-1">Comments: {voucher.ApprovalComments}</div>}
-                  <div className="mt-2 text-green-700 font-medium flex items-center">
+                  <div className="mt-2 text-green-700 dark:text-green-400 font-medium flex items-center">
                     <Shield className="h-4 w-4 mr-1" />
                     This voucher is protected from modifications until approval is reset.
                   </div>
@@ -645,7 +678,7 @@ const JournalVoucherDetails: React.FC = () => {
               {voucher.ApprovalStatus === "Rejected" && voucher.RejectedByName && (
                 <div className="text-sm text-muted-foreground mt-1">
                   Rejected by {voucher.RejectedByName} on {formatDate(voucher.RejectedOn)}
-                  {voucher.RejectionReason && <div className="mt-1 text-red-700">Reason: {voucher.RejectionReason}</div>}
+                  {voucher.RejectionReason && <div className="mt-1 text-red-700 dark:text-red-400">Reason: {voucher.RejectionReason}</div>}
                 </div>
               )}
               {voucher.ApprovalStatus === "Pending" && <div className="text-sm text-muted-foreground mt-1">This voucher is awaiting approval from a manager.</div>}
@@ -653,9 +686,9 @@ const JournalVoucherDetails: React.FC = () => {
           </Alert>
         )}
 
-        {/* Reversal Alert */}
+        {/* Reversal Alert - Updated for dark mode */}
         {voucher.IsReversed && (
-          <Alert className="border-l-4 border-l-red-500 bg-red-50">
+          <Alert className="border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/10 dark:border-l-red-400">
             <RotateCcw className="h-4 w-4" />
             <AlertDescription>
               <div className="font-medium">This voucher has been reversed</div>
@@ -758,7 +791,7 @@ const JournalVoucherDetails: React.FC = () => {
                 <h3 className="text-sm font-medium text-muted-foreground">Balance Status</h3>
                 <div className="flex items-center gap-2">
                   {isBalanced ? (
-                    <Badge className="bg-green-100 text-green-800">
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                       <CheckCircle className="w-3 h-3 mr-1" />
                       Balanced
                     </Badge>
@@ -827,13 +860,13 @@ const JournalVoucherDetails: React.FC = () => {
                   {voucher.Description && (
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
-                      <p className="text-base mt-1 bg-muted/20 p-3 rounded-lg">{voucher.Description}</p>
+                      <p className="text-base mt-1 bg-muted/20 dark:bg-muted/10 p-3 rounded-lg">{voucher.Description}</p>
                     </div>
                   )}
                   {voucher.Narration && (
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Narration</h3>
-                      <p className="text-base mt-1 bg-muted/20 p-3 rounded-lg">{voucher.Narration}</p>
+                      <p className="text-base mt-1 bg-muted/20 dark:bg-muted/10 p-3 rounded-lg">{voucher.Narration}</p>
                     </div>
                   )}
                 </div>
@@ -913,8 +946,8 @@ const JournalVoucherDetails: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {/* Totals Row */}
-                    <TableRow className="font-semibold bg-muted/20">
+                    {/* Totals Row - Updated for dark mode */}
+                    <TableRow className="font-semibold bg-muted/20 dark:bg-muted/10">
                       <TableCell colSpan={2}>
                         <div className="flex items-center gap-2">
                           Total
@@ -967,7 +1000,9 @@ const JournalVoucherDetails: React.FC = () => {
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center">
                             <span className="font-medium">{attachment.DocumentName}</span>
-                            {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                            {attachment.DocTypeName && (
+                              <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400">{attachment.DocTypeName}</Badge>
+                            )}
                           </div>
                           <div className="text-sm space-y-1">
                             {attachment.DocumentDescription && <div className="text-muted-foreground">{attachment.DocumentDescription}</div>}
