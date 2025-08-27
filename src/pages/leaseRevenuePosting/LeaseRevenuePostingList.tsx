@@ -1,5 +1,5 @@
 // src/pages/leaseRevenuePosting/LeaseRevenuePostingList.tsx
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,30 +13,20 @@ import {
   Loader2,
   MoreHorizontal,
   Search,
-  Plus,
   Receipt,
   FileText,
   CheckCircle,
   Clock,
   XCircle,
   Eye,
-  Edit,
-  Trash2,
   Calendar,
-  Building,
-  HandCoins,
   Send,
   RotateCcw,
   RefreshCw,
   Filter,
   X,
-  ChevronDown,
   AlertCircle,
   Shield,
-  UserCheck,
-  TrendingUp,
-  Settings,
-  AlertTriangle,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,9 +34,6 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Services and types
 import { leaseRevenuePostingService } from "@/services/leaseRevenuePostingService";
@@ -65,16 +52,12 @@ import {
   PostingRequest,
   ReversalRequest,
   ApprovalRequest,
-  PostingResponse,
-  ApprovalResponse,
   Account,
   Company,
   FiscalYear,
   Currency,
   ApprovalStatus,
   ApprovalAction,
-  PostingStatus,
-  LeaseRevenueStatistics,
   PendingApprovalItem,
 } from "@/types/leaseRevenuePostingTypes";
 

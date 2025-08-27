@@ -1,7 +1,7 @@
 // src/pages/leaseRevenuePosting/LeaseRevenuePostingForm.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
   Loader2,
   Send,
-  AlertCircle,
   Calculator,
   Building,
   Receipt,
@@ -27,17 +25,11 @@ import {
   Calendar,
   Filter,
   RefreshCw,
-  Save,
   RotateCcw,
-  Plus,
-  Trash2,
-  Info,
   Eye,
-  AlertTriangle,
   XCircle,
   Users,
   Home,
-  Building2,
   FileText,
 } from "lucide-react";
 

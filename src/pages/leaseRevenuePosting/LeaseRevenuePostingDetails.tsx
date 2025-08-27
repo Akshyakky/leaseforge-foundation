@@ -7,53 +7,16 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import {
-  ArrowLeft,
-  Receipt,
-  Calendar,
-  Building,
-  FileText,
-  Copy,
-  CheckCircle,
-  Clock,
-  XCircle,
-  User,
-  HandCoins,
-  Send,
-  RotateCcw,
-  Printer,
-  Home,
-  CreditCard,
-  Loader2,
-  RefreshCw,
-  Download,
-  Eye,
-  AlertTriangle,
-  Shield,
-  Lock,
-  UserCheck,
-  Building2,
-  Tag,
-  Info,
-} from "lucide-react";
+import { ArrowLeft, Receipt, Calendar, FileText, Copy, CheckCircle, Clock, XCircle, User, HandCoins, Send, RotateCcw, Loader2, RefreshCw, Info } from "lucide-react";
 
 // Services and types
 import { leaseRevenuePostingService } from "@/services/leaseRevenuePostingService";
-import {
-  LeaseTransactionDetails,
-  PostedLeaseRevenueTransaction,
-  ReversalRequest,
-  ApprovalRequest,
-  ApprovalAction,
-  ApprovalStatus,
-  PostingStatus,
-} from "@/types/leaseRevenuePostingTypes";
+import { LeaseTransactionDetails, PostedLeaseRevenueTransaction, ReversalRequest, ApprovalRequest, ApprovalAction, ApprovalStatus } from "@/types/leaseRevenuePostingTypes";
 
 // Utilities
 import { toast } from "sonner";
