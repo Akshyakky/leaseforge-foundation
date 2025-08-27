@@ -1,4 +1,4 @@
-// src/pages/journalVoucher/JournalVoucherForm.tsx - Corrected according to types and service
+// src/pages/journalVoucher/JournalVoucherForm.tsx - Corrected with Enhanced Features
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -7,7 +7,6 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -16,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft,
   Loader2,
@@ -62,6 +62,12 @@ import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 import { JournalStatus, JournalType, JournalVoucher, TransactionType } from "@/types/journalVoucherTypes";
 import { journalVoucherService } from "@/services/journalVoucherService";
+import { Account } from "@/types/accountTypes";
+import { Company } from "@/services/companyService";
+import { FiscalYear } from "@/types/fiscalYearTypes";
+import { Currency } from "@/services/currencyService";
+import { Supplier } from "@/types/supplierTypes";
+import { CostCenter1, CostCenter2, CostCenter3, CostCenter4 } from "@/types/costCenterTypes";
 
 // Enhanced schema for journal voucher form validation
 const journalLineSchema = z.object({
@@ -71,6 +77,7 @@ const journalLineSchema = z.object({
   DebitAmount: z.coerce.number().min(0).optional(),
   CreditAmount: z.coerce.number().min(0).optional(),
   BaseAmount: z.coerce.number().min(0).optional(),
+  TaxID: z.string().optional(), // Changed from TaxPercentage to TaxID
   TaxPercentage: z.coerce.number().min(0).max(100).optional(),
   LineTaxAmount: z.coerce.number().min(0).optional(),
   LineDescription: z.string().optional(),
@@ -129,7 +136,6 @@ const journalVoucherSchema = z.object({
   CostCenter2ID: z.string().optional(),
   CostCenter3ID: z.string().optional(),
   CostCenter4ID: z.string().optional(),
-  CopyCostCenters: z.boolean().optional(),
 
   // Reference information
   ReferenceType: z.string().optional(),
@@ -225,18 +231,25 @@ const JournalVoucherForm: React.FC = () => {
   const [voucher, setVoucher] = useState<JournalVoucher | null>(null);
 
   // Reference data
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [fiscalYears, setFiscalYears] = useState<any[]>([]);
-  const [currencies, setCurrencies] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [suppliers, setSuppliers] = useState<Pick<Supplier, "SupplierID" | "SupplierNo" | "SupplierName">[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [taxes, setTaxes] = useState<Tax[]>([]);
   const [docTypes, setDocTypes] = useState<any[]>([]);
-  const [costCenters1, setCostCenters1] = useState<any[]>([]);
-  const [costCenters2, setCostCenters2] = useState<any[]>([]);
-  const [costCenters3, setCostCenters3] = useState<any[]>([]);
-  const [costCenters4, setCostCenters4] = useState<any[]>([]);
+
+  // Cost center data
+  const [costCenters1, setCostCenters1] = useState<CostCenter1[]>([]);
+  const [costCenters2, setCostCenters2] = useState<CostCenter2[]>([]);
+  const [costCenters3, setCostCenters3] = useState<CostCenter3[]>([]);
+  const [costCenters4, setCostCenters4] = useState<CostCenter4[]>([]);
+
+  // Line-level cost center data
+  const [lineCostCenters2, setLineCostCenters2] = useState<{ [key: number]: CostCenter2[] }>({});
+  const [lineCostCenters3, setLineCostCenters3] = useState<{ [key: number]: CostCenter3[] }>({});
+  const [lineCostCenters4, setLineCostCenters4] = useState<{ [key: number]: CostCenter4[] }>({});
 
   // Attachment management state
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
@@ -282,7 +295,6 @@ const JournalVoucherForm: React.FC = () => {
       CostCenter2ID: "",
       CostCenter3ID: "",
       CostCenter4ID: "",
-      CopyCostCenters: false,
       ReferenceType: "",
       ReferenceID: "",
       ReferenceNo: "",
@@ -301,6 +313,83 @@ const JournalVoucherForm: React.FC = () => {
     control: form.control,
     name: "attachments",
   });
+
+  // Apply voucher-level cost centers to all lines
+  const applyVoucherCostCentersToLines = async () => {
+    if (!canEditVoucher) {
+      toast.error("Cannot modify posted or approved vouchers.");
+      return;
+    }
+
+    const voucherCC1 = form.getValues("CostCenter1ID");
+    const voucherCC2 = form.getValues("CostCenter2ID");
+    const voucherCC3 = form.getValues("CostCenter3ID");
+    const voucherCC4 = form.getValues("CostCenter4ID");
+
+    if (!voucherCC1) {
+      toast.error("Please select at least Cost Center Level 1 before applying");
+      return;
+    }
+
+    const lines = form.getValues("lines");
+
+    // Apply to all lines
+    for (let i = 0; i < lines.length; i++) {
+      // Set Level 1
+      form.setValue(`lines.${i}.LineCostCenter1ID`, voucherCC1);
+
+      // Load Level 2 options if Level 1 is set
+      if (voucherCC1) {
+        await loadLineCostCenters(i, 2, {
+          CostCenter1ID: parseInt(voucherCC1),
+        });
+
+        // Set Level 2 if available
+        if (voucherCC2) {
+          form.setValue(`lines.${i}.LineCostCenter2ID`, voucherCC2);
+
+          // Load Level 3 options if Level 2 is set
+          await loadLineCostCenters(i, 3, {
+            CostCenter1ID: parseInt(voucherCC1),
+            CostCenter2ID: parseInt(voucherCC2),
+          });
+
+          // Set Level 3 if available
+          if (voucherCC3) {
+            form.setValue(`lines.${i}.LineCostCenter3ID`, voucherCC3);
+
+            // Load Level 4 options if Level 3 is set
+            await loadLineCostCenters(i, 4, {
+              CostCenter1ID: parseInt(voucherCC1),
+              CostCenter2ID: parseInt(voucherCC2),
+              CostCenter3ID: parseInt(voucherCC3),
+            });
+
+            // Set Level 4 if available
+            if (voucherCC4) {
+              form.setValue(`lines.${i}.LineCostCenter4ID`, voucherCC4);
+            }
+          } else {
+            // Clear Level 3 and 4 if not set at voucher level
+            form.setValue(`lines.${i}.LineCostCenter3ID`, "");
+            form.setValue(`lines.${i}.LineCostCenter4ID`, "");
+            setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+            setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+          }
+        } else {
+          // Clear Level 2, 3, and 4 if not set at voucher level
+          form.setValue(`lines.${i}.LineCostCenter2ID`, "");
+          form.setValue(`lines.${i}.LineCostCenter3ID`, "");
+          form.setValue(`lines.${i}.LineCostCenter4ID`, "");
+          setLineCostCenters2((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters3((prev) => ({ ...prev, [i]: [] }));
+          setLineCostCenters4((prev) => ({ ...prev, [i]: [] }));
+        }
+      }
+    }
+
+    toast.success(`Cost centers applied to ${lines.length} line${lines.length > 1 ? "s" : ""}`);
+  };
 
   // Calculate totals
   const calculateTotals = () => {
@@ -372,6 +461,7 @@ const JournalVoucherForm: React.FC = () => {
               AccountID: line.AccountID?.toString() || "",
               CustomerID: line.CustomerID?.toString() || "",
               LineSupplierID: line.LineSupplierID?.toString() || "",
+              TaxID: line.TaxID?.toString() || "", // Added TaxID
               LineInvoiceDate: line.LineInvoiceDate ? new Date(line.LineInvoiceDate) : null,
               LineCostCenter1ID: line.LineCostCenter1ID?.toString() || "",
               LineCostCenter2ID: line.LineCostCenter2ID?.toString() || "",
@@ -405,6 +495,7 @@ const JournalVoucherForm: React.FC = () => {
                 DebitAmount: 0,
                 CreditAmount: 0,
                 BaseAmount: 0,
+                TaxID: "", // Added TaxID
                 TaxPercentage: 0,
                 LineTaxAmount: 0,
                 LineDescription: "",
@@ -431,7 +522,7 @@ const JournalVoucherForm: React.FC = () => {
     };
 
     initializeForm();
-  }, [id, isEdit, navigate]);
+  }, [id, isEdit, navigate, form]);
 
   // Fetch reference data
   const fetchReferenceData = async () => {
@@ -456,7 +547,7 @@ const JournalVoucherForm: React.FC = () => {
       setCustomers(customersData || []);
       setTaxes(taxesData);
       setDocTypes(docTypesData);
-      setCostCenters1(costCenters1Data || []);
+      setCostCenters1((costCenters1Data as CostCenter1[]) || []);
       setTimeout(() => {
         if (companiesData && !isEdit) {
           const defaultCompany = companiesData[0];
@@ -477,6 +568,135 @@ const JournalVoucherForm: React.FC = () => {
     }
   };
 
+  // Load child cost centers when parent changes
+  const loadChildCostCenters = async (level: number, parentIds: { CostCenter1ID?: number; CostCenter2ID?: number; CostCenter3ID?: number }) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setCostCenters2(childCostCenters as CostCenter2[]);
+          break;
+        case 3:
+          setCostCenters3(childCostCenters as CostCenter3[]);
+          break;
+        case 4:
+          setCostCenters4(childCostCenters as CostCenter4[]);
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading cost centers level ${level}:`, error);
+    }
+  };
+
+  // Load line-level cost centers
+  const loadLineCostCenters = async (
+    lineIndex: number,
+    level: number,
+    parentIds: {
+      CostCenter1ID?: number;
+      CostCenter2ID?: number;
+      CostCenter3ID?: number;
+    }
+  ) => {
+    try {
+      const childCostCenters = await costCenterService.getCostCentersByLevel(level, parentIds);
+
+      switch (level) {
+        case 2:
+          setLineCostCenters2((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter2[],
+          }));
+          break;
+        case 3:
+          setLineCostCenters3((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter3[],
+          }));
+          break;
+        case 4:
+          setLineCostCenters4((prev) => ({
+            ...prev,
+            [lineIndex]: childCostCenters as CostCenter4[],
+          }));
+          break;
+      }
+    } catch (error) {
+      console.error(`Error loading line cost centers level ${level}:`, error);
+    }
+  };
+
+  // Watch for cost center hierarchy changes
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "CostCenter1ID" && value.CostCenter1ID) {
+        const costCenter1Id = parseInt(value.CostCenter1ID);
+        loadChildCostCenters(2, { CostCenter1ID: costCenter1Id });
+        form.setValue("CostCenter2ID", "");
+        form.setValue("CostCenter3ID", "");
+        form.setValue("CostCenter4ID", "");
+        setCostCenters3([]);
+        setCostCenters4([]);
+      } else if (name === "CostCenter2ID" && value.CostCenter2ID) {
+        const costCenter1Id = parseInt(value.CostCenter1ID || "0");
+        const costCenter2Id = parseInt(value.CostCenter2ID);
+        loadChildCostCenters(3, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id });
+        form.setValue("CostCenter3ID", "");
+        form.setValue("CostCenter4ID", "");
+        setCostCenters4([]);
+      } else if (name === "CostCenter3ID" && value.CostCenter3ID) {
+        const costCenter1Id = parseInt(value.CostCenter1ID || "0");
+        const costCenter2Id = parseInt(value.CostCenter2ID || "0");
+        const costCenter3Id = parseInt(value.CostCenter3ID);
+        loadChildCostCenters(4, { CostCenter1ID: costCenter1Id, CostCenter2ID: costCenter2Id, CostCenter3ID: costCenter3Id });
+        form.setValue("CostCenter4ID", "");
+      }
+
+      // Handle LINE-LEVEL cost center hierarchy changes
+      if (name && name.includes("lines.") && name.includes("LineCostCenter")) {
+        const match = name.match(/lines\.(\d+)\.LineCostCenter(\d)ID/);
+        if (match) {
+          const lineIndex = parseInt(match[1]);
+          const costCenterLevel = parseInt(match[2]);
+
+          const lines = form.getValues("lines");
+          if (lines && lines[lineIndex]) {
+            const line = lines[lineIndex];
+
+            if (costCenterLevel === 1 && line.LineCostCenter1ID) {
+              loadLineCostCenters(lineIndex, 2, {
+                CostCenter1ID: parseInt(line.LineCostCenter1ID),
+              });
+              form.setValue(`lines.${lineIndex}.LineCostCenter2ID`, "");
+              form.setValue(`lines.${lineIndex}.LineCostCenter3ID`, "");
+              form.setValue(`lines.${lineIndex}.LineCostCenter4ID`, "");
+              setLineCostCenters3((prev) => ({ ...prev, [lineIndex]: [] }));
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 2 && line.LineCostCenter2ID) {
+              loadLineCostCenters(lineIndex, 3, {
+                CostCenter1ID: parseInt(line.LineCostCenter1ID || "0"),
+                CostCenter2ID: parseInt(line.LineCostCenter2ID),
+              });
+              form.setValue(`lines.${lineIndex}.LineCostCenter3ID`, "");
+              form.setValue(`lines.${lineIndex}.LineCostCenter4ID`, "");
+              setLineCostCenters4((prev) => ({ ...prev, [lineIndex]: [] }));
+            } else if (costCenterLevel === 3 && line.LineCostCenter3ID) {
+              loadLineCostCenters(lineIndex, 4, {
+                CostCenter1ID: parseInt(line.LineCostCenter1ID || "0"),
+                CostCenter2ID: parseInt(line.LineCostCenter2ID || "0"),
+                CostCenter3ID: parseInt(line.LineCostCenter3ID),
+              });
+              form.setValue(`lines.${lineIndex}.LineCostCenter4ID`, "");
+            }
+          }
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   // Auto-calculation effects
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
@@ -495,13 +715,11 @@ const JournalVoucherForm: React.FC = () => {
           const currentCredit = lines[index].CreditAmount || 0;
 
           if (transactionType === TransactionType.DEBIT) {
-            // If switching to debit, move credit amount to debit
             if (currentCredit > 0) {
               form.setValue(`lines.${index}.DebitAmount`, currentCredit);
               form.setValue(`lines.${index}.CreditAmount`, 0);
             }
           } else if (transactionType === TransactionType.CREDIT) {
-            // If switching to credit, move debit amount to credit
             if (currentDebit > 0) {
               form.setValue(`lines.${index}.CreditAmount`, currentDebit);
               form.setValue(`lines.${index}.DebitAmount`, 0);
@@ -531,47 +749,40 @@ const JournalVoucherForm: React.FC = () => {
           // Set base amount
           form.setValue(`lines.${index}.BaseAmount`, amount);
 
-          // Calculate tax if tax percentage is set
-          const taxPercentage = lines[index].TaxPercentage || 0;
-          if (taxPercentage > 0) {
-            const taxAmount = roundToTwo((amount * taxPercentage) / 100);
-            form.setValue(`lines.${index}.LineTaxAmount`, taxAmount);
+          // Calculate tax if tax is selected
+          const selectedTaxId = lines[index].TaxID;
+          if (selectedTaxId && selectedTaxId !== "0") {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const taxAmount = roundToTwo((amount * selectedTax.TaxRate) / 100);
+              form.setValue(`lines.${index}.LineTaxAmount`, taxAmount);
+              form.setValue(`lines.${index}.TaxPercentage`, selectedTax.TaxRate);
+            }
           }
         }
       }
 
-      // Handle tax percentage changes
-      if (name.includes("TaxPercentage") && name.includes("lines.")) {
+      // Handle tax selection changes - auto-calculate tax amount using TaxID
+      if (name.includes("TaxID") && name.includes("lines.")) {
         const index = parseInt(name.split(".")[1]);
         const lines = form.getValues("lines");
 
         if (lines && lines[index]) {
-          const taxPercentage = lines[index].TaxPercentage || 0;
-          const baseAmount = lines[index].BaseAmount || 0;
+          const selectedTaxId = lines[index].TaxID;
 
-          if (taxPercentage > 0 && baseAmount > 0) {
-            const taxAmount = roundToTwo((baseAmount * taxPercentage) / 100);
-            form.setValue(`lines.${index}.LineTaxAmount`, taxAmount);
+          if (selectedTaxId && selectedTaxId !== "0") {
+            const selectedTax = taxes.find((t) => t.TaxID.toString() === selectedTaxId);
+            if (selectedTax) {
+              const amount = lines[index].BaseAmount || 0;
+              const taxAmount = roundToTwo((amount * selectedTax.TaxRate) / 100);
+              form.setValue(`lines.${index}.LineTaxAmount`, taxAmount);
+              form.setValue(`lines.${index}.TaxPercentage`, selectedTax.TaxRate);
+            }
           } else {
             form.setValue(`lines.${index}.LineTaxAmount`, 0);
+            form.setValue(`lines.${index}.TaxPercentage`, 0);
           }
         }
-      }
-
-      // Copy cost centers to lines if enabled
-      if (name === "CopyCostCenters" && value.CopyCostCenters) {
-        const costCenter1 = form.getValues("CostCenter1ID");
-        const costCenter2 = form.getValues("CostCenter2ID");
-        const costCenter3 = form.getValues("CostCenter3ID");
-        const costCenter4 = form.getValues("CostCenter4ID");
-        const lines = form.getValues("lines");
-
-        lines.forEach((_, index) => {
-          if (costCenter1) form.setValue(`lines.${index}.LineCostCenter1ID`, costCenter1);
-          if (costCenter2) form.setValue(`lines.${index}.LineCostCenter2ID`, costCenter2);
-          if (costCenter3) form.setValue(`lines.${index}.LineCostCenter3ID`, costCenter3);
-          if (costCenter4) form.setValue(`lines.${index}.LineCostCenter4ID`, costCenter4);
-        });
       }
     });
 
@@ -591,6 +802,20 @@ const JournalVoucherForm: React.FC = () => {
       DebitAmount: 0,
       CreditAmount: 0,
       BaseAmount: 0,
+      TaxID: "", // Added TaxID
+      TaxPercentage: 0,
+      LineTaxAmount: 0,
+      LineDescription: "",
+      CustomerID: "",
+      LineSupplierID: "",
+      LineInvoiceNo: "",
+      LineInvoiceDate: null,
+      LineTRN: "",
+      LineCity: "",
+      LineCostCenter1ID: "",
+      LineCostCenter2ID: "",
+      LineCostCenter3ID: "",
+      LineCostCenter4ID: "",
     });
   };
 
@@ -616,13 +841,11 @@ const JournalVoucherForm: React.FC = () => {
 
   const addAttachment = (attachmentData: any) => {
     if (editingAttachment) {
-      // Update existing attachment
       const index = attachmentsFieldArray.fields.findIndex((field) => field.id === editingAttachment.id);
       if (index !== -1) {
         attachmentsFieldArray.update(index, attachmentData);
       }
     } else {
-      // Add new attachment
       attachmentsFieldArray.append(attachmentData);
     }
     closeAttachmentDialog();
@@ -701,7 +924,6 @@ const JournalVoucherForm: React.FC = () => {
           CostCenter2ID: data.CostCenter2ID ? parseInt(data.CostCenter2ID) : undefined,
           CostCenter3ID: data.CostCenter3ID ? parseInt(data.CostCenter3ID) : undefined,
           CostCenter4ID: data.CostCenter4ID ? parseInt(data.CostCenter4ID) : undefined,
-          CopyCostCenters: data.CopyCostCenters,
           ReferenceType: data.ReferenceType,
           ReferenceID: data.ReferenceID ? parseInt(data.ReferenceID) : undefined,
           ReferenceNo: data.ReferenceNo,
@@ -714,6 +936,7 @@ const JournalVoucherForm: React.FC = () => {
           DebitAmount: line.TransactionType === TransactionType.DEBIT ? line.DebitAmount : 0,
           CreditAmount: line.TransactionType === TransactionType.CREDIT ? line.CreditAmount : 0,
           BaseAmount: line.BaseAmount,
+          TaxID: line.TaxID && line.TaxID !== "0" ? parseInt(line.TaxID) : undefined, // Use TaxID
           TaxPercentage: line.TaxPercentage,
           LineTaxAmount: line.LineTaxAmount,
           LineDescription: line.LineDescription,
@@ -868,7 +1091,7 @@ const JournalVoucherForm: React.FC = () => {
                     label="Voucher Number"
                     placeholder={isEdit ? "Voucher number (cannot be changed)" : "Auto-generated if left empty"}
                     description={isEdit ? "Voucher number cannot be modified in edit mode" : "Leave blank for auto-generated voucher number"}
-                    disabled={isEdit} // Always disabled in edit mode
+                    disabled={isEdit}
                     className={isEdit ? "bg-muted" : ""}
                   />
                   <FormField form={form} name="VoucherType" label="Voucher Type" placeholder="JV" description="Journal voucher type" disabled={!canEditVoucher} />
@@ -1115,20 +1338,30 @@ const JournalVoucherForm: React.FC = () => {
             {/* Cost Center Section */}
             <Card className={isApproved || isPosted ? "opacity-60" : ""}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Network className="h-5 w-5 text-primary" />
-                  Cost Centers
-                  {(isApproved || isPosted) && <Lock className="h-4 w-4 text-red-500" />}
-                </CardTitle>
-                <CardDescription>
-                  Configure cost center allocation
-                  <Badge variant="secondary" className="ml-2">
-                    Voucher Level
-                  </Badge>
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Network className="h-5 w-5 text-primary" />
+                      Cost Centers
+                      {(isApproved || isPosted) && <Lock className="h-4 w-4 text-red-500" />}
+                    </CardTitle>
+                    <CardDescription>
+                      Configure cost center allocation
+                      <Badge variant="secondary" className="ml-2">
+                        Voucher Level
+                      </Badge>
+                    </CardDescription>
+                  </div>
+                  {linesFieldArray.fields.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={applyVoucherCostCentersToLines} disabled={!canEditVoucher || !form.watch("CostCenter1ID")}>
+                      <Network className="h-4 w-4 mr-2" />
+                      Apply to All Lines
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <FormField
                     form={form}
                     name="CostCenter1ID"
@@ -1182,14 +1415,15 @@ const JournalVoucherForm: React.FC = () => {
                     disabled={!form.watch("CostCenter3ID") || !canEditVoucher}
                   />
                 </div>
-                <FormField
-                  form={form}
-                  name="CopyCostCenters"
-                  label="Copy Cost Centers to Lines"
-                  type="switch"
-                  description="Automatically apply these cost centers to all lines"
-                  disabled={!canEditVoucher}
-                />
+
+                {linesFieldArray.fields.length > 0 && form.watch("CostCenter1ID") && (
+                  <Alert className="bg-blue-50 border-blue-200">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      Click "Apply to All Lines" to copy these cost centers to all journal lines. Lines can still have their own cost centers that override these defaults.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
@@ -1214,7 +1448,24 @@ const JournalVoucherForm: React.FC = () => {
                     description="Applicable tax"
                     disabled={!canEditVoucher}
                   />
-                  <FormField form={form} name="IsTaxInclusive" label="Tax Inclusive" type="switch" description="Whether amounts include tax" disabled={!canEditVoucher} />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="isTaxInclusive" className="text-sm font-medium">
+                      Tax Inclusive
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="isTaxInclusive"
+                        checked={form.watch("IsTaxInclusive")}
+                        onCheckedChange={(checked) => form.setValue("IsTaxInclusive", checked)}
+                        disabled={!canEditVoucher}
+                      />
+                      <Label htmlFor="isTaxInclusive" className="text-sm text-muted-foreground cursor-pointer">
+                        {form.watch("IsTaxInclusive") ? "Tax is included in amounts" : "Tax is excluded from amounts"}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Whether the entered amounts already include tax</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1398,11 +1649,18 @@ const JournalVoucherForm: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                   <FormField
                                     form={form}
-                                    name={`lines.${index}.TaxPercentage`}
-                                    label="Tax Percentage"
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0.00"
+                                    name={`lines.${index}.TaxID`}
+                                    label="Tax"
+                                    type="select"
+                                    options={[
+                                      { label: "No Tax", value: "0" },
+                                      ...taxes.map((tax) => ({
+                                        label: `${tax.TaxCode} - ${tax.TaxName} (${tax.TaxRate}%)`,
+                                        value: tax.TaxID.toString(),
+                                      })),
+                                    ]}
+                                    placeholder="Select tax (optional)"
+                                    description="Select applicable tax from tax master"
                                     disabled={!canEditVoucher}
                                   />
                                   <FormField
@@ -1412,17 +1670,22 @@ const JournalVoucherForm: React.FC = () => {
                                     type="number"
                                     step="0.01"
                                     disabled
-                                    description="Auto-calculated"
+                                    description="Auto-calculated based on selected tax"
                                   />
                                 </div>
                               </div>
 
+                              {/* Line-level Cost Centers */}
+                              <Separator />
                               <div className="space-y-4">
                                 <div className="flex items-center gap-2">
-                                  <Network className="h-4 w-4 text-blue-500" />
+                                  <Network className="h-4 w-4 text-purple-500" />
                                   <span className="font-medium">Line-Level Cost Centers</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    Override voucher level
+                                  </Badge>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.LineCostCenter1ID`}
@@ -1432,7 +1695,7 @@ const JournalVoucherForm: React.FC = () => {
                                       label: cc.Description,
                                       value: cc.CostCenter1ID.toString(),
                                     }))}
-                                    placeholder="CC Level 1"
+                                    placeholder="Select level 1"
                                     disabled={!canEditVoucher}
                                   />
                                   <FormField
@@ -1440,36 +1703,36 @@ const JournalVoucherForm: React.FC = () => {
                                     name={`lines.${index}.LineCostCenter2ID`}
                                     label="Level 2"
                                     type="select"
-                                    options={costCenters2.map((cc) => ({
+                                    options={(lineCostCenters2[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter2ID.toString(),
                                     }))}
-                                    placeholder="CC Level 2"
-                                    disabled={!canEditVoucher}
+                                    placeholder="Select level 2"
+                                    disabled={!form.watch(`lines.${index}.LineCostCenter1ID`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.LineCostCenter3ID`}
                                     label="Level 3"
                                     type="select"
-                                    options={costCenters3.map((cc) => ({
+                                    options={(lineCostCenters3[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter3ID.toString(),
                                     }))}
-                                    placeholder="CC Level 3"
-                                    disabled={!canEditVoucher}
+                                    placeholder="Select level 3"
+                                    disabled={!form.watch(`lines.${index}.LineCostCenter2ID`) || !canEditVoucher}
                                   />
                                   <FormField
                                     form={form}
                                     name={`lines.${index}.LineCostCenter4ID`}
                                     label="Level 4"
                                     type="select"
-                                    options={costCenters4.map((cc) => ({
+                                    options={(lineCostCenters4[index] || []).map((cc) => ({
                                       label: cc.Description,
                                       value: cc.CostCenter4ID.toString(),
                                     }))}
-                                    placeholder="CC Level 4"
-                                    disabled={!canEditVoucher}
+                                    placeholder="Select level 4"
+                                    disabled={!form.watch(`lines.${index}.LineCostCenter3ID`) || !canEditVoucher}
                                   />
                                 </div>
                               </div>
@@ -1684,7 +1947,7 @@ const JournalVoucherForm: React.FC = () => {
             onClose={() => setGalleryOpen(false)}
             attachments={attachmentList.map((attachment, index) => ({
               ...attachment,
-              PostingAttachmentID: index, // Use index as ID for gallery compatibility
+              PostingAttachmentID: index,
               fileUrl: attachment.file?.url,
               FileContentType: attachment.file?.type,
               FileSize: attachment.file?.size,

@@ -97,6 +97,7 @@ export interface JournalVoucherLine extends BaseJournalVoucher {
   DebitAmount?: number;
   CreditAmount?: number;
   BaseAmount?: number;
+  TaxID?: number;
   TaxPercentage?: number;
   LineTaxAmount?: number;
   LineDescription?: string;
