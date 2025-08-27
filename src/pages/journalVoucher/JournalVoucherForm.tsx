@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft,
@@ -22,25 +22,19 @@ import {
   Save,
   Plus,
   Trash2,
-  Upload,
   FileText,
   AlertCircle,
   Calculator,
-  Building,
   Network,
   Receipt,
   CreditCard,
-  Users,
   HandCoins,
-  Calendar,
-  Info,
   RotateCcw,
   PlusCircle,
   Edit2,
   Download,
   Lock,
   Shield,
-  Eye,
   CheckCircle,
 } from "lucide-react";
 import { accountService } from "@/services/accountService";
@@ -270,7 +264,7 @@ const JournalVoucherForm: React.FC = () => {
     resolver: zodResolver(journalVoucherSchema),
     defaultValues: {
       VoucherNo: "",
-      VoucherType: "JV",
+      VoucherType: "Journal",
       TransactionDate: new Date(),
       PostingDate: null,
       CompanyID: "",
@@ -389,34 +383,6 @@ const JournalVoucherForm: React.FC = () => {
     }
 
     toast.success(`Cost centers applied to ${lines.length} line${lines.length > 1 ? "s" : ""}`);
-  };
-
-  // Calculate totals
-  const calculateTotals = () => {
-    const formValues = form.getValues();
-    let totalDebits = 0;
-    let totalCredits = 0;
-
-    const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-
-    if (formValues.lines && formValues.lines.length > 0) {
-      totalDebits = formValues.lines.reduce((sum, line) => {
-        const amount = line.TransactionType === TransactionType.DEBIT ? line.DebitAmount || 0 : 0;
-        return roundToTwo(sum + amount);
-      }, 0);
-
-      totalCredits = formValues.lines.reduce((sum, line) => {
-        const amount = line.TransactionType === TransactionType.CREDIT ? line.CreditAmount || 0 : 0;
-        return roundToTwo(sum + amount);
-      }, 0);
-    }
-
-    return {
-      totalDebits: roundToTwo(totalDebits),
-      totalCredits: roundToTwo(totalCredits),
-      difference: roundToTwo(totalDebits - totalCredits),
-      isBalanced: Math.abs(totalDebits - totalCredits) <= 0.01,
-    };
   };
 
   // Initialize and fetch reference data
@@ -1004,7 +970,7 @@ const JournalVoucherForm: React.FC = () => {
     } else {
       form.reset({
         VoucherNo: "",
-        VoucherType: "JV",
+        VoucherType: "Journal",
         TransactionDate: new Date(),
         PostingDate: null,
         CompanyID: "",
@@ -1038,7 +1004,38 @@ const JournalVoucherForm: React.FC = () => {
     );
   }
 
+  // Watch form lines to make calculations reactive
+  const watchedLines = form.watch("lines") || [];
+
+  // Calculate totals reactively
+  const calculateTotals = () => {
+    let totalDebits = 0;
+    let totalCredits = 0;
+
+    const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+    if (watchedLines && watchedLines.length > 0) {
+      totalDebits = watchedLines.reduce((sum, line) => {
+        const amount = line.TransactionType === TransactionType.DEBIT ? parseFloat(String(line.DebitAmount)) || 0 : 0;
+        return sum + amount;
+      }, 0);
+
+      totalCredits = watchedLines.reduce((sum, line) => {
+        const amount = line.TransactionType === TransactionType.CREDIT ? parseFloat(String(line.CreditAmount)) || 0 : 0;
+        return sum + amount;
+      }, 0);
+    }
+
+    return {
+      totalDebits: roundToTwo(totalDebits),
+      totalCredits: roundToTwo(totalCredits),
+      difference: roundToTwo(totalDebits - totalCredits),
+      isBalanced: Math.abs(totalDebits - totalCredits) <= 0.01,
+    };
+  };
+
   const { totalDebits, totalCredits, difference, isBalanced } = calculateTotals();
+
   const attachmentList = form.watch("attachments") || [];
 
   return (
@@ -1094,7 +1091,7 @@ const JournalVoucherForm: React.FC = () => {
                     disabled={isEdit}
                     className={isEdit ? "bg-muted" : ""}
                   />
-                  <FormField form={form} name="VoucherType" label="Voucher Type" placeholder="JV" description="Journal voucher type" disabled={!canEditVoucher} />
+                  {/* <FormField form={form} name="VoucherType" label="Voucher Type" placeholder="Journal" description="Journal voucher type" disabled={!canEditVoucher} /> */}
                   <FormField
                     form={form}
                     name="JournalType"
@@ -1208,28 +1205,38 @@ const JournalVoucherForm: React.FC = () => {
                       <Plus className="h-4 w-4 text-green-600" />
                       <span className="text-sm font-medium text-muted-foreground">Total Debits</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-600">{totalDebits.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {typeof totalDebits === "number" ? totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{watchedLines.filter((line) => line.TransactionType === TransactionType.DEBIT).length} debit entries</div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <HandCoins className="h-4 w-4 text-red-600" />
                       <span className="text-sm font-medium text-muted-foreground">Total Credits</span>
                     </div>
-                    <div className="text-2xl font-bold text-red-600">{totalCredits.toLocaleString()}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Calculator className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-muted-foreground">Difference</span>
+                    <div className="text-2xl font-bold text-red-600">
+                      {typeof totalCredits === "number" ? totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </div>
-                    <div className={`text-2xl font-bold ${Math.abs(difference) <= 0.01 ? "text-green-600" : "text-red-600"}`}>{difference.toLocaleString()}</div>
+                    <div className="text-sm text-muted-foreground">{watchedLines.filter((line) => line.TransactionType === TransactionType.CREDIT).length} credit entries</div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       {isBalanced ? <CheckCircle className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-red-600" />}
-                      <span className="text-sm font-medium text-muted-foreground">Status</span>
+                      <span className="text-sm font-medium text-muted-foreground">Difference</span>
                     </div>
-                    <div className={`text-lg font-bold ${isBalanced ? "text-green-600" : "text-red-600"}`}>{isBalanced ? "Balanced" : "Unbalanced"}</div>
+                    <div className={`text-2xl font-bold ${isBalanced ? "text-green-600" : "text-red-600"}`}>
+                      {typeof difference === "number" ? difference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{isBalanced ? "Balanced" : "Out of balance"}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Attachments</span>
+                    </div>
+                    <div className="text-2xl font-bold">{attachmentList.length}</div>
+                    <div className="text-sm text-muted-foreground">Documents</div>
                   </div>
                 </div>
               </CardContent>
