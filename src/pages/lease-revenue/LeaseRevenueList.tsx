@@ -38,8 +38,6 @@ import {
   Calculator,
   Receipt,
   RotateCcw,
-  Mail,
-  Send,
   History,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,11 +60,9 @@ import { companyService } from "@/services/companyService";
 import { fiscalYearService } from "@/services/fiscalYearService";
 import { LeaseRevenueData, LeaseRevenueSearchParams, PostedLeaseRevenueEntry, LeaseRevenueStatistics, PostingResult } from "@/types/leaseRevenueTypes";
 
-// PDF and Email Components
+// PDF Components
 import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
-import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
-import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
 // Types and interfaces
 interface LeaseRevenueFilter {
@@ -144,14 +140,6 @@ const LeaseRevenueList: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const leaseRevenuePdf = useGenericPdfReport();
 
-  // Email integration
-  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
-  const emailIntegration = useEmailIntegration({
-    entityType: "contract",
-    entityId: 0,
-  });
-
   // Contract status options
   const contractStatusOptions = ["Active", "Completed", "Expired", "Cancelled", "Terminated"];
   const postingStatusOptions = [
@@ -163,7 +151,6 @@ const LeaseRevenueList: React.FC = () => {
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
-    emailIntegration.loadEmailTemplates("Lease Revenue");
   }, []);
 
   // Update URL params when filters change
@@ -201,7 +188,7 @@ const LeaseRevenueList: React.FC = () => {
   const initializeData = async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchReferenceData(), fetchLeaseRevenueData()]);
+      await Promise.all([fetchReferenceData()]);
     } catch (error) {
       console.error("Error initializing data:", error);
       toast.error("Failed to load initial data");
@@ -209,6 +196,15 @@ const LeaseRevenueList: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedCompany?.CompanyID && selectedFiscalYear?.FiscalYearID) {
+      fetchLeaseRevenueData();
+      if (activeTab === "posted") {
+        fetchPostedEntries();
+      }
+    }
+  }, [selectedCompany, selectedFiscalYear]);
 
   // Fetch reference data for dropdowns
   const fetchReferenceData = async () => {
@@ -528,18 +524,6 @@ const LeaseRevenueList: React.FC = () => {
     }
   };
 
-  // Email handlers
-  const handleSendEmail = (triggerEvent?: string) => {
-    setEmailTriggerEvent(triggerEvent);
-    setIsEmailDialogOpen(true);
-  };
-
-  const handleEmailSent = async (result: any) => {
-    if (result.success) {
-      toast.success("Email sent successfully");
-    }
-  };
-
   // PDF generation handlers
   const handleGenerateReport = async () => {
     const parameters = {
@@ -799,31 +783,6 @@ const LeaseRevenueList: React.FC = () => {
                     Posted Entries ({postedEntries.length})
                   </Button>
                 </div>
-
-                {/* Email Actions */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={emailIntegration.isLoading}>
-                      {emailIntegration.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                      Email
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleSendEmail()}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Send Custom Email
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSendEmail("lease_revenue_summary")}>
-                      <Receipt className="mr-2 h-4 w-4" />
-                      Revenue Summary Report
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSendEmail("posting_notification")}>
-                      <Mail className="mr-2 h-4 w-4" />
-                      Posting Notification
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
 
                 {/* PDF Generation */}
                 <DropdownMenu>
@@ -1276,18 +1235,6 @@ const LeaseRevenueList: React.FC = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* Email Send Dialog */}
-        <EmailSendDialog
-          isOpen={isEmailDialogOpen}
-          onClose={() => setIsEmailDialogOpen(false)}
-          entityType="contract"
-          entityId={0}
-          entityData={{ period: { from: filters.periodFrom, to: filters.periodTo }, stats }}
-          defaultRecipients={[]}
-          triggerEvent={emailTriggerEvent}
-          onEmailSent={handleEmailSent}
-        />
 
         {/* PDF Preview Modal */}
         <PdfPreviewModal

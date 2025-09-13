@@ -294,31 +294,6 @@ const LeaseRevenueForm: React.FC = () => {
     };
   };
 
-  // Email handlers
-  const handleSendEmail = (triggerEvent?: string) => {
-    setEmailTriggerEvent(triggerEvent);
-    setIsEmailDialogOpen(true);
-  };
-
-  const handleEmailSent = async (result: any) => {
-    if (result.success) {
-      toast.success("Email sent successfully");
-    }
-  };
-
-  // Generate default email recipients
-  const getDefaultEmailRecipients = () => {
-    // For lease revenue posting, we might send to finance team, property managers, etc.
-    // This would be configured based on business requirements
-    return [
-      {
-        email: "finance@company.com",
-        name: "Finance Team",
-        type: "to" as const,
-      },
-    ];
-  };
-
   // Handle form submission
   const onSubmit = async (data: PostingFormValues) => {
     if (!user || !selectedCompany || !selectedFiscalYear) {
@@ -590,63 +565,6 @@ const LeaseRevenueForm: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Email Notification Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary" />
-                Email Notifications
-              </CardTitle>
-              <CardDescription>Configure email notifications for posting completion</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="sendEmailNotification"
-                  checked={sendEmailNotification}
-                  onCheckedChange={(checked) => {
-                    form.setValue("sendEmailNotification", !!checked);
-                    if (checked) {
-                      const recipients = getDefaultEmailRecipients();
-                      form.setValue("emailRecipients", recipients);
-                    }
-                  }}
-                />
-                <label htmlFor="sendEmailNotification" className="text-sm font-medium">
-                  Send email notification when posting is completed
-                </label>
-              </div>
-
-              {sendEmailNotification && (
-                <div className="space-y-4 pl-6 border-l-2 border-blue-200">
-                  <div className="text-sm text-muted-foreground">
-                    Email notifications will be sent automatically to the selected recipients when the posting is completed successfully.
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Email Recipients</label>
-                    <div className="space-y-2">
-                      {form.watch("emailRecipients")?.map((recipient, index) => (
-                        <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <Badge variant="outline">{recipient.type.toUpperCase()}</Badge>
-                          <span className="font-medium">{recipient.name}</span>
-                          <span className="text-muted-foreground">({recipient.email})</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleSendEmail()}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Preview Email Template
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Lease Revenue Data */}
           <Card>
             <CardHeader>
@@ -906,25 +824,6 @@ const LeaseRevenueForm: React.FC = () => {
           </Card>
         </form>
       </Form>
-
-      {/* Email Send Dialog */}
-      <EmailSendDialog
-        isOpen={isEmailDialogOpen}
-        onClose={() => setIsEmailDialogOpen(false)}
-        entityType="contract"
-        entityId={0}
-        entityData={{
-          period: {
-            from: form.getValues("PeriodFrom"),
-            to: form.getValues("PeriodTo"),
-          },
-          totals,
-          selectedUnits: totals.totalUnits,
-        }}
-        defaultRecipients={getDefaultEmailRecipients()}
-        triggerEvent={emailTriggerEvent}
-        onEmailSent={handleEmailSent}
-      />
     </div>
   );
 };

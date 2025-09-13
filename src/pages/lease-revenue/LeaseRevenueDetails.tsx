@@ -17,8 +17,6 @@ import {
   Receipt,
   Eye,
   Download,
-  Mail,
-  Send,
   History,
   FileText,
   DollarSign,
@@ -40,11 +38,9 @@ import { contractService } from "@/services/contractService";
 import { companyService } from "@/services/companyService";
 import { LeaseRevenueData, PostedLeaseRevenueEntry, PostingResult } from "@/types/leaseRevenueTypes";
 
-// PDF and Email Components
+// PDF Components
 import { PdfPreviewModal, PdfActionButtons } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
-import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
-import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 const LeaseRevenueDetails: React.FC = () => {
@@ -69,20 +65,11 @@ const LeaseRevenueDetails: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const detailsPdfReport = useGenericPdfReport();
 
-  // Email integration
-  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [emailTriggerEvent, setEmailTriggerEvent] = useState<string | undefined>(undefined);
-  const emailIntegration = useEmailIntegration({
-    entityType: "contract",
-    entityId: parseInt(id || "0"),
-  });
-
   const isPostedEntry = type === "posted";
 
   useEffect(() => {
     initializeCompany();
     fetchDetails();
-    emailIntegration.loadEmailTemplates("Lease Revenue");
   }, [id, type]);
 
   // Initialize company data
@@ -238,18 +225,6 @@ const LeaseRevenueDetails: React.FC = () => {
     }
   };
 
-  // Email handlers
-  const handleSendEmail = (triggerEvent?: string) => {
-    setEmailTriggerEvent(triggerEvent);
-    setIsEmailDialogOpen(true);
-  };
-
-  const handleEmailSent = async (result: any) => {
-    if (result.success) {
-      toast.success("Email sent successfully");
-    }
-  };
-
   // PDF generation handlers
   const handleGenerateReport = async () => {
     const entityData = isPostedEntry ? postedEntry : leaseRevenueItem;
@@ -380,12 +355,6 @@ const LeaseRevenueDetails: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-2">
-          {/* Email Actions */}
-          <Button variant="outline" onClick={() => handleSendEmail()}>
-            <Mail className="mr-2 h-4 w-4" />
-            Send Email
-          </Button>
-
           {/* PDF Generation */}
           <div className="flex space-x-2">
             <PdfActionButtons
@@ -859,18 +828,6 @@ const LeaseRevenueDetails: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Email Send Dialog */}
-      <EmailSendDialog
-        isOpen={isEmailDialogOpen}
-        onClose={() => setIsEmailDialogOpen(false)}
-        entityType="contract"
-        entityId={parseInt(id || "0")}
-        entityData={currentEntity}
-        defaultRecipients={[]}
-        triggerEvent={emailTriggerEvent}
-        onEmailSent={handleEmailSent}
-      />
 
       {/* PDF Preview Modal */}
       <PdfPreviewModal
