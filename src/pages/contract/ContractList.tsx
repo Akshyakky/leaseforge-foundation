@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -54,7 +53,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Separator } from "@/components/ui/separator";
 import { contractService, Contract } from "@/services/contractService";
 import { customerService } from "@/services/customerService";
 import { propertyService } from "@/services/propertyService";
@@ -148,6 +146,7 @@ const ContractList: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAppSelector((state) => state.auth);
+  const currentCompanyId = user?.currentCompanyId ? parseInt(user.currentCompanyId) : undefined;
 
   // State variables
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -253,7 +252,7 @@ const ContractList: React.FC = () => {
   // Fetch all contracts
   const fetchContracts = async () => {
     try {
-      const contractsData = await contractService.getAllContracts();
+      const contractsData = await contractService.getAllContracts(currentCompanyId);
       setContracts(contractsData);
     } catch (error) {
       console.error("Error fetching contracts:", error);
@@ -1050,7 +1049,15 @@ const ContractList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Management</h1>
-            <p className="text-muted-foreground">Manage rental and property contracts with integrated email communications</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage rental and property contracts with integrated email communications</p>
+              {user?.currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700">
+                  <Building className="mr-1 h-3 w-3" />
+                  {user.currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Email Reminders Button */}

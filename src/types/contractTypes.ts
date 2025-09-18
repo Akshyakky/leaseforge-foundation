@@ -13,6 +13,7 @@ export interface Contract extends BaseContract {
   ContractID: number;
   ContractNo: string;
   ContractStatus: string;
+  CompanyID: number;
   CustomerID: number;
   JointCustomerID?: number;
   TransactionDate: string | Date;
@@ -34,6 +35,7 @@ export interface Contract extends BaseContract {
   RejectedOn?: string | Date;
 
   // Joined fields
+  CompanyName?: string;
   CustomerName?: string;
   CustomerEmail?: string;
   JointCustomerName?: string;
@@ -127,6 +129,7 @@ export interface ContractStatistics {
 // Search parameters
 export interface ContractSearchParams {
   searchText?: string;
+  companyID?: number;
   customerID?: number;
   contractStatus?: string;
   approvalStatus?: string;
@@ -156,7 +159,9 @@ export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
   NewContractID?: number;
-  [key: string]: any;
+  NewContractUnitID?: number;
+  NewContractChargeID?: number;
+  NewContractAttachmentID?: number;
   data?: T;
 }
 

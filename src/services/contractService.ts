@@ -89,13 +89,14 @@ class ContractService extends BaseService {
       parameters: {
         // Contract master data
         ContractNo: data.contract.ContractNo,
-        ContractStatus: data.contract.ContractStatus,
+        ContractStatus: data.contract.ContractStatus || "Draft",
+        CompanyID: data.contract.CompanyID || 1, // Default to 1 as per SP
         CustomerID: data.contract.CustomerID,
         JointCustomerID: data.contract.JointCustomerID,
         TransactionDate: data.contract.TransactionDate,
-        TotalAmount: data.contract.TotalAmount,
-        AdditionalCharges: data.contract.AdditionalCharges,
-        GrandTotal: data.contract.GrandTotal,
+        TotalAmount: data.contract.TotalAmount || 0,
+        AdditionalCharges: data.contract.AdditionalCharges || 0,
+        GrandTotal: data.contract.GrandTotal || 0,
         Remarks: data.contract.Remarks,
 
         // Approval fields
@@ -151,6 +152,7 @@ class ContractService extends BaseService {
         ContractID: data.contract.ContractID,
         ContractNo: data.contract.ContractNo,
         ContractStatus: data.contract.ContractStatus,
+        CompanyID: data.contract.CompanyID,
         CustomerID: data.contract.CustomerID,
         JointCustomerID: data.contract.JointCustomerID,
         TransactionDate: data.contract.TransactionDate,
@@ -191,10 +193,12 @@ class ContractService extends BaseService {
    * Get all active contracts
    * @returns Array of contracts
    */
-  async getAllContracts(): Promise<Contract[]> {
+  async getAllContracts(companyID?: number): Promise<Contract[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Contracts
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyID,
+      },
     };
 
     const response = await this.execute<Contract[]>(request);
@@ -281,6 +285,7 @@ class ContractService extends BaseService {
       mode: 6, // Mode 6: Search Contracts with Filters
       parameters: {
         SearchText: params.searchText,
+        FilterCompanyID: params.companyID,
         FilterCustomerID: params.customerID,
         FilterContractStatus: params.contractStatus,
         FilterApprovalStatus: params.approvalStatus,
@@ -297,8 +302,9 @@ class ContractService extends BaseService {
 
   /**
    * Change contract status
+   * Note: Changing contract status will automatically update associated unit statuses
    * @param contractId - The ID of the contract
-   * @param status - The new status
+   * @param status - The new status (Draft, Pending, Active, Expired, Cancelled, Completed, Terminated)
    * @returns Response with status
    */
   async changeContractStatus(contractId: number, status: string): Promise<ApiResponse> {
@@ -330,10 +336,12 @@ class ContractService extends BaseService {
    * Get contract statistics
    * @returns Contract statistics
    */
-  async getContractStatistics(): Promise<ContractStatistics> {
+  async getContractStatistics(companyID?: number): Promise<ContractStatistics> {
     const request: BaseRequest = {
       mode: 8, // Mode 8: Get Contract Statistics
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyID,
+      },
     };
 
     const response = await this.execute(request, false);
@@ -799,10 +807,12 @@ class ContractService extends BaseService {
    * Get contracts pending approval (Mode 22)
    * @returns Array of contracts pending approval
    */
-  async getContractsPendingApproval(): Promise<Contract[]> {
+  async getContractsPendingApproval(companyID?: number): Promise<Contract[]> {
     const request: BaseRequest = {
       mode: 22, // Mode 22: Get Contracts Pending Approval
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyID,
+      },
     };
 
     const response = await this.execute<Contract[]>(request);

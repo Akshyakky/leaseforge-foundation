@@ -1,4 +1,4 @@
-// src/pages/contract/ContractForm.tsx - Enhanced with Email Integration and Advanced Unit Selection
+// src/pages/contract/ContractForm.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -7,8 +7,6 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,14 +20,11 @@ import {
   Save,
   Plus,
   Trash2,
-  Upload,
   FileText,
   Building,
-  Users,
   HandCoins,
   Calendar,
   Calculator,
-  AlertCircle,
   CheckCircle,
   Info,
   RotateCcw,
