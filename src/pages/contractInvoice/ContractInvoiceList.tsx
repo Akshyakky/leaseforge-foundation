@@ -80,6 +80,7 @@ import {
 } from "@/types/contractInvoiceTypes";
 import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Payment recording schema
 const paymentSchema = z.object({
@@ -146,11 +147,13 @@ const ContractInvoiceList: React.FC = () => {
 
   // State variables
   const [invoices, setInvoices] = useState<ContractInvoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<ContractInvoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<ContractInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInvoices, setSelectedInvoices] = useState<Set<number>>(new Set());
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Reference data
   const [customers, setCustomers] = useState<any[]>([]);
@@ -238,6 +241,75 @@ const ContractInvoiceList: React.FC = () => {
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
 
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data and selections
+        setInvoices([]);
+        setAllInvoices([]);
+        setFilteredInvoices([]);
+        setSelectedInvoices(new Set());
+
+        // Clear filters
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCustomerId: "",
+          selectedPropertyId: "",
+          selectedStatus: "",
+          selectedApprovalStatus: "",
+          selectedType: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+          dueDateFrom: undefined,
+          dueDateTo: undefined,
+          showPostedOnly: undefined,
+          showOverdueOnly: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+        setActiveTab("all");
+
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          // Fetch all data
+          const [allInvoicesData, customersData, propertiesData, companiesData, fiscalYearsData, accountsData] = await Promise.all([
+            contractInvoiceService.getAllInvoices(),
+            customerService.getAllCustomers(),
+            propertyService.getAllProperties(),
+            companyService.getCompaniesForDropdown(true),
+            fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+            accountService.getAllAccounts(),
+          ]);
+
+          // Filter invoices by company ID
+          const companyInvoices = allInvoicesData.filter((invoice) => invoice.CompanyID === companyIdNum);
+
+          // Set all data
+          setAllInvoices(allInvoicesData);
+          setInvoices(companyInvoices);
+          setCustomers(customersData);
+          setProperties(propertiesData);
+          setCompanies(companiesData);
+          setFiscalYears(fiscalYearsData);
+          setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
+
+          // Fetch statistics for the company
+          await fetchStatistics();
+        }
+      } catch (error) {
+        console.error("Error handling company change in ContractInvoiceList:", error);
+        toast.error("Failed to load invoices for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
+
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
@@ -283,14 +355,22 @@ const ContractInvoiceList: React.FC = () => {
   // Fetch data functions
   const fetchInvoices = async () => {
     try {
-      const invoicesData = await contractInvoiceService.getAllInvoices();
-      setInvoices(invoicesData);
+      const allInvoicesData = await contractInvoiceService.getAllInvoices();
+      setAllInvoices(allInvoicesData);
+
+      // Filter by current company if available
+      if (currentCompanyId) {
+        const companyIdNum = parseInt(currentCompanyId);
+        const companyInvoices = allInvoicesData.filter((invoice) => invoice.CompanyID === companyIdNum);
+        setInvoices(companyInvoices);
+      } else {
+        setInvoices(allInvoicesData);
+      }
     } catch (error) {
       console.error("Error fetching invoices:", error);
       toast.error("Failed to load invoices");
     }
   };
-
   const fetchReferenceData = async () => {
     try {
       const [customersData, propertiesData, companiesData, fiscalYearsData, accountsData] = await Promise.all([
@@ -1078,10 +1158,16 @@ const ContractInvoiceList: React.FC = () => {
     filters.showPostedOnly ||
     filters.showOverdueOnly;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading invoices for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1093,7 +1179,15 @@ const ContractInvoiceList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Invoice Management</h1>
-            <p className="text-muted-foreground">Manage lease invoices, approvals, and revenue posting</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage lease invoices, approvals, and revenue posting</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
@@ -1135,6 +1229,7 @@ const ContractInvoiceList: React.FC = () => {
             <CardTitle>Contract Invoices</CardTitle>
             <CardDescription>
               {hasActiveFilters ? `Showing ${currentInvoices.length} of ${invoices.length} invoices` : `Showing all ${invoices.length} invoices`}
+              {currentCompanyName && <span className="ml-2 text-blue-600 dark:text-blue-400">for {currentCompanyName}</span>}
               {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved invoices are protected from modifications</span>}
             </CardDescription>
           </CardHeader>
