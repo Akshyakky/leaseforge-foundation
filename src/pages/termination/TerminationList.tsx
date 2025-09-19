@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationList.tsx - Enhanced with Email Integration
+// src/pages/termination/TerminationList.tsx - Enhanced with Email Integration and Dark Mode Support
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,7 @@ interface TerminationFilter {
   selectedPropertyId: string;
   dateFrom?: Date;
   dateTo?: Date;
-  emailStatus?: string; // New filter for email status
+  emailStatus?: string;
 }
 
 interface SortConfig {
@@ -110,14 +110,12 @@ interface TerminationListStats {
   approvalRejected: number;
   approvedProtected: number;
   pendingRefunds: number;
-  // Email-related stats
   emailNotificationsSent: number;
   pendingEmailReminders: number;
   movingOutSoon: number;
   keyReturnPending: number;
 }
 
-// Email reminder types
 interface EmailReminderConfig {
   triggerEvent: string;
   triggerName: string;
@@ -219,7 +217,7 @@ const TerminationList: React.FC = () => {
   // Initialize email integration hook
   const emailIntegration = useEmailIntegration({
     entityType: "termination",
-    entityId: 0, // Will be set when needed
+    entityId: 0,
   });
 
   const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
@@ -254,7 +252,7 @@ const TerminationList: React.FC = () => {
           const [terminationsData, customersData, propertiesData] = await Promise.all([
             terminationService.getAllTerminations(companyIdNum),
             customerService.getAllCustomers(),
-            propertyService.getAllProperties().catch(() => []), // Gracefully handle if properties fail
+            propertyService.getAllProperties().catch(() => []),
           ]);
 
           setTerminations(terminationsData);
@@ -509,14 +507,6 @@ const TerminationList: React.FC = () => {
         type: "to" as const,
       });
     }
-
-    // if (termination.JointCustomerEmail) {
-    //   recipients.push({
-    //     email: termination.JointCustomerEmail,
-    //     name: termination.JointCustomerName || "Joint Customer",
-    //     type: "to" as const,
-    //   });
-    // }
 
     return recipients;
   };
@@ -1039,11 +1029,31 @@ const TerminationList: React.FC = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Completed: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
-      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Completed: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      },
+      Cancelled: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -1060,9 +1070,18 @@ const TerminationList: React.FC = () => {
   // Render approval status badge
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -1082,7 +1101,7 @@ const TerminationList: React.FC = () => {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <MailCheck className="h-4 w-4 text-green-600" />
+            <MailCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification sent</p>
@@ -1096,7 +1115,7 @@ const TerminationList: React.FC = () => {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <MailX className="h-4 w-4 text-red-600" />
+            <MailX className="h-4 w-4 text-red-600 dark:text-red-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification failed</p>
@@ -1109,7 +1128,7 @@ const TerminationList: React.FC = () => {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <Clock className="h-4 w-4 text-yellow-600" />
+            <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification pending</p>
@@ -1121,7 +1140,7 @@ const TerminationList: React.FC = () => {
     return (
       <Tooltip>
         <TooltipTrigger>
-          <Mail className="h-4 w-4 text-gray-400" />
+          <Mail className="h-4 w-4 text-gray-400 dark:text-gray-600" />
         </TooltipTrigger>
         <TooltipContent>
           <p>No email sent</p>
@@ -1211,6 +1230,7 @@ const TerminationList: React.FC = () => {
       </div>
     );
   }
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1221,7 +1241,7 @@ const TerminationList: React.FC = () => {
             <div className="flex items-center gap-2">
               <p className="text-muted-foreground">Manage rental contract terminations and security deposit processing with automated email communications</p>
               {currentCompanyName && (
-                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700">
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
                   <Building className="mr-1 h-3 w-3" />
                   {currentCompanyName}
                 </Badge>
@@ -1231,7 +1251,11 @@ const TerminationList: React.FC = () => {
           <div className="flex items-center gap-2">
             {/* Move Out Reminders */}
             {stats.movingOutSoon > 0 && (
-              <Button variant="outline" onClick={handleSendMoveOutReminders} className="bg-orange-50 border-orange-200 text-orange-800">
+              <Button
+                variant="outline"
+                onClick={handleSendMoveOutReminders}
+                className="bg-orange-50 border-orange-200 text-orange-800 hover:bg-orange-100 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900"
+              >
                 <MoveRight className="mr-2 h-4 w-4" />
                 {stats.movingOutSoon} Moving Out Soon
               </Button>
@@ -1239,7 +1263,11 @@ const TerminationList: React.FC = () => {
 
             {/* Key Return Reminders */}
             {stats.keyReturnPending > 0 && (
-              <Button variant="outline" onClick={handleSendKeyReturnReminders} className="bg-red-50 border-red-200 text-red-800">
+              <Button
+                variant="outline"
+                onClick={handleSendKeyReturnReminders}
+                className="bg-red-50 border-red-200 text-red-800 hover:bg-red-100 dark:bg-red-950 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900"
+              >
                 <KeyRound className="mr-2 h-4 w-4" />
                 {stats.keyReturnPending} Key Returns Pending
               </Button>
@@ -1249,7 +1277,10 @@ const TerminationList: React.FC = () => {
             {stats.emailNotificationsSent > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-blue-50 border-blue-200 text-blue-800">
+                  <Button
+                    variant="outline"
+                    className="bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900"
+                  >
                     <MailCheck className="mr-2 h-4 w-4" />
                     {stats.emailNotificationsSent} Emails Sent
                   </Button>
@@ -1261,7 +1292,11 @@ const TerminationList: React.FC = () => {
             )}
 
             {isManager && stats.approvalPending > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-950 dark:border-yellow-800 dark:text-yellow-400 dark:hover:bg-yellow-900"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
@@ -1270,7 +1305,10 @@ const TerminationList: React.FC = () => {
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                  <Button
+                    variant="outline"
+                    className="bg-green-50 border-green-200 text-green-800 hover:bg-green-100 dark:bg-green-950 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900"
+                  >
                     <Lock className="mr-2 h-4 w-4" />
                     {stats.approvedProtected} Protected
                   </Button>
@@ -1293,7 +1331,7 @@ const TerminationList: React.FC = () => {
         </div>
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
@@ -1308,50 +1346,40 @@ const TerminationList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600" />
+                <FileText className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 <span className="text-sm text-muted-foreground">Draft</span>
               </div>
-              <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.draft}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600" />
+                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-muted-foreground">Pending</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-muted-foreground">Approved</span>
-              </div>
-              <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-blue-600" />
+                <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Completed</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.completed}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-red-600" />
+                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 <span className="text-sm text-muted-foreground">Cancelled</span>
               </div>
-              <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.cancelled}</div>
             </CardContent>
           </Card>
 
@@ -1359,20 +1387,20 @@ const TerminationList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <MailCheck className="h-4 w-4 text-blue-600" />
+                <MailCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Emails Sent</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.emailNotificationsSent}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.emailNotificationsSent}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <MoveRight className="h-4 w-4 text-orange-600" />
-                <span className="text-sm text-muted-foreground">Moving Out Soon</span>
+                <MoveRight className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                <span className="text-sm text-muted-foreground">Moving Soon</span>
               </div>
-              <div className="text-2xl font-bold text-orange-600">{stats.movingOutSoon}</div>
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.movingOutSoon}</div>
             </CardContent>
           </Card>
 
@@ -1458,8 +1486,12 @@ const TerminationList: React.FC = () => {
                 <CardTitle>Terminations</CardTitle>
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredTerminations.length} of ${terminations.length} terminations` : `Showing all ${terminations.length} terminations`}
-                  {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved terminations are protected from modifications</span>}
-                  {stats.emailNotificationsSent > 0 && <span className="ml-2 text-blue-600">• {stats.emailNotificationsSent} have email notifications sent</span>}
+                  {stats.approvedProtected > 0 && (
+                    <span className="ml-2 text-green-600 dark:text-green-400">• {stats.approvedProtected} approved terminations are protected from modifications</span>
+                  )}
+                  {stats.emailNotificationsSent > 0 && (
+                    <span className="ml-2 text-blue-600 dark:text-blue-400">• {stats.emailNotificationsSent} have email notifications sent</span>
+                  )}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -1562,11 +1594,11 @@ const TerminationList: React.FC = () => {
                           <DropdownMenuSeparator />
                           <DropdownMenuLabel>Approval Actions</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => handleBulkApproval("approve")} disabled={bulkApprovalLoading}>
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                            <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                             Approve Selected
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleBulkApproval("reject")} disabled={bulkApprovalLoading}>
-                            <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                            <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                             Reject Selected
                           </DropdownMenuItem>
                         </>
@@ -1866,7 +1898,7 @@ const TerminationList: React.FC = () => {
                           className={cn(
                             "hover:bg-muted/50 transition-colors",
                             selectedTerminations.has(termination.TerminationID) && "bg-accent/50",
-                            isApproved && "bg-green-50/30"
+                            isApproved && "bg-green-50/30 dark:bg-green-950/20"
                           )}
                         >
                           <TableCell>
@@ -1885,7 +1917,7 @@ const TerminationList: React.FC = () => {
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Lock className="h-3 w-3 text-green-600" />
+                                    <Lock className="h-3 w-3 text-green-600 dark:text-green-400" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected - Approved terminations cannot be modified</p>
@@ -1943,7 +1975,7 @@ const TerminationList: React.FC = () => {
                               {termination.RefundAmount > 0 && (
                                 <div className="text-sm">
                                   <span className="text-muted-foreground">Refund:</span>
-                                  <span className="font-medium text-green-600 ml-1">{formatCurrency(termination.RefundAmount)}</span>
+                                  <span className="font-medium text-green-600 dark:text-green-400 ml-1">{formatCurrency(termination.RefundAmount)}</span>
                                   {termination.IsRefundProcessed && (
                                     <Badge variant="outline" className="ml-2 text-xs py-0">
                                       Processed
@@ -1954,7 +1986,7 @@ const TerminationList: React.FC = () => {
                               {termination.CreditNoteAmount > 0 && (
                                 <div className="text-sm">
                                   <span className="text-muted-foreground">Credit:</span>
-                                  <span className="font-medium text-red-600 ml-1">{formatCurrency(termination.CreditNoteAmount)}</span>
+                                  <span className="font-medium text-red-600 dark:text-red-400 ml-1">{formatCurrency(termination.CreditNoteAmount)}</span>
                                 </div>
                               )}
                             </div>
@@ -1965,14 +1997,14 @@ const TerminationList: React.FC = () => {
                               {termination.RequiresApproval ? (
                                 renderApprovalBadge(termination.ApprovalStatus)
                               ) : (
-                                <Badge variant="outline" className="bg-gray-50">
+                                <Badge variant="outline" className="bg-gray-50 dark:bg-gray-900">
                                   No Approval Required
                                 </Badge>
                               )}
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Shield className="h-3 w-3 text-green-600 ml-1" />
+                                    <Shield className="h-3 w-3 text-green-600 dark:text-green-400 ml-1" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected from modifications</p>
@@ -2055,11 +2087,11 @@ const TerminationList: React.FC = () => {
                                     {termination.ApprovalStatus === "Pending" && (
                                       <>
                                         <DropdownMenuItem onClick={() => handleApproveTermination(termination)}>
-                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                                           Approve
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleRejectTermination(termination)}>
-                                          <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                          <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                                           Reject
                                         </DropdownMenuItem>
                                       </>
@@ -2067,7 +2099,7 @@ const TerminationList: React.FC = () => {
 
                                     {termination.ApprovalStatus !== "Pending" && (
                                       <DropdownMenuItem onClick={() => navigate(`/terminations/${termination.TerminationID}`)}>
-                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                                         Reset Approval
                                       </DropdownMenuItem>
                                     )}
@@ -2114,7 +2146,7 @@ const TerminationList: React.FC = () => {
 
                                 {canEdit ? (
                                   <DropdownMenuItem
-                                    className="text-red-500"
+                                    className="text-red-500 dark:text-red-400"
                                     onClick={() => openDeleteDialog(termination)}
                                     disabled={termination.TerminationStatus === "Approved" || termination.TerminationStatus === "Completed"}
                                   >
@@ -2201,11 +2233,11 @@ const TerminationList: React.FC = () => {
             <div className="space-y-4">
               <p>Enter refund details for termination {selectedTermination?.TerminationNo}:</p>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Refund Date</label>
+                <label className="block text-sm font-medium text-foreground">Refund Date</label>
                 <DatePicker value={refundDate} onChange={setRefundDate} placeholder="Select refund date" />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Refund Reference</label>
+                <label className="block text-sm font-medium text-foreground">Refund Reference</label>
                 <Input placeholder="Enter refund reference" value={refundReference} onChange={(e) => setRefundReference(e.target.value)} />
               </div>
             </div>
