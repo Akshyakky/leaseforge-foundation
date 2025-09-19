@@ -62,6 +62,9 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/hooks";
 
+// Import the company change handler hook
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
+
 // PDF Report Components
 import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
@@ -146,7 +149,6 @@ const ContractList: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAppSelector((state) => state.auth);
-  const currentCompanyId = user?.currentCompanyId ? parseInt(user.currentCompanyId) : undefined;
 
   // State variables
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -158,6 +160,7 @@ const ContractList: React.FC = () => {
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedContracts, setSelectedContracts] = useState<Set<number>>(new Set());
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Filter and sort state
   const [filters, setFilters] = useState<ContractFilter>({
@@ -209,11 +212,64 @@ const ContractList: React.FC = () => {
     entityId: 0, // Will be set when needed
   });
 
-  // Initialize data on component mount
+  // Handle company changes with the custom hook
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      // Set loading state to indicate company change is in progress
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data first
+        setContracts([]);
+        setFilteredContracts([]);
+        setSelectedContracts(new Set());
+
+        // Clear filters when company changes
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCustomerId: "",
+          selectedStatus: "",
+          selectedApprovalStatus: "",
+          selectedPropertyId: "",
+          emailStatus: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+
+        // Reload all data for the new company
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          // Fetch data in parallel for better performance
+          const [contractsData, customersData, propertiesData] = await Promise.all([
+            contractService.getAllContracts(companyIdNum),
+            customerService.getAllCustomers(),
+            propertyService.getAllProperties().catch(() => []), // Gracefully handle if properties fail
+          ]);
+
+          setContracts(contractsData);
+          setCustomers(customersData);
+          setProperties(propertiesData);
+
+          // Reload email templates for the new company
+          await emailIntegration.loadEmailTemplates("Contract");
+        }
+      } catch (error) {
+        console.error("Error handling company change in ContractList:", error);
+        toast.error("Failed to load contracts for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
+
+  // Initialize data on component mount (only once)
   useEffect(() => {
     initializeData();
-    // Load email templates for contract category
-    emailIntegration.loadEmailTemplates("Contract");
   }, []);
 
   // Update URL params when filters change
@@ -241,6 +297,8 @@ const ContractList: React.FC = () => {
     setLoading(true);
     try {
       await Promise.all([fetchContracts(), fetchCustomers(), fetchProperties()]);
+      // Load email templates
+      await emailIntegration.loadEmailTemplates("Contract");
     } catch (error) {
       console.error("Error initializing data:", error);
       toast.error("Failed to load initial data");
@@ -252,7 +310,8 @@ const ContractList: React.FC = () => {
   // Fetch all contracts
   const fetchContracts = async () => {
     try {
-      const contractsData = await contractService.getAllContracts(currentCompanyId);
+      const companyId = currentCompanyId ? parseInt(currentCompanyId) : undefined;
+      const contractsData = await contractService.getAllContracts(companyId);
       setContracts(contractsData);
     } catch (error) {
       console.error("Error fetching contracts:", error);
@@ -1034,10 +1093,16 @@ const ContractList: React.FC = () => {
     filters.dateFrom ||
     filters.dateTo;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading contracts for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1051,10 +1116,10 @@ const ContractList: React.FC = () => {
             <h1 className="text-2xl font-semibold">Contract Management</h1>
             <div className="flex items-center gap-2">
               <p className="text-muted-foreground">Manage rental and property contracts with integrated email communications</p>
-              {user?.currentCompanyName && (
+              {currentCompanyName && (
                 <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700">
                   <Building className="mr-1 h-3 w-3" />
-                  {user.currentCompanyName}
+                  {currentCompanyName}
                 </Badge>
               )}
             </div>
