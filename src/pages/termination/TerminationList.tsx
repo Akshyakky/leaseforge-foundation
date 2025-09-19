@@ -76,6 +76,7 @@ import { useGenericPdfReport } from "@/hooks/usePdfReports";
 // Email Components
 import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
 import { useEmailIntegration } from "@/hooks/useEmailIntegration";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Types and interfaces
 interface TerminationFilter {
@@ -169,6 +170,7 @@ const TerminationList: React.FC = () => {
   const [selectedTerminations, setSelectedTerminations] = useState<Set<number>>(new Set());
   const [refundDate, setRefundDate] = useState<Date | null>(new Date());
   const [refundReference, setRefundReference] = useState("");
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Filter and sort state
   const [filters, setFilters] = useState<TerminationFilter>({
@@ -220,6 +222,59 @@ const TerminationList: React.FC = () => {
     entityId: 0, // Will be set when needed
   });
 
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data first
+        setTerminations([]);
+        setFilteredTerminations([]);
+        setSelectedTerminations(new Set());
+
+        // Clear filters when company changes
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCustomerId: "",
+          selectedStatus: "",
+          selectedApprovalStatus: "",
+          selectedPropertyId: "",
+          emailStatus: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+
+        // Reload all data for the new company
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          // Fetch data in parallel for better performance
+          const [terminationsData, customersData, propertiesData] = await Promise.all([
+            terminationService.getAllTerminations(companyIdNum),
+            customerService.getAllCustomers(),
+            propertyService.getAllProperties().catch(() => []), // Gracefully handle if properties fail
+          ]);
+
+          setTerminations(terminationsData);
+          setCustomers(customersData);
+          setProperties(propertiesData);
+
+          // Reload email templates for the new company
+          await emailIntegration.loadEmailTemplates("Termination");
+        }
+      } catch (error) {
+        console.error("Error handling company change in TerminationList:", error);
+        toast.error("Failed to load terminations for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
+
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
@@ -263,7 +318,8 @@ const TerminationList: React.FC = () => {
   // Fetch all terminations
   const fetchTerminations = async () => {
     try {
-      const terminationsData = await terminationService.getAllTerminations();
+      const companyId = currentCompanyId ? parseInt(currentCompanyId) : undefined;
+      const terminationsData = await terminationService.getAllTerminations(companyId);
       setTerminations(terminationsData);
     } catch (error) {
       console.error("Error fetching terminations:", error);
@@ -1142,14 +1198,19 @@ const TerminationList: React.FC = () => {
     filters.dateFrom ||
     filters.dateTo;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading terminations for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1157,7 +1218,15 @@ const TerminationList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Termination Management</h1>
-            <p className="text-muted-foreground">Manage rental contract terminations and security deposit processing with automated email communications</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage rental contract terminations and security deposit processing with automated email communications</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Move Out Reminders */}

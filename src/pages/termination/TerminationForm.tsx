@@ -32,6 +32,7 @@ import {
   Send,
   Settings,
   Info,
+  Building,
 } from "lucide-react";
 import { terminationService, ContractTermination } from "@/services/terminationService";
 import { contractService } from "@/services/contractService";
@@ -673,6 +674,7 @@ const TerminationForm: React.FC = () => {
         termination: {
           TerminationNo: data.TerminationNo,
           ContractID: parseInt(data.ContractID),
+          CompanyID: user.currentCompanyId ? parseInt(user.currentCompanyId) : 1, // Add CompanyID
           TerminationDate: data.TerminationDate,
           NoticeDate: data.NoticeDate,
           EffectiveDate: data.EffectiveDate,
@@ -972,7 +974,17 @@ const TerminationForm: React.FC = () => {
         <Button variant="outline" size="icon" onClick={handleCancel}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-semibold">{isEdit ? "Edit Termination" : "Create Termination"}</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">{isEdit ? "Edit Termination" : "Create Termination"}</h1>
+          {user?.currentCompanyName && (
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                <Building className="mr-1 h-3 w-3" />
+                {user.currentCompanyName}
+              </Badge>
+            </div>
+          )}
+        </div>
         {isApproved && (
           <Badge variant="outline" className="bg-red-50 border-red-200 text-red-800">
             <Lock className="h-3 w-3 mr-1" />

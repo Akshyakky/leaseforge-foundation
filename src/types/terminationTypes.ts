@@ -13,6 +13,7 @@ export interface ContractTermination extends BaseTermination {
   TerminationID: number;
   TerminationNo: string;
   ContractID: number;
+  CompanyID: number; // Added CompanyID field
   TerminationDate: string | Date;
   NoticeDate?: string | Date;
   EffectiveDate: string | Date;
@@ -54,6 +55,7 @@ export interface ContractTermination extends BaseTermination {
   CustomerID?: number;
   PropertyID?: number;
   PropertyName?: string;
+  CompanyName?: string; // Added CompanyName field
   UnitNumbers?: string;
   DeductionCount?: number;
   AttachmentCount?: number;
@@ -129,8 +131,10 @@ export interface TerminationStatistics {
     TerminationID: number;
     TerminationNo: string;
     ContractID: number;
+    CompanyID: number; // Added CompanyID
     ContractNo: string;
     CustomerFullName: string;
+    CompanyName?: string; // Added CompanyName
     TerminationDate: string | Date;
     EffectiveDate: string | Date;
     RefundAmount: number;
@@ -139,8 +143,10 @@ export interface TerminationStatistics {
     TerminationID: number;
     TerminationNo: string;
     ContractID: number;
+    CompanyID: number; // Added CompanyID
     ContractNo: string;
     CustomerFullName: string;
+    CompanyName?: string; // Added CompanyName
     TerminationDate: string | Date;
     CreatedBy: string;
     CreatedOn: string | Date;
@@ -158,6 +164,7 @@ export interface TerminationSearchParams {
   customerID?: number;
   propertyID?: number;
   unitID?: number;
+  companyID?: number; // Added companyID parameter
 }
 
 // Termination request for create/update

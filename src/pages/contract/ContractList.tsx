@@ -1,4 +1,4 @@
-// src/pages/contract/ContractList.tsx - Enhanced with Email Integration
+// src/pages/contract/ContractList.tsx - Enhanced with Email Integration and Dark Mode Support
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -73,7 +73,7 @@ import { useGenericPdfReport } from "@/hooks/usePdfReports";
 import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
 import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 
-// Types and interfaces
+// Types and interface
 interface ContractFilter {
   searchTerm: string;
   selectedCustomerId: string;
@@ -82,7 +82,7 @@ interface ContractFilter {
   selectedPropertyId: string;
   dateFrom?: Date;
   dateTo?: Date;
-  emailStatus?: string; // New filter for email status
+  emailStatus?: string;
 }
 
 interface SortConfig {
@@ -104,13 +104,11 @@ interface ContractListStats {
   approvalApproved: number;
   approvalRejected: number;
   approvedProtected: number;
-  // Email-related stats
   emailNotificationsSent: number;
   pendingEmailReminders: number;
   expiringSoon: number;
 }
 
-// Email reminder types
 interface EmailReminderConfig {
   triggerEvent: string;
   triggerName: string;
@@ -150,7 +148,7 @@ const ContractList: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAppSelector((state) => state.auth);
 
-  // State variables
+  // State variables (unchanged)
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -215,16 +213,13 @@ const ContractList: React.FC = () => {
   // Handle company changes with the custom hook
   const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
     onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
-      // Set loading state to indicate company change is in progress
       setIsCompanyChanging(true);
 
       try {
-        // Clear existing data first
         setContracts([]);
         setFilteredContracts([]);
         setSelectedContracts(new Set());
 
-        // Clear filters when company changes
         const clearedFilters = {
           searchTerm: "",
           selectedCustomerId: "",
@@ -238,22 +233,19 @@ const ContractList: React.FC = () => {
         setFilters(clearedFilters);
         setSearchParams(new URLSearchParams());
 
-        // Reload all data for the new company
         if (newCompanyId) {
           const companyIdNum = parseInt(newCompanyId);
 
-          // Fetch data in parallel for better performance
           const [contractsData, customersData, propertiesData] = await Promise.all([
             contractService.getAllContracts(companyIdNum),
             customerService.getAllCustomers(),
-            propertyService.getAllProperties().catch(() => []), // Gracefully handle if properties fail
+            propertyService.getAllProperties().catch(() => []),
           ]);
 
           setContracts(contractsData);
           setCustomers(customersData);
           setProperties(propertiesData);
 
-          // Reload email templates for the new company
           await emailIntegration.loadEmailTemplates("Contract");
         }
       } catch (error) {
@@ -934,17 +926,43 @@ const ContractList: React.FC = () => {
       toast.error("Failed to generate contract list preview");
     }
   };
-
-  // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Draft: { variant: "secondary" as const, icon: FileText, className: "bg-gray-100 text-gray-800" },
-      Pending: { variant: "default" as const, icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Completed: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
-      Expired: { variant: "destructive" as const, icon: AlertCircle, className: "bg-orange-100 text-orange-800" },
-      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Terminated: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Draft: {
+        variant: "secondary" as const,
+        icon: FileText,
+        className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+      },
+      Pending: {
+        variant: "default" as const,
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Active: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Completed: {
+        variant: "default" as const,
+        icon: CheckCircle,
+        className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      },
+      Expired: {
+        variant: "destructive" as const,
+        icon: AlertCircle,
+        className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+      },
+      Cancelled: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
+      Terminated: {
+        variant: "destructive" as const,
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Draft;
@@ -958,12 +976,21 @@ const ContractList: React.FC = () => {
     );
   };
 
-  // Render approval status badge
+  // Render approval status badge with dark mode support
   const renderApprovalBadge = (status: string) => {
     const approvalConfig = {
-      Pending: { icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-      Approved: { icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Rejected: { icon: XCircle, className: "bg-red-100 text-red-800" },
+      Pending: {
+        icon: Clock,
+        className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      },
+      Approved: {
+        icon: CheckCircle,
+        className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      },
+      Rejected: {
+        icon: XCircle,
+        className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      },
     };
 
     const config = approvalConfig[status as keyof typeof approvalConfig] || approvalConfig.Pending;
@@ -977,13 +1004,13 @@ const ContractList: React.FC = () => {
     );
   };
 
-  // Render email status indicator
+  // Render email status indicator with dark mode support
   const renderEmailStatusIndicator = (contract: Contract) => {
     if (contract.EmailNotificationSent) {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <MailCheck className="h-4 w-4 text-green-600" />
+            <MailCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification sent</p>
@@ -997,7 +1024,7 @@ const ContractList: React.FC = () => {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <MailX className="h-4 w-4 text-red-600" />
+            <MailX className="h-4 w-4 text-red-600 dark:text-red-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification failed</p>
@@ -1010,7 +1037,7 @@ const ContractList: React.FC = () => {
       return (
         <Tooltip>
           <TooltipTrigger>
-            <Clock className="h-4 w-4 text-yellow-600" />
+            <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
           </TooltipTrigger>
           <TooltipContent>
             <p>Email notification pending</p>
@@ -1022,7 +1049,7 @@ const ContractList: React.FC = () => {
     return (
       <Tooltip>
         <TooltipTrigger>
-          <Mail className="h-4 w-4 text-gray-400" />
+          <Mail className="h-4 w-4 text-gray-400 dark:text-gray-500" />
         </TooltipTrigger>
         <TooltipContent>
           <p>No email sent</p>
@@ -1117,7 +1144,7 @@ const ContractList: React.FC = () => {
             <div className="flex items-center gap-2">
               <p className="text-muted-foreground">Manage rental and property contracts with integrated email communications</p>
               {currentCompanyName && (
-                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700">
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                   <Building className="mr-1 h-3 w-3" />
                   {currentCompanyName}
                 </Badge>
@@ -1127,7 +1154,11 @@ const ContractList: React.FC = () => {
           <div className="flex items-center gap-2">
             {/* Email Reminders Button */}
             {stats.expiringSoon > 0 && (
-              <Button variant="outline" onClick={handleSendExpiryReminders} className="bg-orange-50 border-orange-200 text-orange-800">
+              <Button
+                variant="outline"
+                onClick={handleSendExpiryReminders}
+                className="bg-orange-50 border-orange-200 text-orange-800 hover:bg-orange-100 dark:bg-orange-950/50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950"
+              >
                 <BellRing className="mr-2 h-4 w-4" />
                 {stats.expiringSoon} Expiring Soon
               </Button>
@@ -1137,7 +1168,10 @@ const ContractList: React.FC = () => {
             {stats.emailNotificationsSent > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-blue-50 border-blue-200 text-blue-800">
+                  <Button
+                    variant="outline"
+                    className="bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950"
+                  >
                     <MailCheck className="mr-2 h-4 w-4" />
                     {stats.emailNotificationsSent} Emails Sent
                   </Button>
@@ -1149,7 +1183,11 @@ const ContractList: React.FC = () => {
             )}
 
             {isManager && stats.approvalPending > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:border-yellow-800 dark:text-yellow-300 dark:hover:bg-yellow-950"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {stats.approvalPending} Pending Approval{stats.approvalPending !== 1 ? "s" : ""}
               </Button>
@@ -1158,7 +1196,10 @@ const ContractList: React.FC = () => {
             {stats.approvedProtected > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                  <Button
+                    variant="outline"
+                    className="bg-green-50 border-green-200 text-green-800 hover:bg-green-100 dark:bg-green-950/50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-950"
+                  >
                     <Lock className="mr-2 h-4 w-4" />
                     {stats.approvedProtected} Protected
                   </Button>
@@ -1200,50 +1241,50 @@ const ContractList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600" />
+                <FileText className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 <span className="text-sm text-muted-foreground">Draft</span>
               </div>
-              <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+              <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.draft}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600" />
+                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-muted-foreground">Pending</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm text-muted-foreground">Active</span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.active}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-blue-600" />
+                <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Completed</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.completed}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                 <span className="text-sm text-muted-foreground">Expired</span>
               </div>
-              <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.expired}</div>
             </CardContent>
           </Card>
 
@@ -1251,20 +1292,20 @@ const ContractList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <MailCheck className="h-4 w-4 text-blue-600" />
+                <MailCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Emails Sent</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.emailNotificationsSent}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.emailNotificationsSent}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <BellRing className="h-4 w-4 text-orange-600" />
+                <BellRing className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                 <span className="text-sm text-muted-foreground">Expiring Soon</span>
               </div>
-              <div className="text-2xl font-bold text-orange-600">{stats.expiringSoon}</div>
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.expiringSoon}</div>
             </CardContent>
           </Card>
 
@@ -1273,40 +1314,40 @@ const ContractList: React.FC = () => {
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <span className="text-sm text-muted-foreground">Approval Pending</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.approvalPending}</div>
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Approved</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.approvalApproved}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-green-600" />
+                    <Lock className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Protected</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.approvedProtected}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvedProtected}</div>
                 </CardContent>
               </Card>
 
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <span className="text-sm text-muted-foreground">Rejected</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.approvalRejected}</div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
                 </CardContent>
               </Card>
             </>
@@ -1315,20 +1356,20 @@ const ContractList: React.FC = () => {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <HandCoins className="h-4 w-4 text-blue-600" />
+                <HandCoins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Total Value</span>
               </div>
-              <div className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalValue)}</div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalValue)}</div>
             </CardContent>
           </Card>
 
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-600" />
+                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 <span className="text-sm text-muted-foreground">Average</span>
               </div>
-              <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageValue)}</div>
+              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageValue)}</div>
             </CardContent>
           </Card>
         </div>
@@ -1340,8 +1381,12 @@ const ContractList: React.FC = () => {
                 <CardTitle>Contracts</CardTitle>
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredContracts.length} of ${contracts.length} contracts` : `Showing all ${contracts.length} contracts`}
-                  {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved contracts are protected from modifications</span>}
-                  {stats.emailNotificationsSent > 0 && <span className="ml-2 text-blue-600">• {stats.emailNotificationsSent} have email notifications sent</span>}
+                  {stats.approvedProtected > 0 && (
+                    <span className="ml-2 text-green-600 dark:text-green-400">• {stats.approvedProtected} approved contracts are protected from modifications</span>
+                  )}
+                  {stats.emailNotificationsSent > 0 && (
+                    <span className="ml-2 text-blue-600 dark:text-blue-400">• {stats.emailNotificationsSent} have email notifications sent</span>
+                  )}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -1733,7 +1778,11 @@ const ContractList: React.FC = () => {
                       return (
                         <TableRow
                           key={contract.ContractID}
-                          className={cn("hover:bg-muted/50 transition-colors", selectedContracts.has(contract.ContractID) && "bg-accent/50", isApproved && "bg-green-50/30")}
+                          className={cn(
+                            "hover:bg-muted/50 transition-colors",
+                            selectedContracts.has(contract.ContractID) && "bg-accent/50 dark:bg-accent/20",
+                            isApproved && "bg-green-50/30 dark:bg-green-950/10"
+                          )}
                         >
                           <TableCell>
                             <Checkbox
@@ -1751,7 +1800,7 @@ const ContractList: React.FC = () => {
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Lock className="h-3 w-3 text-green-600" />
+                                    <Lock className="h-3 w-3 text-green-600 dark:text-green-400" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected - Approved contracts cannot be modified</p>
@@ -1787,14 +1836,14 @@ const ContractList: React.FC = () => {
                               {contract.RequiresApproval ? (
                                 renderApprovalBadge(contract.ApprovalStatus)
                               ) : (
-                                <Badge variant="outline" className="bg-gray-50">
+                                <Badge variant="outline" className="bg-gray-50 dark:bg-gray-900">
                                   No Approval Required
                                 </Badge>
                               )}
                               {isApproved && (
                                 <Tooltip>
                                   <TooltipTrigger>
-                                    <Shield className="h-3 w-3 text-green-600 ml-1" />
+                                    <Shield className="h-3 w-3 text-green-600 dark:text-green-400 ml-1" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p>Protected from modifications</p>

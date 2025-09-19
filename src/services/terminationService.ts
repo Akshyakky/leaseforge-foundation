@@ -99,6 +99,7 @@ class TerminationService extends BaseService {
         // Termination master data
         TerminationNo: data.termination.TerminationNo,
         ContractID: data.termination.ContractID,
+        CompanyID: data.termination.CompanyID, // Added CompanyID
         TerminationDate: data.termination.TerminationDate,
         NoticeDate: data.termination.NoticeDate,
         EffectiveDate: data.termination.EffectiveDate,
@@ -173,6 +174,7 @@ class TerminationService extends BaseService {
         TerminationID: data.termination.TerminationID,
         TerminationNo: data.termination.TerminationNo,
         ContractID: data.termination.ContractID,
+        CompanyID: data.termination.CompanyID, // Added CompanyID
         TerminationDate: data.termination.TerminationDate,
         NoticeDate: data.termination.NoticeDate,
         EffectiveDate: data.termination.EffectiveDate,
@@ -225,12 +227,15 @@ class TerminationService extends BaseService {
 
   /**
    * Get all active terminations
+   * @param companyId - Optional company ID to filter terminations
    * @returns Array of terminations
    */
-  async getAllTerminations(): Promise<ContractTermination[]> {
+  async getAllTerminations(companyId?: number): Promise<ContractTermination[]> {
     const request: BaseRequest = {
       mode: 3, // Mode 3: Fetch All Active Terminations
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyId, // Added company filter
+      },
     };
 
     const response = await this.execute<ContractTermination[]>(request);
@@ -323,6 +328,7 @@ class TerminationService extends BaseService {
         FilterCustomerID: params.customerID,
         FilterPropertyID: params.propertyID,
         FilterUnitID: params.unitID,
+        FilterCompanyID: params.companyID, // Added company filter
       },
     };
 
@@ -535,12 +541,15 @@ class TerminationService extends BaseService {
 
   /**
    * Get terminations pending approval
+   * @param companyId - Optional company ID to filter terminations
    * @returns Array of terminations pending approval
    */
-  async getTerminationsPendingApproval(): Promise<ContractTermination[]> {
+  async getTerminationsPendingApproval(companyId?: number): Promise<ContractTermination[]> {
     const request: BaseRequest = {
       mode: 22, // Mode 22: Get Terminations Pending Approval
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyId, // Added company filter
+      },
     };
 
     const response = await this.execute<ContractTermination[]>(request);
@@ -780,12 +789,15 @@ class TerminationService extends BaseService {
 
   /**
    * Get termination statistics
+   * @param companyId - Optional company ID to filter statistics
    * @returns Termination statistics
    */
-  async getTerminationStatistics(): Promise<TerminationStatistics> {
+  async getTerminationStatistics(companyId?: number): Promise<TerminationStatistics> {
     const request: BaseRequest = {
       mode: 17, // Mode 17: Get Termination Statistics
-      parameters: {},
+      parameters: {
+        FilterCompanyID: companyId, // Added company filter
+      },
     };
 
     const response = await this.execute(request, false);
