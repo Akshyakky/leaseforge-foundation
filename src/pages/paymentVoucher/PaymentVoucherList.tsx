@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -63,6 +62,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/hooks";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // PDF Report Components
 import { PdfPreviewModal, GenericPdfReport } from "@/components/pdf/PdfReportComponents";
@@ -118,6 +118,7 @@ const PaymentVoucherList: React.FC = () => {
   const [selectedVoucher, setSelectedVoucher] = useState<PaymentVoucher | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedVouchers, setSelectedVouchers] = useState<Set<string>>(new Set());
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Filter and sort state
   const [filters, setFilters] = useState<PaymentVoucherFilter>({
@@ -149,6 +150,59 @@ const PaymentVoucherList: React.FC = () => {
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Handle company changes with the custom hook
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data
+        setVouchers([]);
+        setFilteredVouchers([]);
+        setSelectedVouchers(new Set());
+
+        // Clear filters and URL parameters
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCompanyId: "",
+          selectedFiscalYearId: "",
+          selectedStatus: "",
+          selectedApprovalStatus: "",
+          selectedSupplierId: "",
+          selectedPaymentType: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+
+        // Load data for the new company
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          const [vouchersData, companiesData, fiscalYearsData, suppliersData] = await Promise.all([
+            paymentVoucherService.getAllPaymentVouchers({ companyId: companyIdNum }),
+            companyService.getCompaniesForDropdown(true),
+            fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+            supplierService.getSuppliersForDropdown(true),
+          ]);
+
+          setVouchers(vouchersData);
+          setCompanies(companiesData);
+          setFiscalYears(fiscalYearsData);
+          setSuppliers(suppliersData);
+        }
+      } catch (error) {
+        console.error("Error handling company change in PaymentVoucherList:", error);
+        toast.error("Failed to load payment vouchers for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
 
   // Initialize data on component mount
   useEffect(() => {
@@ -192,7 +246,8 @@ const PaymentVoucherList: React.FC = () => {
   // Fetch all vouchers
   const fetchVouchers = async () => {
     try {
-      const vouchersData = await paymentVoucherService.getAllPaymentVouchers();
+      const companyId = currentCompanyId ? parseInt(currentCompanyId) : undefined;
+      const vouchersData = await paymentVoucherService.getAllPaymentVouchers({ companyId });
       setVouchers(vouchersData);
     } catch (error) {
       console.error("Error fetching vouchers:", error);
@@ -823,10 +878,16 @@ const PaymentVoucherList: React.FC = () => {
     filters.dateFrom ||
     filters.dateTo;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading payment vouchers for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -838,7 +899,15 @@ const PaymentVoucherList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Payment Voucher Management</h1>
-            <p className="text-muted-foreground">Manage payment vouchers and supplier payments</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage payment vouchers and supplier payments</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
@@ -1020,6 +1089,7 @@ const PaymentVoucherList: React.FC = () => {
                   {stats.paidProtected > 0 && (
                     <span className="ml-2 text-green-600 dark:text-green-500">• {stats.paidProtected} paid vouchers are protected from modifications</span>
                   )}
+                  {currentCompanyName && <span className="ml-2 text-blue-600 dark:text-blue-400">• Filtered by {currentCompanyName}</span>}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -1104,20 +1174,6 @@ const PaymentVoucherList: React.FC = () => {
               {/* Advanced Filters */}
               {showFilters && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 p-4 bg-muted/50 dark:bg-muted/20 rounded-lg">
-                  <Select value={filters.selectedCompanyId || "all"} onValueChange={(value) => handleFilterChange("selectedCompanyId", value === "all" ? "" : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Company" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Companies</SelectItem>
-                      {companies.map((company) => (
-                        <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
-                          {company.CompanyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
                   <Select value={filters.selectedFiscalYearId || "all"} onValueChange={(value) => handleFilterChange("selectedFiscalYearId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Fiscal Year" />

@@ -27,6 +27,7 @@ import {
   X,
   AlertCircle,
   Shield,
+  Building,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,6 +75,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/hooks";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Form validation schema
 const postingSchema = z.object({
@@ -138,6 +140,7 @@ const LeaseRevenuePostingList: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("unposted");
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Selection state
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
@@ -166,6 +169,68 @@ const LeaseRevenuePostingList: React.FC = () => {
 
   // Check if user is manager/admin
   const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Handle company changes with the custom hook
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data
+        setUnpostedTransactions([]);
+        setPostedTransactions([]);
+        setPendingApprovals([]);
+        setSelectedTransactions(new Set());
+
+        // Clear filters and URL parameters
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCompanyId: "",
+          selectedFiscalYearId: "",
+          selectedPropertyId: "",
+          selectedCustomerId: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+
+        // Load data for the new company
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          const [companiesData, fiscalYearsData, accountsData, currenciesData, propertiesData, customersData, unpostedData, postedData, pendingApprovalsData] = await Promise.all([
+            companyService.getCompaniesForDropdown(true),
+            fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+            accountService.getAllAccounts(),
+            currencyService.getAllCurrencies(),
+            propertyService.getAllProperties(),
+            customerService.getAllCustomers(),
+            leaseRevenuePostingService.getUnpostedTransactions({ CompanyID: companyIdNum }),
+            leaseRevenuePostingService.getPostedTransactions({ CompanyID: companyIdNum }),
+            isManager ? leaseRevenuePostingService.getPendingApprovals({ companyId: companyIdNum }) : Promise.resolve([]),
+          ]);
+
+          setCompanies(companiesData);
+          setFiscalYears(fiscalYearsData);
+          setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
+          setCurrencies(currenciesData);
+          setProperties(propertiesData);
+          setCustomers(customersData);
+          setUnpostedTransactions(unpostedData);
+          setPostedTransactions(postedData);
+          setPendingApprovals(pendingApprovalsData);
+        }
+      } catch (error) {
+        console.error("Error handling company change in LeaseRevenuePostingList:", error);
+        toast.error("Failed to load lease revenue transactions for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
 
   // Posting form
   const postingForm = useForm<PostingFormValues>({
@@ -202,7 +267,7 @@ const LeaseRevenuePostingList: React.FC = () => {
 
   // Apply filters when they change
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !isCompanyChanging) {
       fetchTransactionsData();
     }
   }, [filters]);
@@ -248,7 +313,7 @@ const LeaseRevenuePostingList: React.FC = () => {
   const fetchTransactionsData = async () => {
     try {
       const apiFilters: LeaseRevenueFilters = {
-        CompanyID: filters.selectedCompanyId ? parseInt(filters.selectedCompanyId) : undefined,
+        CompanyID: currentCompanyId ? parseInt(currentCompanyId) : filters.selectedCompanyId ? parseInt(filters.selectedCompanyId) : undefined,
         FiscalYearID: filters.selectedFiscalYearId ? parseInt(filters.selectedFiscalYearId) : undefined,
         PropertyID: filters.selectedPropertyId ? parseInt(filters.selectedPropertyId) : undefined,
         CustomerID: filters.selectedCustomerId ? parseInt(filters.selectedCustomerId) : undefined,
@@ -403,7 +468,7 @@ const LeaseRevenuePostingList: React.FC = () => {
         ReferenceNo: data.referenceNo,
         ExchangeRate: data.exchangeRate || 1,
         CurrencyID: data.currencyId ? parseInt(data.currencyId) : undefined,
-        CompanyID: filters.selectedCompanyId ? parseInt(filters.selectedCompanyId) : 1,
+        CompanyID: currentCompanyId ? parseInt(currentCompanyId) : filters.selectedCompanyId ? parseInt(filters.selectedCompanyId) : 1,
         FiscalYearID: filters.selectedFiscalYearId ? parseInt(filters.selectedFiscalYearId) : 1,
         SelectedTransactions: selectedTxns,
       };
@@ -544,7 +609,7 @@ const LeaseRevenuePostingList: React.FC = () => {
   const renderStatusBadge = (isPosted: boolean, isReversed?: boolean, approvalStatus?: ApprovalStatus) => {
     if (isReversed) {
       return (
-        <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+        <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
           <XCircle className="w-3 h-3 mr-1" />
           Reversed
         </Badge>
@@ -554,28 +619,28 @@ const LeaseRevenuePostingList: React.FC = () => {
     if (isPosted) {
       if (approvalStatus === ApprovalStatus.APPROVED) {
         return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
+          <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
             <CheckCircle className="w-3 h-3 mr-1" />
             Posted & Approved
           </Badge>
         );
       } else if (approvalStatus === ApprovalStatus.PENDING) {
         return (
-          <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+          <Badge variant="default" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
             <Clock className="w-3 h-3 mr-1" />
             Posted - Pending Approval
           </Badge>
         );
       } else if (approvalStatus === ApprovalStatus.REJECTED) {
         return (
-          <Badge variant="destructive" className="bg-red-100 text-red-800">
+          <Badge variant="destructive" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
             <XCircle className="w-3 h-3 mr-1" />
             Posted - Rejected
           </Badge>
         );
       } else {
         return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
+          <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
             <CheckCircle className="w-3 h-3 mr-1" />
             Posted
           </Badge>
@@ -584,7 +649,7 @@ const LeaseRevenuePostingList: React.FC = () => {
     }
 
     return (
-      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
         <Clock className="w-3 h-3 mr-1" />
         Unposted
       </Badge>
@@ -625,10 +690,16 @@ const LeaseRevenuePostingList: React.FC = () => {
     filters.dateFrom ||
     filters.dateTo;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading lease revenue transactions for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -640,11 +711,23 @@ const LeaseRevenuePostingList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Lease Revenue Posting</h1>
-            <p className="text-muted-foreground">Post lease revenue transactions to the general ledger</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Post lease revenue transactions to the general ledger</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isManager && pendingApprovals.length > 0 && (
-              <Button variant="outline" onClick={handleViewPendingApprovals} className="bg-yellow-50 border-yellow-200 text-yellow-800">
+              <Button
+                variant="outline"
+                onClick={handleViewPendingApprovals}
+                className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
+              >
                 <Shield className="mr-2 h-4 w-4" />
                 {pendingApprovals.length} Pending Approval{pendingApprovals.length !== 1 ? "s" : ""}
               </Button>
@@ -662,7 +745,7 @@ const LeaseRevenuePostingList: React.FC = () => {
 
         {/* Summary Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -673,57 +756,57 @@ const LeaseRevenuePostingList: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm text-muted-foreground">Selected</span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{stats.unposted.selected}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.unposted.selected}</div>
               <div className="text-xs text-muted-foreground">{formatCurrency(stats.unposted.selectedAmount)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-blue-600" />
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Posted</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{stats.posted.total}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.posted.total}</div>
               <div className="text-xs text-muted-foreground">{formatCurrency(stats.posted.totalAmount)}</div>
             </CardContent>
           </Card>
 
           {isManager && (
             <>
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <span className="text-sm text-muted-foreground">Pending</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600">{stats.posted.pendingApproval}</div>
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.posted.pendingApproval}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm text-muted-foreground">Approved</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{stats.posted.approved}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.posted.approved}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
+              <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <span className="text-sm text-muted-foreground">Rejected</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{stats.posted.rejected}</div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.posted.rejected}</div>
                 </CardContent>
               </Card>
             </>
@@ -737,7 +820,10 @@ const LeaseRevenuePostingList: React.FC = () => {
                 <CardTitle>Lease Revenue Transactions</CardTitle>
                 <CardDescription>
                   Manage lease revenue posting operations
-                  {stats.posted.pendingApproval > 0 && <span className="ml-2 text-yellow-600">• {stats.posted.pendingApproval} transactions pending approval</span>}
+                  {stats.posted.pendingApproval > 0 && (
+                    <span className="ml-2 text-yellow-600 dark:text-yellow-400">• {stats.posted.pendingApproval} transactions pending approval</span>
+                  )}
+                  {currentCompanyName && <span className="ml-2 text-blue-600 dark:text-blue-400">• Filtered by {currentCompanyName}</span>}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -771,21 +857,7 @@ const LeaseRevenuePostingList: React.FC = () => {
 
               {/* Advanced Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <Select value={filters.selectedCompanyId || "all"} onValueChange={(value) => handleFilterChange("selectedCompanyId", value === "all" ? "" : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Company" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Companies</SelectItem>
-                      {companies.map((company) => (
-                        <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
-                          {company.CompanyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg dark:bg-muted/20">
                   <Select value={filters.selectedFiscalYearId || "all"} onValueChange={(value) => handleFilterChange("selectedFiscalYearId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Fiscal year" />
@@ -951,7 +1023,7 @@ const LeaseRevenuePostingList: React.FC = () => {
                           const isSelected = selectedTransactions.has(transactionKey);
 
                           return (
-                            <TableRow key={transactionKey} className={cn("hover:bg-muted/50 transition-colors", isSelected && "bg-accent/50")}>
+                            <TableRow key={transactionKey} className={cn("hover:bg-muted/50 transition-colors", isSelected && "bg-accent/50 dark:bg-accent/20")}>
                               <TableCell>
                                 <Checkbox
                                   checked={isSelected}
@@ -1058,8 +1130,8 @@ const LeaseRevenuePostingList: React.FC = () => {
                               key={posting.PostingID}
                               className={cn(
                                 "hover:bg-muted/50 transition-colors",
-                                isPending && "bg-yellow-50/30",
-                                posting.ApprovalStatus === ApprovalStatus.APPROVED && "bg-green-50/30"
+                                isPending && "bg-yellow-50/30 dark:bg-yellow-950/20",
+                                posting.ApprovalStatus === ApprovalStatus.APPROVED && "bg-green-50/30 dark:bg-green-950/20"
                               )}
                             >
                               <TableCell>
@@ -1103,7 +1175,7 @@ const LeaseRevenuePostingList: React.FC = () => {
                                   {isPending && (
                                     <Tooltip>
                                       <TooltipTrigger>
-                                        <Clock className="h-3 w-3 text-yellow-600 ml-1" />
+                                        <Clock className="h-3 w-3 text-yellow-600 dark:text-yellow-400 ml-1" />
                                       </TooltipTrigger>
                                       <TooltipContent>
                                         <p>Pending approval</p>
@@ -1136,7 +1208,7 @@ const LeaseRevenuePostingList: React.FC = () => {
                                             setApprovalDialogOpen(true);
                                           }}
                                         >
-                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                          <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                                           Approve
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
@@ -1145,7 +1217,7 @@ const LeaseRevenuePostingList: React.FC = () => {
                                             setApprovalAction(ApprovalAction.REJECT);
                                             setApprovalDialogOpen(true);
                                           }}
-                                          className="text-red-500"
+                                          className="text-red-500 dark:text-red-400"
                                         >
                                           <XCircle className="mr-2 h-4 w-4" />
                                           Reject
@@ -1161,7 +1233,7 @@ const LeaseRevenuePostingList: React.FC = () => {
                                             setSelectedPosting(posting);
                                             setReversalDialogOpen(true);
                                           }}
-                                          className="text-red-500"
+                                          className="text-red-500 dark:text-red-400"
                                         >
                                           <RotateCcw className="mr-2 h-4 w-4" />
                                           Reverse
