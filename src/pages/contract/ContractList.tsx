@@ -1,4 +1,4 @@
-// src/pages/contract/ContractList.tsx - Enhanced with Email Integration and Dark Mode Support
+// src/pages/contract/ContractList.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";

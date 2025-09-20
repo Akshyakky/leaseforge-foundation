@@ -52,6 +52,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/lib/hooks";
 import { FiscalYear } from "@/types/fiscalYearTypes";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Types and interfaces
 interface VoucherFilter {
@@ -98,6 +99,7 @@ const PettyCashList: React.FC = () => {
   const [selectedVoucher, setSelectedVoucher] = useState<PettyCashVoucher | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedVouchers, setSelectedVouchers] = useState<Set<string>>(new Set());
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Filter and sort state
   const [filters, setFilters] = useState<VoucherFilter>({
@@ -123,6 +125,52 @@ const PettyCashList: React.FC = () => {
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Handle company changes with the custom hook
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        setVouchers([]);
+        setFilteredVouchers([]);
+        setSelectedVouchers(new Set());
+
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCompanyId: "",
+          selectedFiscalYearId: "",
+          selectedStatus: "",
+          selectedApprovalStatus: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          const [vouchersData, companiesData, fiscalYearsData] = await Promise.all([
+            pettyCashService.getAllVouchers({ companyId: companyIdNum }),
+            companyService.getCompaniesForDropdown(true),
+            fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+          ]);
+
+          setVouchers(vouchersData);
+          setCompanies(companiesData);
+          setFiscalYears(fiscalYearsData);
+        }
+      } catch (error) {
+        console.error("Error handling company change in PettyCashList:", error);
+        toast.error("Failed to load petty cash vouchers for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
 
   // Initialize data on component mount
   useEffect(() => {
@@ -164,7 +212,8 @@ const PettyCashList: React.FC = () => {
   // Fetch all vouchers
   const fetchVouchers = async () => {
     try {
-      const vouchersData = await pettyCashService.getAllVouchers();
+      const companyId = currentCompanyId ? parseInt(currentCompanyId) : undefined;
+      const vouchersData = await pettyCashService.getAllVouchers({ companyId });
       setVouchers(vouchersData);
     } catch (error) {
       console.error("Error fetching vouchers:", error);
@@ -640,10 +689,16 @@ const PettyCashList: React.FC = () => {
     filters.dateFrom ||
     filters.dateTo;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading petty cash vouchers for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -655,7 +710,15 @@ const PettyCashList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Petty Cash Management</h1>
-            <p className="text-muted-foreground">Manage petty cash vouchers and expenses</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage petty cash vouchers and expenses</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
@@ -791,6 +854,7 @@ const PettyCashList: React.FC = () => {
           </Card>
         </div>
 
+        {/* Rest of the component remains the same... */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
@@ -798,6 +862,7 @@ const PettyCashList: React.FC = () => {
                 <CardTitle>Petty Cash Vouchers</CardTitle>
                 <CardDescription>
                   {hasActiveFilters ? `Showing ${filteredVouchers.length} of ${vouchers.length} vouchers` : `Showing all ${vouchers.length} vouchers`}
+                  {currentCompanyName && <span className="ml-2 text-blue-600 dark:text-blue-400">• Filtered by {currentCompanyName}</span>}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
