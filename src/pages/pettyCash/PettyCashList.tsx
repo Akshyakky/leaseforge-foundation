@@ -861,20 +861,6 @@ const PettyCashList: React.FC = () => {
               {/* Advanced Filters */}
               {showFilters && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <Select value={filters.selectedCompanyId || "all"} onValueChange={(value) => handleFilterChange("selectedCompanyId", value === "all" ? "" : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Filter by company" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Companies</SelectItem>
-                      {companies.map((company) => (
-                        <SelectItem key={company.CompanyID} value={company.CompanyID.toString()}>
-                          {company.CompanyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
                   <Select value={filters.selectedFiscalYearId || "all"} onValueChange={(value) => handleFilterChange("selectedFiscalYearId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Fiscal year" />

@@ -1,4 +1,4 @@
-// src/pages/contractReceipt/ContractReceiptList.tsx - Updated with Comprehensive Approval System
+// src/pages/contractReceipt/ContractReceiptList.tsx - Updated with Company Management
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,7 @@ import {
 } from "@/types/contractReceiptTypes";
 import { PdfPreviewModal } from "@/components/pdf/PdfReportComponents";
 import { useGenericPdfReport } from "@/hooks/usePdfReports";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Posting schema
 const postingSchema = z.object({
@@ -151,11 +152,13 @@ const ContractReceiptList: React.FC = () => {
 
   // State variables
   const [receipts, setReceipts] = useState<ContractReceipt[]>([]);
+  const [allReceipts, setAllReceipts] = useState<ContractReceipt[]>([]);
   const [filteredReceipts, setFilteredReceipts] = useState<ContractReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedReceipts, setSelectedReceipts] = useState<Set<number>>(new Set());
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
 
   // Reference data
   const [customers, setCustomers] = useState<any[]>([]);
@@ -245,6 +248,80 @@ const ContractReceiptList: React.FC = () => {
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
 
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+
+      try {
+        // Clear existing data and selections
+        setReceipts([]);
+        setAllReceipts([]);
+        setFilteredReceipts([]);
+        setSelectedReceipts(new Set());
+
+        // Clear filters
+        const clearedFilters = {
+          searchTerm: "",
+          selectedCustomerId: "",
+          selectedPropertyId: "",
+          selectedPaymentStatus: "",
+          selectedApprovalStatus: "",
+          selectedPaymentType: "",
+          selectedBankId: "",
+          dateFrom: undefined,
+          dateTo: undefined,
+          depositDateFrom: undefined,
+          depositDateTo: undefined,
+          showPostedOnly: undefined,
+          showAdvanceOnly: undefined,
+        };
+        setFilters(clearedFilters);
+        setSearchParams(new URLSearchParams());
+        setActiveTab("all");
+
+        if (newCompanyId) {
+          const companyIdNum = parseInt(newCompanyId);
+
+          // Fetch all data
+          const [allReceiptsData, customersData, propertiesData, companiesData, fiscalYearsData, accountsData, currenciesData, banksData] = await Promise.all([
+            leaseReceiptService.getAllReceipts(),
+            customerService.getAllCustomers(),
+            propertyService.getAllProperties(),
+            companyService.getCompaniesForDropdown(true),
+            fiscalYearService.getFiscalYearsForDropdown({ filterIsActive: true }),
+            accountService.getAllAccounts(),
+            currencyService.getAllCurrencies(),
+            bankService.getAllBanks(),
+          ]);
+
+          // Filter receipts by company ID
+          const companyReceipts = allReceiptsData.filter((receipt) => receipt.CompanyID === companyIdNum);
+
+          // Set all data
+          setAllReceipts(allReceiptsData);
+          setReceipts(companyReceipts);
+          setCustomers(customersData);
+          setProperties(propertiesData);
+          setCompanies(companiesData);
+          setFiscalYears(fiscalYearsData);
+          setAccounts(accountsData.filter((acc) => acc.IsActive && acc.IsPostable));
+          setCurrencies(currenciesData);
+          setBanks(banksData);
+
+          // Fetch statistics for the company
+          await fetchStatistics();
+        }
+      } catch (error) {
+        console.error("Error handling company change in ContractReceiptList:", error);
+        toast.error("Failed to load receipts for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
+
   // Initialize data on component mount
   useEffect(() => {
     initializeData();
@@ -291,8 +368,17 @@ const ContractReceiptList: React.FC = () => {
   // Fetch data functions
   const fetchReceipts = async () => {
     try {
-      const receiptsData = await leaseReceiptService.getAllReceipts();
-      setReceipts(receiptsData);
+      const allReceiptsData = await leaseReceiptService.getAllReceipts();
+      setAllReceipts(allReceiptsData);
+
+      // Filter by current company if available
+      if (currentCompanyId) {
+        const companyIdNum = parseInt(currentCompanyId);
+        const companyReceipts = allReceiptsData.filter((receipt) => receipt.CompanyID === companyIdNum);
+        setReceipts(companyReceipts);
+      } else {
+        setReceipts(allReceiptsData);
+      }
     } catch (error) {
       console.error("Error fetching receipts:", error);
       toast.error("Failed to load receipts");
@@ -1101,10 +1187,16 @@ const ContractReceiptList: React.FC = () => {
     filters.showPostedOnly ||
     filters.showAdvanceOnly;
 
-  if (loading) {
+  if (loading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isCompanyChanging && (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading receipts for the selected company</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1116,7 +1208,15 @@ const ContractReceiptList: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-semibold">Contract Receipt Management</h1>
-            <p className="text-muted-foreground">Manage lease receipts, approvals, and payment posting</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">Manage lease receipts, approvals, and payment posting</p>
+              {currentCompanyName && (
+                <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isManager && stats.approvalPending > 0 && (
@@ -1158,6 +1258,7 @@ const ContractReceiptList: React.FC = () => {
             <CardTitle>Contract Receipts</CardTitle>
             <CardDescription>
               {hasActiveFilters ? `Showing ${currentReceipts.length} of ${receipts.length} receipts` : `Showing all ${receipts.length} receipts`}
+              {currentCompanyName && <span className="ml-2 text-blue-600 dark:text-blue-400">for {currentCompanyName}</span>}
               {stats.approvedProtected > 0 && <span className="ml-2 text-green-600">• {stats.approvedProtected} approved receipts are protected from modifications</span>}
             </CardDescription>
           </CardHeader>
