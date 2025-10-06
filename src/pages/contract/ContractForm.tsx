@@ -615,7 +615,107 @@ const ContractForm: React.FC = () => {
       }
     };
 
+    const handleEnhancedChargeChange = async (chargeId: string, index: number) => {
+      if (!chargeId || chargeId === "0") {
+        // Clear charge-related fields when no charge is selected
+        form.setValue(`additionalCharges.${index}.Amount`, 0);
+        form.setValue(`additionalCharges.${index}.TaxID`, "");
+        form.setValue(`additionalCharges.${index}.TaxPercentage`, 0);
+        form.setValue(`additionalCharges.${index}.TaxAmount`, 0);
+        form.setValue(`additionalCharges.${index}.TotalAmount`, 0);
+        return;
+      }
+
+      try {
+        // Find charge details from existing data or fetch from API
+        let chargeDetails = charges.find((c) => c.ChargesID.toString() === chargeId);
+
+        if (!chargeDetails) {
+          // Fetch charge details if not in current list
+          chargeDetails = await additionalChargesService.getChargeById(parseInt(chargeId));
+        }
+
+        if (chargeDetails) {
+          // Get current values to preserve any user changes
+          const currentValues = form.getValues(`additionalCharges.${index}`);
+
+          // Create updated charge data object
+          const updatedChargeData = {
+            ...currentValues,
+            AdditionalChargesID: chargeId,
+          };
+
+          // Auto-populate amount based on charge type
+          if (chargeDetails.IsPercentage && chargeDetails.PercentageValue) {
+            // For percentage-based charges, you might need additional context
+            // For now, we'll set the percentage value as a reference
+            toast.info(`This is a percentage-based charge (${chargeDetails.PercentageValue}%). Please enter the base amount to calculate the charge.`);
+            // You could optionally set a default base amount or leave it for manual entry
+            updatedChargeData.Amount = 0;
+          } else if (chargeDetails.ChargeAmount) {
+            // For fixed amount charges, auto-populate the charge amount
+            updatedChargeData.Amount = chargeDetails.ChargeAmount;
+          }
+
+          // Auto-populate tax information if available
+          if (chargeDetails.TaxID && chargeDetails.TaxID > 0) {
+            updatedChargeData.TaxID = chargeDetails.TaxID.toString();
+
+            // Find the tax details to get the rate
+            const selectedTax = taxes.find((tax) => tax.TaxID === chargeDetails.TaxID);
+            if (selectedTax) {
+              updatedChargeData.TaxPercentage = selectedTax.TaxRate;
+
+              // Calculate tax amount
+              const amount = updatedChargeData.Amount || 0;
+              const taxAmount = parseFloat(((amount * selectedTax.TaxRate) / 100).toFixed(2));
+              updatedChargeData.TaxAmount = taxAmount;
+              updatedChargeData.TotalAmount = parseFloat((amount + taxAmount).toFixed(2));
+            }
+          } else {
+            // No tax associated with this charge
+            updatedChargeData.TaxID = "0";
+            updatedChargeData.TaxPercentage = 0;
+            updatedChargeData.TaxAmount = 0;
+            updatedChargeData.TotalAmount = updatedChargeData.Amount || 0;
+          }
+
+          // Apply all updates at once to prevent multiple re-renders
+          Object.entries(updatedChargeData).forEach(([key, value]) => {
+            if (key !== "AdditionalChargesID") {
+              form.setValue(`additionalCharges.${index}.${key}` as any, value, {
+                shouldValidate: false,
+              });
+            }
+          });
+
+          // Show success notification with charge details
+          const chargeInfo = chargeDetails.IsPercentage
+            ? `${chargeDetails.ChargesName} (${chargeDetails.PercentageValue}%)`
+            : `${chargeDetails.ChargesName} (${chargeDetails.ChargeAmount})`;
+
+          toast.success(`Charge details loaded: ${chargeInfo}`);
+        } else {
+          toast.error("Charge details not found");
+        }
+      } catch (error) {
+        console.error("Error fetching charge details:", error);
+        toast.error("Failed to load charge details. Please try again.");
+      }
+    };
+
     const subscription = form.watch((value, { name, type }) => {
+      if (!name || type !== "change") return;
+
+      // Handle additional charge selection
+      if (name.includes("AdditionalChargesID") && name.includes("additionalCharges.")) {
+        const index = parseInt(name.split(".")[1]);
+        const chargeId = form.getValues(`additionalCharges.${index}.AdditionalChargesID`);
+
+        if (chargeId && chargeId !== "0") {
+          handleEnhancedChargeChange(chargeId, index);
+        }
+      }
       if (name && name.includes(".UnitID") && type === "change") {
         const index = parseInt(name.split(".")[1]);
         const unitId = form.getValues(`units.${index}.UnitID`);
@@ -627,7 +727,7 @@ const ContractForm: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, units, taxes]);
+  }, [form, units, charges, taxes]);
 
   // Enhanced contract duration calculations with validation
   useEffect(() => {
