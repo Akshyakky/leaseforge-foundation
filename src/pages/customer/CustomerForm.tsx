@@ -185,7 +185,7 @@ const customerSchema = z
     PrimaryContactName: z.string().optional(),
     PrimaryEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
     PrimaryPhone: z.string().optional(),
-    TaxRegNo: z.string().optional(),
+    TaxRegNo: z.string().min(1, "Tax registration number is required"),
     CustomerIdentityNo: z.string().optional(),
     AccountCode: z.string().optional(),
     AccountName: z.string().optional(),
@@ -929,7 +929,7 @@ const CustomerForm = () => {
                   <Separator />
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormField form={customerForm} name="TaxRegNo" label="Tax Registration Number" placeholder="Enter tax registration number" />
+                    <FormField form={customerForm} name="TaxRegNo" label="Tax Registration Number" placeholder="Enter tax registration number" required />
                     <FormField form={customerForm} name="AccountCode" label="Account Code" placeholder="Enter account code" />
                     <FormField form={customerForm} name="AccountName" label="Account Name" placeholder="Enter account name" />
                   </div>

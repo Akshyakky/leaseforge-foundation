@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { contractService } from "@/services/contractService";
 import { terminationService } from "@/services/terminationService";
-import { Calendar, BarChart3, PieChart as PieChartIcon, TrendingUp, HandCoins, FileText, Clock, AlertCircle, Plus, Users, RefreshCw } from "lucide-react";
+import { Calendar, BarChart3, PieChart as PieChartIcon, TrendingUp, HandCoins, FileText, Clock, AlertCircle, Plus, Users, RefreshCw, Building } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -16,6 +16,9 @@ import { Loader2 } from "lucide-react";
 import { ContractStatistics } from "@/types/contractTypes";
 import { TerminationStatistics } from "@/types/terminationTypes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { useAppSelector } from "@/lib/hooks";
+import { useCompanyChangeHandler } from "@/hooks/useCompanyChangeHandler";
 
 // Define color palettes for charts
 const STATUS_COLORS = [
@@ -69,8 +72,10 @@ interface DashboardData {
 
 const ContractAnalyticsDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAppSelector((state) => state.auth);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCompanyChanging, setIsCompanyChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timePeriod, setTimePeriod] = useState("90days");
   const [customDateRange, setCustomDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
@@ -102,11 +107,57 @@ const ContractAnalyticsDashboard: React.FC = () => {
     },
   });
 
+  // Handle company changes with the custom hook
+  const { currentCompanyId, currentCompanyName } = useCompanyChangeHandler({
+    onCompanyChange: async (newCompanyId: string, oldCompanyId: string | null) => {
+      setIsCompanyChanging(true);
+      try {
+        // Clear existing data
+        setDashboardData({
+          contractStats: {
+            statusCounts: [],
+            approvalCounts: [],
+            propertyUnitCounts: [],
+            customerCounts: [],
+          },
+          terminationStats: {
+            statusCounts: [],
+            approvalStatusCounts: [],
+            monthlyTerminations: [],
+            pendingRefunds: [],
+            pendingApprovals: [],
+          },
+          totalValues: {
+            activeContractsValue: 0,
+            totalContractsCount: 0,
+            averageContractValue: 0,
+            expiringContractsCount: 0,
+            pendingContractsCount: 0,
+            pendingTerminationsCount: 0,
+            pendingRefundsCount: 0,
+          },
+        });
+
+        // Load data for new company
+        if (newCompanyId) {
+          await loadDashboardData(false, parseInt(newCompanyId));
+        }
+      } catch (error) {
+        console.error("Error handling company change in dashboard:", error);
+        setError("Failed to load dashboard data for the selected company");
+      } finally {
+        setIsCompanyChanging(false);
+      }
+    },
+    enableLogging: true,
+    showNotifications: true,
+  });
+
   useEffect(() => {
     loadDashboardData();
   }, []);
 
-  const loadDashboardData = async (showRefreshing = false) => {
+  const loadDashboardData = async (showRefreshing = false, companyId?: number) => {
     if (showRefreshing) {
       setIsRefreshing(true);
     } else {
@@ -115,8 +166,14 @@ const ContractAnalyticsDashboard: React.FC = () => {
     setError(null);
 
     try {
-      // Load contract and termination statistics in parallel
-      const [contractStats, terminationStats] = await Promise.all([contractService.getContractStatistics(), terminationService.getTerminationStatistics()]);
+      // Use provided companyId or current company ID
+      const effectiveCompanyId = companyId ?? (currentCompanyId ? parseInt(currentCompanyId) : undefined);
+
+      // Load contract and termination statistics in parallel with company filter
+      const [contractStats, terminationStats] = await Promise.all([
+        contractService.getContractStatistics(effectiveCompanyId),
+        terminationService.getTerminationStatistics(effectiveCompanyId),
+      ]);
 
       // Calculate total values
       const totalValues = calculateTotalValues(contractStats, terminationStats);
@@ -169,7 +226,8 @@ const ContractAnalyticsDashboard: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    loadDashboardData(true);
+    const companyId = currentCompanyId ? parseInt(currentCompanyId) : undefined;
+    loadDashboardData(true, companyId);
   };
 
   const formatCurrency = (value: number) => {
@@ -204,11 +262,18 @@ const ContractAnalyticsDashboard: React.FC = () => {
     ));
   };
 
-  if (isLoading) {
+  if (isLoading || isCompanyChanging) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading dashboard data...</span>
+        {isCompanyChanging ? (
+          <div className="text-center">
+            <p className="text-muted-foreground">Switching to {currentCompanyName}...</p>
+            <p className="text-sm text-muted-foreground">Loading dashboard data for the selected company</p>
+          </div>
+        ) : (
+          <span className="ml-2">Loading dashboard data...</span>
+        )}
       </div>
     );
   }
@@ -217,7 +282,17 @@ const ContractAnalyticsDashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Contract Analytics</h1>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Contract Analytics</h1>
+              {currentCompanyName && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  <Building className="mr-1 h-3 w-3" />
+                  {currentCompanyName}
+                </Badge>
+              )}
+            </div>
+          </div>
           <Button onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
             Retry
@@ -235,8 +310,16 @@ const ContractAnalyticsDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Contract Analytics</h1>
-          <p className="text-gray-500">Monitor and analyze contract performance</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Contract Analytics</h1>
+            {currentCompanyName && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                <Building className="mr-1 h-3 w-3" />
+                {currentCompanyName}
+              </Badge>
+            )}
+          </div>
+          <p className="text-gray-500">Monitor and analyze contract performance for the selected company</p>
         </div>
         <div className="flex space-x-4">
           <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>

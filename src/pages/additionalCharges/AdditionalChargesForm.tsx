@@ -113,6 +113,15 @@ const AdditionalChargesForm: React.FC = () => {
         setTaxes(taxesData);
         setCurrencies(currenciesData);
 
+        setTimeout(() => {
+          if (!isEdit) {
+            if (currenciesData.length > 0) {
+              const defaultCurrency = currenciesData.find((c) => c.IsDefault) || currenciesData[0];
+              form.setValue("CurrencyID", defaultCurrency.CurrencyID.toString());
+            }
+          }
+        }, 0);
+
         // If editing, fetch the charge data
         if (isEdit && id) {
           const chargeData = await additionalChargesService.getChargeById(parseInt(id));
