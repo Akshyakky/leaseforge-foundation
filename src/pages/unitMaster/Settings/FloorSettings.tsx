@@ -14,7 +14,7 @@ interface FloorSettingsProps {
 const floorSchema = z.object({
   FloorName: z.string().min(1, "Floor name is required"),
   FloorNumber: z.coerce.number().min(0, "Floor number must be non-negative"),
-  PropertyID: z.coerce.number().min(1, "Property is required"),
+  PropertyID: z.coerce.number().optional(),
   Description: z.string().optional(),
 });
 
@@ -22,7 +22,7 @@ const floorSchema = z.object({
 const tableColumns = [
   { key: "FloorName", header: "Name" },
   { key: "FloorNumber", header: "Floor Number" },
-  { key: "PropertyName", header: "Property" },
+  // { key: "PropertyName", header: "Property" },
   { key: "CreatedBy", header: "Created By" },
   { key: "CreatedOn", header: "Created On" },
 ];
@@ -44,7 +44,7 @@ export const FloorSettings = ({ properties, isLoadingProperties }: FloorSettings
   const renderAdditionalFields = (form: any) => (
     <>
       <div className="grid grid-cols-2 gap-4">
-        <div>
+        {/* <div>
           <label className="text-sm font-medium">Property</label>
           <Select value={form.watch("PropertyID").toString() || "0"} onValueChange={(value) => form.setValue("PropertyID", parseInt(value))} disabled={isLoadingProperties}>
             <SelectTrigger>
@@ -62,7 +62,7 @@ export const FloorSettings = ({ properties, isLoadingProperties }: FloorSettings
             </SelectContent>
           </Select>
           {form.formState.errors.PropertyID && <p className="text-sm font-medium text-destructive">{form.formState.errors.PropertyID.message}</p>}
-        </div>
+        </div> */}
 
         <div>
           <label className="text-sm font-medium">Floor Number</label>

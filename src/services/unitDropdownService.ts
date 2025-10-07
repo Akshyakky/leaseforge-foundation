@@ -125,7 +125,7 @@ class UnitDropdownService extends BaseService {
     const request: BaseRequest = {
       mode: 5, // Mode 5: Get Floors for Dropdown
       parameters: {
-        PropertyID: propertyId,
+        //PropertyID: propertyId,
       },
     };
 
