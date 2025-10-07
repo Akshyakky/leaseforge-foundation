@@ -1,5 +1,5 @@
 // src/pages/UnitMaster/types.ts
-import { Unit, UnitContact } from "../../services/unitService";
+import { Unit, UnitAttachment, UnitContact } from "../../services/unitService";
 
 export interface FormMode {
   isCreate: boolean;
@@ -10,9 +10,9 @@ export interface FormMode {
 
 export interface UnitFormProps {
   unit?: Unit;
+  sourceUnit?: Unit;
   mode: FormMode;
-  sourceUnit?: Unit; // Unit to clone from
-  onSave: (unit: Partial<Unit>, contacts: Partial<UnitContact>[]) => Promise<void>;
+  onSave: (unitData: Partial<Unit>, contacts: Partial<UnitContact>[], attachments?: Partial<UnitAttachment>[]) => Promise<void>;
   onCancel: () => void;
 }
 

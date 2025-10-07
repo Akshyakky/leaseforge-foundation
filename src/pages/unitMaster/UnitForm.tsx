@@ -849,7 +849,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
       return;
     }
 
-    // Prepare attachments data
+    // Prepare attachments data - only include new attachments
     const attachmentsData: Partial<UnitAttachment>[] = attachments
       .filter((att) => att.isNew && att.DocTypeID && att.DocTypeID > 0)
       .map((att) => ({
@@ -869,7 +869,8 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
         Remarks: att.Remarks,
       }));
 
-    await onSave(preparedData, contacts);
+    // Pass attachments as the third parameter
+    await onSave(preparedData, contacts, attachmentsData);
   };
 
   // Open attachment dialog

@@ -1,6 +1,6 @@
 // src/pages/UnitMaster/UnitMasterPage.tsx
 import { useState, useEffect } from "react";
-import { unitService } from "../../services/unitService";
+import { UnitAttachment, unitService } from "../../services/unitService";
 import { Unit, UnitContact } from "../../services/unitService";
 import { UnitSearchFilters, FormMode } from "./types";
 import { toast } from "sonner";
@@ -176,7 +176,7 @@ export const UnitMasterPage = () => {
     }
   };
 
-  const handleSave = async (unitData: Partial<Unit>, contacts: Partial<UnitContact>[]) => {
+  const handleSave = async (unitData: Partial<Unit>, contacts: Partial<UnitContact>[], attachments?: Partial<UnitAttachment>[]) => {
     setIsLoading(true);
     try {
       if (viewMode === ViewMode.CREATE || viewMode === ViewMode.CLONE) {
@@ -186,14 +186,14 @@ export const UnitMasterPage = () => {
             ? { ...unitData, UnitID: undefined } // Remove ID to ensure new creation
             : unitData;
 
-        const newUnitId = await unitService.createUnit(dataToSave, contacts);
+        const newUnitId = await unitService.createUnit(dataToSave, contacts, attachments);
         if (newUnitId) {
           const successMessage = viewMode === ViewMode.CLONE ? `Unit cloned successfully (New Unit ID: ${newUnitId})` : "Unit created successfully";
           toast.success(successMessage);
           navigateToList();
         }
       } else if (viewMode === ViewMode.EDIT && selectedUnit) {
-        const success = await unitService.updateUnit({ ...unitData, UnitID: selectedUnit.UnitID }, contacts);
+        const success = await unitService.updateUnit({ ...unitData, UnitID: selectedUnit.UnitID }, contacts, attachments);
         if (success) {
           toast.success("Unit updated successfully");
           navigateToList();
