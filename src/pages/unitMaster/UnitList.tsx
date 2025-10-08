@@ -59,7 +59,7 @@ export const UnitList: React.FC<UnitListProps> = ({ units, isLoading, onEdit, on
   const formatAttachmentInfo = (unit: any) => {
     const imageCount = unit.ImageCount || 0;
     const attachmentCount = unit.AttachmentCount || 0;
-    const totalCount = unit.TotalAttachmentCount || 0;
+    const totalCount = imageCount + attachmentCount;
 
     if (totalCount === 0) {
       return { text: "No attachments", icon: null, variant: "outline" as const };

@@ -128,58 +128,112 @@ interface PropertySummary {
 
 // Smart categorization based on file type
 const getSmartAttachmentInfo = (
-  file: File
+  file: File,
+  availableDocTypes: DocType[]
 ): {
   type: AttachmentFormData["AttachmentType"];
   category: AttachmentFormData["AttachmentCategory"];
-  suggestedDocTypes: number[];
+  suggestedDocTypeId: number | null;
 } => {
   const fileName = file.name.toLowerCase();
   const fileType = file.type.toLowerCase();
   const fileExtension = fileName.split(".").pop() || "";
 
+  // Helper function to find matching doc type
+  const findDocType = (keywords: string[]): number | null => {
+    const docType = availableDocTypes.find((dt) => {
+      const description = dt.Description.toLowerCase();
+      return keywords.some((keyword) => description.includes(keyword.toLowerCase()));
+    });
+    return docType?.DocTypeID || null;
+  };
+
   // Image files
   if (fileType.startsWith("image/")) {
     if (fileName.includes("floor") || fileName.includes("plan") || fileName.includes("layout")) {
-      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [1, 2] };
+      return {
+        type: "Blueprint",
+        category: "Floor Plan",
+        suggestedDocTypeId: findDocType(["floor", "plan", "blueprint", "layout"]),
+      };
     }
     if (fileName.includes("main") || fileName.includes("cover") || fileName.includes("primary")) {
-      return { type: "Image", category: "Primary", suggestedDocTypes: [1] };
+      return {
+        type: "Image",
+        category: "Primary",
+        suggestedDocTypeId: findDocType(["main", "primary", "cover", "image", "photo"]),
+      };
     }
-    return { type: "Image", category: "Gallery", suggestedDocTypes: [1, 2] };
+    return {
+      type: "Image",
+      category: "Gallery",
+      suggestedDocTypeId: findDocType(["image", "photo", "gallery", "picture"]),
+    };
   }
 
   // Video files
   if (fileType.startsWith("video/")) {
-    return { type: "Video", category: "Marketing", suggestedDocTypes: [3] };
+    return {
+      type: "Video",
+      category: "Marketing",
+      suggestedDocTypeId: findDocType(["video", "media", "marketing"]),
+    };
   }
 
   // PDF files
   if (fileType === "application/pdf" || fileExtension === "pdf") {
     if (fileName.includes("certificate") || fileName.includes("cert")) {
-      return { type: "Certificate", category: "Legal", suggestedDocTypes: [4, 5] };
+      return {
+        type: "Certificate",
+        category: "Legal",
+        suggestedDocTypeId: findDocType(["certificate", "cert", "legal"]),
+      };
     }
     if (fileName.includes("title") || fileName.includes("deed") || fileName.includes("legal")) {
-      return { type: "Document", category: "Legal", suggestedDocTypes: [4, 5, 6] };
+      return {
+        type: "Document",
+        category: "Legal",
+        suggestedDocTypeId: findDocType(["title", "deed", "legal", "document"]),
+      };
     }
     if (fileName.includes("plan") || fileName.includes("blueprint") || fileName.includes("drawing")) {
-      return { type: "Blueprint", category: "Floor Plan", suggestedDocTypes: [7, 8] };
+      return {
+        type: "Blueprint",
+        category: "Floor Plan",
+        suggestedDocTypeId: findDocType(["plan", "blueprint", "drawing", "technical"]),
+      };
     }
-    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10] };
+    return {
+      type: "Document",
+      category: "Other",
+      suggestedDocTypeId: findDocType(["document", "pdf", "file"]),
+    };
   }
 
   // Office documents
   if (fileType.includes("word") || fileType.includes("excel") || fileType.includes("powerpoint") || ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(fileExtension)) {
-    return { type: "Document", category: "Other", suggestedDocTypes: [9, 10, 11] };
+    return {
+      type: "Document",
+      category: "Other",
+      suggestedDocTypeId: findDocType(["document", "office", "report"]),
+    };
   }
 
   // CAD files
   if (["dwg", "dxf", "autocad"].includes(fileExtension)) {
-    return { type: "Blueprint", category: "Construction", suggestedDocTypes: [7, 8] };
+    return {
+      type: "Blueprint",
+      category: "Construction",
+      suggestedDocTypeId: findDocType(["cad", "drawing", "technical", "blueprint"]),
+    };
   }
 
   // Default fallback
-  return { type: "Other", category: "Other", suggestedDocTypes: [12] };
+  return {
+    type: "Other",
+    category: "Other",
+    suggestedDocTypeId: availableDocTypes.length > 0 ? availableDocTypes[0].DocTypeID : null,
+  };
 };
 
 // Property Information Display Component
@@ -492,18 +546,15 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
           }
         }
 
-        // Get smart attachment info
-        const smartInfo = getSmartAttachmentInfo(file);
+        // Get smart attachment info with actual doc types
+        const smartInfo = getSmartAttachmentInfo(file, docTypes);
 
-        // Find the best matching doc type
-        const suggestedDocType =
-          smartInfo.suggestedDocTypes.find((id) => docTypes.some((dt) => dt.DocTypeID === id)) ||
-          smartInfo.suggestedDocTypes[0] ||
-          (docTypes.length > 0 ? docTypes[0].DocTypeID : 0);
+        // Use the suggested doc type if found, otherwise use first available
+        const docTypeId = smartInfo.suggestedDocTypeId || (docTypes.length > 0 ? docTypes[0].DocTypeID : 0);
 
         const newAttachment: AttachmentFormData = {
           DocumentName: file.name,
-          DocTypeID: suggestedDocType,
+          DocTypeID: docTypeId,
           FileContent: base64Content,
           FileContentType: file.type,
           FileSize: file.size,
@@ -581,11 +632,34 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
   };
 
   // Get filtered doc types based on attachment type
-  const getFilteredDocTypes = (attachmentType: AttachmentFormData["AttachmentType"]) => {
-    return docTypes.filter((dt) => {
-      // Implement filtering logic based on your doc type structure
-      return true;
+  const getFilteredDocTypes = (attachmentType: AttachmentFormData["AttachmentType"], allDocTypes: DocType[]) => {
+    // If no filtering needed, return all
+    if (!attachmentType || attachmentType === "Other") {
+      return allDocTypes;
+    }
+
+    // Filter based on attachment type
+    const typeKeywords: Record<string, string[]> = {
+      Image: ["image", "photo", "picture", "gallery"],
+      Document: ["document", "file", "report", "agreement", "contract"],
+      Blueprint: ["blueprint", "plan", "drawing", "layout", "technical", "cad"],
+      Certificate: ["certificate", "cert", "license", "permit"],
+      Video: ["video", "media", "recording"],
+    };
+
+    const keywords = typeKeywords[attachmentType] || [];
+
+    if (keywords.length === 0) {
+      return allDocTypes;
+    }
+
+    const filtered = allDocTypes.filter((dt) => {
+      const description = dt.Description.toLowerCase();
+      return keywords.some((keyword) => description.includes(keyword));
     });
+
+    // If no matches found with keywords, return all doc types
+    return filtered.length > 0 ? filtered : allDocTypes;
   };
 
   // Bulk actions for attachments
@@ -851,7 +925,7 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
 
     // Prepare attachments data - only include new attachments
     const attachmentsData: Partial<UnitAttachment>[] = attachments
-      .filter((att) => att.isNew && att.DocTypeID && att.DocTypeID > 0)
+      .filter((att) => att.DocTypeID && att.DocTypeID > 0) //att.isNew &&
       .map((att) => ({
         DocTypeID: att.DocTypeID,
         DocumentName: att.DocumentName,
@@ -1749,71 +1823,79 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {imageAttachments.map((attachment, index) => (
-                          <div key={index} className="border rounded-lg overflow-hidden space-y-3 p-3">
-                            <div className="relative group">
-                              <div className="aspect-square bg-muted rounded-lg overflow-hidden">
-                                {attachment.preview || attachment.FilePath ? (
-                                  <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <FileImage className="h-8 w-8 text-muted-foreground" />
-                                  </div>
-                                )}
-                              </div>
+                        {imageAttachments.map((attachment) => {
+                          // Find the actual index in the main attachments array
+                          const actualIndex = attachments.findIndex((att) => att === attachment);
 
-                              <div className="absolute top-2 right-2 flex space-x-1">
-                                {attachment.IsMainImage && (
-                                  <Badge className="bg-yellow-500 hover:bg-yellow-600">
-                                    <Star className="h-3 w-3" />
-                                  </Badge>
-                                )}
-                                <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
-                                  <Settings className="h-3 w-3" />
-                                </Button>
-                                <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(index)}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
+                          return (
+                            <div key={actualIndex} className="border rounded-lg overflow-hidden space-y-3 p-3">
+                              <div className="relative group">
+                                <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                                  {attachment.preview || attachment.FilePath ? (
+                                    <img src={attachment.preview || attachment.FilePath} alt={attachment.DocumentName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <FileImage className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
 
-                            <div className="space-y-2">
-                              <p className="text-sm font-medium truncate">{attachment.DocumentName}</p>
-
-                              <div className="flex flex-wrap gap-1">
-                                <Badge variant={attachment.AttachmentType === "Image" ? "default" : "secondary"} className="text-xs">
-                                  {attachment.AttachmentType}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {attachment.AttachmentCategory}
-                                </Badge>
+                                <div className="absolute top-2 right-2 flex space-x-1">
+                                  {attachment.IsMainImage && (
+                                    <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                                      <Star className="h-3 w-3" />
+                                    </Badge>
+                                  )}
+                                  <Button type="button" size="sm" variant="secondary" className="h-6 w-6 p-0" onClick={() => openAttachmentDialog(attachment)}>
+                                    <Settings className="h-3 w-3" />
+                                  </Button>
+                                  <Button type="button" size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => deleteAttachment(actualIndex)}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
 
                               <div className="space-y-2">
-                                <Label className="text-xs">Document Type</Label>
-                                <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
-                                  <SelectTrigger className={`h-8 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
-                                      <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
-                                        {docType.Description}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500">Document type is required</p>}
-                              </div>
+                                <p className="text-sm font-medium truncate">{attachment.DocumentName}</p>
 
-                              <div className="flex items-center justify-between">
-                                <Button type="button" size="sm" variant="outline" onClick={() => setMainImage(index)} disabled={attachment.IsMainImage}>
-                                  {attachment.IsMainImage ? "Main Image" : "Set as Main"}
-                                </Button>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge variant={attachment.AttachmentType === "Image" ? "default" : "secondary"} className="text-xs">
+                                    {attachment.AttachmentType}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {attachment.AttachmentCategory}
+                                  </Badge>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label className="text-xs">Document Type</Label>
+                                  <Select
+                                    value={attachment.DocTypeID?.toString() || "0"}
+                                    onValueChange={(value) => updateAttachmentInline(actualIndex, "DocTypeID", parseInt(value))}
+                                  >
+                                    <SelectTrigger className={`h-8 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {getFilteredDocTypes(attachment.AttachmentType, docTypes).map((docType) => (
+                                        <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                          {docType.Description}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500">Document type is required</p>}
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => setMainImage(actualIndex)} disabled={attachment.IsMainImage}>
+                                    {attachment.IsMainImage ? "Main Image" : "Set as Main"}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -1848,53 +1930,61 @@ export const UnitForm: React.FC<UnitFormProps> = ({ unit, mode, sourceUnit, onSa
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {documentAttachments.map((attachment, index) => (
-                          <div key={index} className="border rounded-lg p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-3">
-                                <div className="flex items-center space-x-2">
-                                  <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                  <span className="font-medium">{attachment.DocumentName}</span>
-                                  <Badge variant={attachment.AttachmentType === "Certificate" ? "default" : "secondary"} className="text-xs">
-                                    {attachment.AttachmentType}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {attachment.AttachmentCategory}
-                                  </Badge>
+                        {documentAttachments.map((attachment) => {
+                          // Find the actual index in the main attachments array
+                          const actualIndex = attachments.findIndex((att) => att === attachment);
+
+                          return (
+                            <div key={actualIndex} className="border rounded-lg p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 space-y-3">
+                                  <div className="flex items-center space-x-2">
+                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">{attachment.DocumentName}</span>
+                                    <Badge variant={attachment.AttachmentType === "Certificate" ? "default" : "secondary"} className="text-xs">
+                                      {attachment.AttachmentType}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs">
+                                      {attachment.AttachmentCategory}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
+
+                                  <div className="max-w-xs">
+                                    <Label className="text-xs">Document Type</Label>
+                                    <Select
+                                      value={attachment.DocTypeID?.toString() || "0"}
+                                      onValueChange={(value) => updateAttachmentInline(actualIndex, "DocTypeID", parseInt(value))}
+                                    >
+                                      <SelectTrigger className={`h-8 mt-1 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
+                                        <SelectValue placeholder="Select type" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {getFilteredDocTypes(attachment.AttachmentType, docTypes).map((docType) => (
+                                          <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
+                                            {docType.Description}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500 mt-1">Document type is required</p>}
+                                  </div>
                                 </div>
 
-                                <div className="text-sm text-muted-foreground">Size: {((attachment.FileSize || 0) / 1024).toFixed(1)} KB</div>
-
-                                <div className="max-w-xs">
-                                  <Label className="text-xs">Document Type</Label>
-                                  <Select value={attachment.DocTypeID?.toString() || "0"} onValueChange={(value) => updateAttachmentInline(index, "DocTypeID", parseInt(value))}>
-                                    <SelectTrigger className={`h-8 mt-1 ${!attachment.DocTypeID || attachment.DocTypeID === 0 ? "border-red-300" : ""}`}>
-                                      <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {getFilteredDocTypes(attachment.AttachmentType).map((docType) => (
-                                        <SelectItem key={docType.DocTypeID} value={docType.DocTypeID.toString()}>
-                                          {docType.Description}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  {(!attachment.DocTypeID || attachment.DocTypeID === 0) && <p className="text-xs text-red-500 mt-1">Document type is required</p>}
+                                <div className="flex space-x-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openAttachmentDialog(attachment)}>
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Details
+                                  </Button>
+                                  <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => deleteAttachment(actualIndex)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                              </div>
-
-                              <div className="flex space-x-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => openAttachmentDialog(attachment)}>
-                                  <Settings className="mr-2 h-4 w-4" />
-                                  Details
-                                </Button>
-                                <Button type="button" size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => deleteAttachment(index)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
