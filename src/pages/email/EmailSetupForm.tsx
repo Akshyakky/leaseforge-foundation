@@ -24,7 +24,7 @@ const formSchema = z
     CompanyID: z.string().min(1, "Company is required"),
     SetupName: z.string().min(2, "Setup name must be at least 2 characters").max(250, "Setup name cannot exceed 250 characters"),
     SMTPServer: z.string().min(1, "SMTP server is required").max(250, "SMTP server cannot exceed 250 characters"),
-    SMTPPort: z.number().min(1, "Port must be greater than 0").max(65535, "Port must be less than 65536"),
+    SMTPPort: z.coerce.number().min(1, "Port must be greater than 0").max(65535, "Port must be less than 65536"),
     EnableSSL: z.boolean().default(true),
     EnableTLS: z.boolean().default(true),
     AuthenticationRequired: z.boolean().default(true),

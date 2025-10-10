@@ -1226,7 +1226,7 @@ const ContractList: React.FC = () => {
         </div>
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
@@ -1353,23 +1353,23 @@ const ContractList: React.FC = () => {
             </>
           )}
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow sm:col-span-2 md:col-span-3 lg:col-span-2">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <HandCoins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Total Value</span>
               </div>
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalValue)}</div>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400 break-words">{formatCurrency(stats.totalValue)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow sm:col-span-2 md:col-span-3 lg:col-span-2">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                <span className="text-sm text-muted-foreground">Average</span>
+                <span className="text-sm text-muted-foreground">Average Value</span>
               </div>
-              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageValue)}</div>
+              <div className="text-xl font-bold text-purple-600 dark:text-purple-400 break-words">{formatCurrency(stats.averageValue)}</div>
             </CardContent>
           </Card>
         </div>

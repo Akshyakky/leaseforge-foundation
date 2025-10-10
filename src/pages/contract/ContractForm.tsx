@@ -130,26 +130,26 @@ const UnitInformationCard = ({ unitDetails }: { unitDetails: any }) => {
   if (!unitDetails) return null;
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+    <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
       <div className="flex items-center gap-2 mb-3">
-        <Building className="h-5 w-5 text-blue-600" />
-        <span className="font-medium text-blue-900">Unit Information</span>
+        <Building className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <span className="font-medium text-blue-900 dark:text-blue-100">Unit Information</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
-          <span className="text-gray-600">Property:</span>
-          <div className="font-medium">{unitDetails.PropertyName}</div>
+          <span className="text-gray-600 dark:text-gray-400">Property:</span>
+          <div className="font-medium text-gray-900 dark:text-gray-100">{unitDetails.PropertyName}</div>
         </div>
         <div>
-          <span className="text-gray-600">Type:</span>
-          <div className="font-medium">{unitDetails.UnitTypeName}</div>
+          <span className="text-gray-600 dark:text-gray-400">Type:</span>
+          <div className="font-medium text-gray-900 dark:text-gray-100">{unitDetails.UnitTypeName}</div>
         </div>
         <div>
-          <span className="text-gray-600">Area:</span>
-          <div className="font-medium">{unitDetails.TotalAreaSqft ? `${unitDetails.TotalAreaSqft.toLocaleString()} sqft` : "Not specified"}</div>
+          <span className="text-gray-600 dark:text-gray-400">Area:</span>
+          <div className="font-medium text-gray-900 dark:text-gray-100">{unitDetails.TotalAreaSqft ? `${unitDetails.TotalAreaSqft.toLocaleString()} sqft` : "Not specified"}</div>
         </div>
         <div>
-          <span className="text-gray-600">Status:</span>
+          <span className="text-gray-600 dark:text-gray-400">Status:</span>
           <div className="font-medium">
             <Badge variant={unitDetails.UnitStatus === "Available" ? "default" : "secondary"}>{unitDetails.UnitStatus}</Badge>
           </div>

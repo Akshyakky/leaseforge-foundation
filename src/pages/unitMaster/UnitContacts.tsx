@@ -95,7 +95,7 @@ export const UnitContacts: React.FC<UnitContactsProps> = ({ unitId, contacts, on
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Unit Contacts</h3>
         {!readOnly && (
-          <Button onClick={handleAddContact} size="sm">
+          <Button type="button" onClick={handleAddContact} size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Add Contact
           </Button>
