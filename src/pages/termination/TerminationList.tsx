@@ -2029,7 +2029,7 @@ const TerminationList: React.FC = () => {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" sideOffset={5} className="max-h-[500px] overflow-y-auto">
                                 <DropdownMenuItem onClick={() => handleViewTermination(termination)}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   View details
