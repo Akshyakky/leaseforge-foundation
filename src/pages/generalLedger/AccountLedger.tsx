@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, BookOpen, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, BookOpen, Info, Eye } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { generalLedgerService } from "@/services/generalLedgerService";
@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { GLTransactionSlipPreview } from "@/pages/generalLedger/GLTransactionSlipPreview";
 
 const AccountLedger = () => {
   const navigate = useNavigate();
@@ -37,6 +38,8 @@ const AccountLedger = () => {
   const [filteredTransactions, setFilteredTransactions] = useState<AccountLedgerTransaction[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showTaxColumns, setShowTaxColumns] = useState(false);
+  const [previewTransaction, setPreviewTransaction] = useState<AccountLedgerTransaction | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Form state
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -173,6 +176,16 @@ const AccountLedger = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePreviewSlip = (transaction: AccountLedgerTransaction) => {
+    setPreviewTransaction(transaction);
+    setShowPreview(true);
+  };
+
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewTransaction(null);
   };
 
   const handleCompanyChange = async (value: string) => {
@@ -507,6 +520,7 @@ const AccountLedger = () => {
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -557,6 +571,11 @@ const AccountLedger = () => {
                       <TableCell className="text-right font-medium text-green-600">{transaction.DebitAmount ? formatCurrency(transaction.DebitAmount) : "-"}</TableCell>
                       <TableCell className="text-right font-medium text-red-600">{transaction.CreditAmount ? formatCurrency(transaction.CreditAmount) : "-"}</TableCell>
                       <TableCell className="text-right font-bold">{formatCurrency(transaction.RunningBalance)}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePreviewSlip(transaction)} title="Preview Slip">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -574,6 +593,22 @@ const AccountLedger = () => {
           </CardContent>
         </Card>
       ) : null}
+      {/* Transaction Slip Preview Modal */}
+      {previewTransaction && accountLedger && (
+        <GLTransactionSlipPreview
+          isOpen={showPreview}
+          onClose={handleClosePreview}
+          transaction={{
+            VoucherNo: previewTransaction.VoucherNo,
+            VoucherType: previewTransaction.VoucherType,
+            CompanyID: accountLedger.accountInfo.CompanyID,
+            TransactionID: previewTransaction.TransactionID,
+            PostingID: previewTransaction.PostingID,
+            ReferenceType: previewTransaction.ReferenceType,
+            ReferenceNo: previewTransaction.ReferenceNo,
+          }}
+        />
+      )}
     </div>
   );
 };

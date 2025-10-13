@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, FileText, MoreHorizontal, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Download, Filter, Calendar, Building, RefreshCw, Search, FileText, MoreHorizontal, Info, Eye } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { generalLedgerService } from "@/services/generalLedgerService";
@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { debounce } from "lodash";
+import { GLTransactionSlipPreview } from "@/pages/generalLedger/GLTransactionSlipPreview";
 
 const GLTransactions = () => {
   const navigate = useNavigate();
@@ -37,6 +38,8 @@ const GLTransactions = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showTaxColumns, setShowTaxColumns] = useState(false);
+  const [previewTransaction, setPreviewTransaction] = useState<DetailedGLTransaction | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Form state
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -160,7 +163,7 @@ const GLTransactions = () => {
         fiscalYearID: targetFiscalYearId || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
-        accountID: selectedAccountId ? parseInt(selectedAccountId) : undefined,
+        accountID: selectedAccountId && selectedAccountId !== "0" ? parseInt(selectedAccountId) : undefined,
         voucherType: selectedVoucherType || undefined,
         postingStatus: selectedPostingStatus || undefined,
         customerID: selectedCustomerId ? parseInt(selectedCustomerId) : undefined,
@@ -183,6 +186,16 @@ const GLTransactions = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePreviewSlip = (transaction: DetailedGLTransaction) => {
+    setPreviewTransaction(transaction);
+    setShowPreview(true);
+  };
+
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewTransaction(null);
   };
 
   const handleCompanyChange = async (value: string) => {
@@ -623,6 +636,10 @@ const GLTransactions = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handlePreviewSlip(transaction)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Preview Slip
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleViewAccountLedger(transaction.AccountID)}>View Account Ledger</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => toast.info("Transaction details view will be implemented")}>View Details</DropdownMenuItem>
@@ -683,6 +700,22 @@ const GLTransactions = () => {
           </CardContent>
         </Card>
       ) : null}
+      {/* Transaction Slip Preview Modal */}
+      {previewTransaction && (
+        <GLTransactionSlipPreview
+          isOpen={showPreview}
+          onClose={handleClosePreview}
+          transaction={{
+            VoucherNo: previewTransaction.VoucherNo,
+            VoucherType: previewTransaction.VoucherType,
+            CompanyID: previewTransaction.CompanyID,
+            TransactionID: previewTransaction.TransactionID,
+            PostingID: previewTransaction.PostingID,
+            ReferenceType: previewTransaction.ReferenceType,
+            ReferenceNo: previewTransaction.ReferenceNo,
+          }}
+        />
+      )}
     </div>
   );
 };
