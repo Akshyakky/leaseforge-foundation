@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { companyService } from "@/services";
 
 interface TreeNode {
   id: number;
@@ -47,12 +48,8 @@ const AccountHierarchy = () => {
 
   const fetchCompanies = async () => {
     try {
-      // In a real app, fetch from company service
-      setCompanies([
-        { CompanyID: 1, CompanyName: "Main Company" },
-        { CompanyID: 2, CompanyName: "Subsidiary 1" },
-        { CompanyID: 3, CompanyName: "Subsidiary 2" },
-      ]);
+      const companiesData = await companyService.getAllCompanies();
+      setCompanies(companiesData);
     } catch (error) {
       console.error("Error fetching companies:", error);
     }
@@ -127,17 +124,20 @@ const AccountHierarchy = () => {
 
     return (
       <React.Fragment key={node.id}>
-        <div className={`flex items-center py-2 px-4 hover:bg-accent border-b border-border ${!node.isActive ? "opacity-60" : ""}`} style={{ paddingLeft: `${indent + 12}px` }}>
+        <div
+          className={`flex items-center py-2 px-4 hover:bg-accent/50 border-b border-border transition-colors ${!node.isActive ? "opacity-60" : ""}`}
+          style={{ paddingLeft: `${indent + 12}px` }}
+        >
           <div className="flex-1 flex items-center">
             {node.children.length > 0 && <ChevronRight className="h-4 w-4 mr-2 text-muted-foreground" />}
             <span className="font-mono text-sm text-muted-foreground mr-2">{node.code}</span>
-            <span className={`text-foreground ${!node.isPostable ? "italic" : ""}`}>{node.name}</span>
+            <span className={`text-foreground ${!node.isPostable ? "italic text-muted-foreground" : ""}`}>{node.name}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/${node.id}`)} title="View Account">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/${node.id}`)} title="View Account" className="hover:bg-accent hover:text-accent-foreground">
               <Eye className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/edit/${node.id}`)} title="Edit Account">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/edit/${node.id}`)} title="Edit Account" className="hover:bg-accent hover:text-accent-foreground">
               <Edit className="h-4 w-4" />
             </Button>
           </div>
@@ -149,12 +149,12 @@ const AccountHierarchy = () => {
 
   const renderIndentedList = () => {
     return (
-      <div className="border border-border rounded-md overflow-hidden">
+      <div className="border border-border rounded-md overflow-hidden bg-card">
         <div className="bg-muted py-2 px-4 font-medium border-b border-border flex items-center">
           <div className="flex-1 text-foreground">Account</div>
           <div className="text-foreground">Actions</div>
         </div>
-        <div className="max-h-[600px] overflow-y-auto bg-background">{hierarchyTree.map((node, index) => renderTreeNode(node, index))}</div>
+        <div className="max-h-[600px] overflow-y-auto bg-card">{hierarchyTree.map((node, index) => renderTreeNode(node, index))}</div>
       </div>
     );
   };
@@ -162,7 +162,7 @@ const AccountHierarchy = () => {
   const renderHierarchyView = () => {
     const renderHierarchyItem = (account: AccountHierarchyType) => {
       return (
-        <div key={account.AccountID} className="py-3 px-4 border-b border-border hover:bg-accent">
+        <div key={account.AccountID} className="py-3 px-4 border-b border-border hover:bg-accent/50 transition-colors">
           <div className="flex items-center justify-between">
             <div className="flex items-start">
               <div className="font-mono text-sm text-muted-foreground mr-3 mt-0.5">{account.AccountCode}</div>
@@ -172,10 +172,22 @@ const AccountHierarchy = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/${account.AccountID}`)} title="View Account">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(`/accounts/${account.AccountID}`)}
+                title="View Account"
+                className="hover:bg-accent hover:text-accent-foreground"
+              >
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => navigate(`/accounts/edit/${account.AccountID}`)} title="Edit Account">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(`/accounts/edit/${account.AccountID}`)}
+                title="Edit Account"
+                className="hover:bg-accent hover:text-accent-foreground"
+              >
                 <Edit className="h-4 w-4" />
               </Button>
             </div>
@@ -185,9 +197,9 @@ const AccountHierarchy = () => {
     };
 
     return (
-      <div className="border border-border rounded-md overflow-hidden">
+      <div className="border border-border rounded-md overflow-hidden bg-card">
         <div className="bg-muted py-2 px-4 font-medium border-b border-border text-foreground">Hierarchical View</div>
-        <div className="max-h-[600px] overflow-y-auto bg-background">{accounts.map((account) => renderHierarchyItem(account))}</div>
+        <div className="max-h-[600px] overflow-y-auto bg-card">{accounts.map((account) => renderHierarchyItem(account))}</div>
       </div>
     );
   };
@@ -202,8 +214,8 @@ const AccountHierarchy = () => {
 
   if (error) {
     return (
-      <div className="text-center py-10 text-destructive">
-        <p>{error}</p>
+      <div className="text-center py-10">
+        <p className="text-destructive">{error}</p>
         <Button className="mt-4" onClick={() => navigate("/accounts")}>
           Back to Accounts
         </Button>
@@ -215,7 +227,7 @@ const AccountHierarchy = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="icon" onClick={() => navigate("/accounts")}>
+          <Button variant="outline" size="icon" onClick={() => navigate("/accounts")} className="hover:bg-accent hover:text-accent-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-2xl font-semibold text-foreground">Account Hierarchy</h1>

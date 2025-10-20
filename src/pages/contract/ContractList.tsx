@@ -1225,151 +1225,150 @@ const ContractList: React.FC = () => {
           </div>
         </div>
 
-        {/* Summary Statistics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Total</span>
+        {/* Summary Statistics - Single Row Compact Layout */}
+        <div className="flex flex-wrap gap-3">
+          <Card className="flex-1 min-w-[140px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground font-medium">Total</span>
               </div>
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-xs text-muted-foreground">{hasActiveFilters ? `of ${contracts.length} total` : "contracts"}</div>
+              <div className="text-xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{hasActiveFilters ? `of ${contracts.length}` : "contracts"}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                <span className="text-sm text-muted-foreground">Draft</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+                <span className="text-xs text-muted-foreground font-medium">Draft</span>
               </div>
-              <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.draft}</div>
+              <div className="text-xl font-bold text-gray-600 dark:text-gray-400">{stats.draft}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                <span className="text-sm text-muted-foreground">Pending</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Clock className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+                <span className="text-xs text-muted-foreground font-medium">Pending</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
+              <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm text-muted-foreground">Active</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                <span className="text-xs text-muted-foreground font-medium">Active</span>
               </div>
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.active}</div>
+              <div className="text-xl font-bold text-green-600 dark:text-green-400">{stats.active}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm text-muted-foreground">Completed</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckCircle className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs text-muted-foreground font-medium">Completed</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.completed}</div>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.completed}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-sm text-muted-foreground">Expired</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <AlertCircle className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                <span className="text-xs text-muted-foreground font-medium">Expired</span>
               </div>
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.expired}</div>
+              <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{stats.expired}</div>
             </CardContent>
           </Card>
 
-          {/* Email-specific stats */}
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <MailCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm text-muted-foreground">Emails Sent</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <MailCheck className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs text-muted-foreground font-medium">Emails Sent</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.emailNotificationsSent}</div>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.emailNotificationsSent}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <BellRing className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-sm text-muted-foreground">Expiring Soon</span>
+          <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <BellRing className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                <span className="text-xs text-muted-foreground font-medium">Expiring Soon</span>
               </div>
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.expiringSoon}</div>
+              <div className="text-xl font-bold text-orange-600 dark:text-orange-400">{stats.expiringSoon}</div>
             </CardContent>
           </Card>
 
           {isManager && (
             <>
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                    <span className="text-sm text-muted-foreground">Approval Pending</span>
+              <Card className="flex-1 min-w-[140px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Clock className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+                    <span className="text-xs text-muted-foreground font-medium">Approval Pending</span>
                   </div>
-                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
+                  <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.approvalPending}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-sm text-muted-foreground">Approved</span>
+              <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                    <span className="text-xs text-muted-foreground font-medium">Approved</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
+                  <div className="text-xl font-bold text-green-600 dark:text-green-400">{stats.approvalApproved}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-sm text-muted-foreground">Protected</span>
+              <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Lock className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                    <span className="text-xs text-muted-foreground font-medium">Protected</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.approvedProtected}</div>
+                  <div className="text-xl font-bold text-green-600 dark:text-green-400">{stats.approvedProtected}</div>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    <span className="text-sm text-muted-foreground">Rejected</span>
+              <Card className="flex-1 min-w-[120px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                    <span className="text-xs text-muted-foreground font-medium">Rejected</span>
                   </div>
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
+                  <div className="text-xl font-bold text-red-600 dark:text-red-400">{stats.approvalRejected}</div>
                 </CardContent>
               </Card>
             </>
           )}
 
-          <Card className="hover:shadow-md transition-shadow sm:col-span-2 md:col-span-3 lg:col-span-2">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <HandCoins className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm text-muted-foreground">Total Value</span>
+          <Card className="flex-1 min-w-[160px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <HandCoins className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs text-muted-foreground font-medium">Total Value</span>
               </div>
-              <div className="text-xl font-bold text-blue-600 dark:text-blue-400 break-words">{formatCurrency(stats.totalValue)}</div>
+              <div className="text-base font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalValue)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow sm:col-span-2 md:col-span-3 lg:col-span-2">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                <span className="text-sm text-muted-foreground">Average Value</span>
+          <Card className="flex-1 min-w-[160px] hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <TrendingUp className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                <span className="text-xs text-muted-foreground font-medium">Average Value</span>
               </div>
-              <div className="text-xl font-bold text-purple-600 dark:text-purple-400 break-words">{formatCurrency(stats.averageValue)}</div>
+              <div className="text-base font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageValue)}</div>
             </CardContent>
           </Card>
         </div>
