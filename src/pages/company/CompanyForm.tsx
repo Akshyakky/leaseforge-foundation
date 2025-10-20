@@ -33,7 +33,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 const CompanyForm = () => {
   const { id } = useParams<{ id: string }>();
-  const isEdit = id !== "new";
+  const isEdit = id && id !== "new";
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
@@ -67,17 +67,14 @@ const CompanyForm = () => {
 
         if (countriesData && !isEdit) {
           const defaultCountry = countriesData[0];
-          form.setValue("CountryID", defaultCountry.CountryID.toString());
-        }
-
-        // If editing and country is set, fetch cities for that country
-        if (isEdit && company?.CountryID) {
-          const citiesData = await cityService.getCitiesByCountry(company.CountryID);
-          setCities(citiesData);
-          setSelectedCountryId(company.CountryID.toString());
-        } else {
-          // Otherwise, fetch all cities or leave empty
-          setCities([]);
+          setTimeout(() => {
+            form.setValue("CountryID", defaultCountry.CountryID.toString());
+          }, 0);
+          if (defaultCountry.CountryID) {
+            const citiesData = await cityService.getCitiesByCountry(defaultCountry.CountryID);
+            setCities(citiesData);
+            setSelectedCountryId(defaultCountry.CountryID.toString());
+          }
         }
       } catch (error) {
         console.error("Error fetching reference data:", error);
