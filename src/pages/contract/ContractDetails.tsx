@@ -1,4 +1,4 @@
-// src/pages/contract/ContractDetails.tsx - Enhanced with Email Integration
+// src/pages/contract/ContractDetails.tsx - Enhanced with Email Integration and Dark Mode Support
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { contractService, Contract, ContractUnit, ContractAdditionalCharge, ContractAttachment } from "@/services/contractService";
@@ -65,6 +65,7 @@ import { EmailSendDialog } from "@/pages/email/EmailSendDialog";
 import { useEmailIntegration } from "@/hooks/useEmailIntegration";
 import { CurrencyIcon } from "@/utils/currencyIcons";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { cn } from "@/lib/utils";
 
 const ContractDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -472,13 +473,13 @@ const ContractDetails: React.FC = () => {
   const getApprovalStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
-        return "bg-green-100 text-green-800";
+        return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
       case "Rejected":
-        return "bg-red-100 text-red-800";
+        return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20";
       case "Pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -609,13 +610,13 @@ const ContractDetails: React.FC = () => {
             <div className="ml-2 flex items-center gap-2">
               <Badge variant={getStatusColor(contract.ContractStatus)}>{contract.ContractStatus}</Badge>
               {contract.RequiresApproval && (
-                <Badge className={getApprovalStatusColor(contract.ApprovalStatus)}>
+                <Badge className={cn("border", getApprovalStatusColor(contract.ApprovalStatus))}>
                   <ApprovalIcon className="h-3 w-3 mr-1" />
                   {contract.ApprovalStatus}
                 </Badge>
               )}
               {isApproved && (
-                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                <Badge variant="outline" className="bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400">
                   <Lock className="h-3 w-3 mr-1" />
                   Protected
                 </Badge>
@@ -686,18 +687,18 @@ const ContractDetails: React.FC = () => {
                   {contract.ApprovalStatus === "Pending" && (
                     <>
                       <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                         Approve Contract
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                        <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                         Reject Contract
                       </DropdownMenuItem>
                     </>
                   )}
                   {contract.ApprovalStatus !== "Pending" && (
                     <DropdownMenuItem onClick={() => openApprovalDialog("reset")}>
-                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                       Reset Approval
                     </DropdownMenuItem>
                   )}
@@ -776,13 +777,12 @@ const ContractDetails: React.FC = () => {
         {/* Approval Status Alert */}
         {contract.RequiresApproval && (
           <Alert
-            className={`border-l-4 ${
-              contract.ApprovalStatus === "Approved"
-                ? "border-l-green-500 bg-green-50"
-                : contract.ApprovalStatus === "Rejected"
-                ? "border-l-red-500 bg-red-50"
-                : "border-l-yellow-500 bg-yellow-50"
-            }`}
+            className={cn(
+              "border-l-4",
+              contract.ApprovalStatus === "Approved" && "border-l-green-500 bg-green-500/10 dark:bg-green-500/5",
+              contract.ApprovalStatus === "Rejected" && "border-l-red-500 bg-red-500/10 dark:bg-red-500/5",
+              contract.ApprovalStatus === "Pending" && "border-l-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/5"
+            )}
           >
             <ApprovalIcon className="h-4 w-4" />
             <AlertDescription>
@@ -791,7 +791,7 @@ const ContractDetails: React.FC = () => {
                 <div className="text-sm text-muted-foreground mt-1">
                   Approved by {contract.ApprovedBy} on {formatDate(contract.ApprovedOn)}
                   {contract.ApprovalComments && <div className="mt-1">Comments: {contract.ApprovalComments}</div>}
-                  <div className="mt-2 text-green-700 font-medium flex items-center">
+                  <div className="mt-2 text-green-700 dark:text-green-400 font-medium flex items-center">
                     <Shield className="h-4 w-4 mr-1" />
                     This contract is protected from modifications until approval is reset.
                   </div>
@@ -800,7 +800,7 @@ const ContractDetails: React.FC = () => {
               {contract.ApprovalStatus === "Rejected" && contract.RejectedBy && (
                 <div className="text-sm text-muted-foreground mt-1">
                   Rejected by {contract.RejectedBy} on {formatDate(contract.RejectedOn)}
-                  {contract.RejectionReason && <div className="mt-1 text-red-700">Reason: {contract.RejectionReason}</div>}
+                  {contract.RejectionReason && <div className="mt-1 text-red-700 dark:text-red-400">Reason: {contract.RejectionReason}</div>}
                 </div>
               )}
               {contract.ApprovalStatus === "Pending" && <div className="text-sm text-muted-foreground mt-1">This contract is awaiting approval from a manager.</div>}
@@ -850,7 +850,7 @@ const ContractDetails: React.FC = () => {
                       <div>
                         <h3 className="text-sm font-medium text-muted-foreground">Approval Status</h3>
                         <div>
-                          <Badge className={`${getApprovalStatusColor(contract.ApprovalStatus)} mt-1`}>
+                          <Badge className={cn("mt-1 border", getApprovalStatusColor(contract.ApprovalStatus))}>
                             <ApprovalIcon className="h-3 w-3 mr-1" />
                             {contract.ApprovalStatus}
                           </Badge>
@@ -1101,7 +1101,7 @@ const ContractDetails: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {attachments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <div className="flex flex-col items-center justify-center p-8 bg-muted/50 dark:bg-muted/20 rounded-md">
                     <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground mb-4">No documents have been attached to this contract.</p>
                     {canEditContract ? (
@@ -1138,7 +1138,11 @@ const ContractDetails: React.FC = () => {
                               <div className="flex-1 space-y-2">
                                 <div className="flex items-center">
                                   <span className="font-medium">{attachment.DocumentName}</span>
-                                  {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                                  {attachment.DocTypeName && (
+                                    <Badge className="ml-2 bg-purple-500/10 text-purple-700 dark:text-purple-400 hover:bg-purple-500/20 border-purple-500/20">
+                                      {attachment.DocTypeName}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-sm space-y-1">
                                   {attachment.DocIssueDate && (

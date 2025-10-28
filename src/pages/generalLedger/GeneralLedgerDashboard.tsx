@@ -249,7 +249,7 @@ const GeneralLedgerDashboard = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">General Ledger</h1>
+          <h1 className="text-3xl font-bold">Financial Reports</h1>
           <p className="text-muted-foreground">Financial reporting and account management</p>
         </div>
 
