@@ -113,7 +113,7 @@ const ContractDetails: React.FC = () => {
   const [showEmailHistory, setShowEmailHistory] = useState(false);
 
   // Contract status options
-  const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated"];
+  const contractStatusOptions = ["Draft", "Pending", "Active", "Expired", "Cancelled", "Completed", "Terminated", "Renewed"];
 
   // Check if user is manager
   const isManager = user?.role === "admin" || user?.role === "manager";
@@ -510,8 +510,9 @@ const ContractDetails: React.FC = () => {
 
       const renewalData = {
         contract: {
-          ContractNo: "",
-          ContractStatus: "Draft",
+          ContractNo: "", // Will be auto-generated
+          ContractStatus: "Active",
+          CompanyID: contract.CompanyID,
           CustomerID: contract.CustomerID,
           JointCustomerID: contract.JointCustomerID,
           TransactionDate: new Date(),
@@ -519,6 +520,8 @@ const ContractDetails: React.FC = () => {
           AdditionalCharges: contract.AdditionalCharges,
           GrandTotal: contract.GrandTotal,
           Remarks: `Renewal of contract ${contract.ContractNo}. ${contract.Remarks || ""}`,
+          RequiresApproval: true,
+          ApprovalStatus: "Pending",
         },
         units: units.map((unit) => {
           const fromDate = new Date();
@@ -547,23 +550,31 @@ const ContractDetails: React.FC = () => {
             TotalAmount: unit.TotalAmount,
           };
         }),
-        additionalCharges: additionalCharges,
+        additionalCharges: additionalCharges.map((charge) => ({
+          AdditionalChargesID: charge.AdditionalChargesID,
+          Amount: charge.Amount,
+          TaxPercentage: charge.TaxPercentage,
+          TaxAmount: charge.TaxAmount,
+          TotalAmount: charge.TotalAmount,
+        })),
         attachments: [],
       };
 
-      const response = await contractService.createContract(renewalData);
+      // Use the dedicated renewal method
+      const response = await contractService.renewContract(renewalData, contract.ContractID);
 
       if (response.Status === 1 && response.NewContractID) {
         // Send contract renewal notification
         const contractVariables = emailIntegration.generateContractVariables(contract, {
           customerEmail: contract.CustomerEmail,
-          renewalPeriod: `${renewalPeriod.years} years, ${renewalPeriod.months} months`,
+          renewalPeriod: `${renewalPeriod.years} year(s), ${renewalPeriod.months} month(s)`,
           newContractId: response.NewContractID,
+          oldContractNumber: contract.ContractNo,
         });
 
         await emailIntegration.sendAutomatedEmail("contract_renewed", contractVariables, getDefaultEmailRecipients());
 
-        toast.success("Contract renewed successfully");
+        toast.success("Contract renewed successfully. Old contract marked as Renewed, new contract created.");
         navigate(`/contracts/${response.NewContractID}`);
       } else {
         toast.error(response.Message || "Failed to renew contract");
@@ -1347,7 +1358,10 @@ const ContractDetails: React.FC = () => {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Renew Contract</DialogTitle>
-              <DialogDescription>Create a new contract based on the current one with updated dates. Email notifications will be sent automatically.</DialogDescription>
+              <DialogDescription>
+                Create a new active contract based on the current one. The current contract will be marked as "Renewed" and the new contract will have "Active" status. Email
+                notifications will be sent automatically.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">

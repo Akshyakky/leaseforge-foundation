@@ -159,6 +159,7 @@ export interface ApiResponse<T = any> {
   Status: number;
   Message: string;
   NewContractID?: number;
+  OldContractID?: number;
   NewContractUnitID?: number;
   NewContractChargeID?: number;
   NewContractAttachmentID?: number;

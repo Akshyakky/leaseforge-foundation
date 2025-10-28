@@ -818,6 +818,71 @@ class ContractService extends BaseService {
     const response = await this.execute<Contract[]>(request);
     return response.success ? response.data || [] : [];
   }
+  /**
+   * Renew contract - Creates a new active contract and marks the old one as renewed
+   * @param renewalData - The renewal contract data
+   * @param sourceContractId - The ID of the contract to renew
+   * @returns Response with status and new contract ID
+   */
+  async renewContract(renewalData: ContractRequest, sourceContractId: number): Promise<ApiResponse> {
+    // Process attachments if provided
+    let processedAttachments = renewalData.attachments;
+    if (renewalData.attachments && renewalData.attachments.length > 0) {
+      processedAttachments = await Promise.all(renewalData.attachments.map((attachment) => this.processAttachmentFile(attachment)));
+    }
+
+    // Prepare JSON data for child records
+    const unitsJSON = renewalData.units && renewalData.units.length > 0 ? JSON.stringify(renewalData.units) : null;
+    const additionalChargesJSON = renewalData.additionalCharges && renewalData.additionalCharges.length > 0 ? JSON.stringify(renewalData.additionalCharges) : null;
+    const attachmentsJSON = processedAttachments && processedAttachments.length > 0 ? JSON.stringify(processedAttachments) : null;
+
+    const request: BaseRequest = {
+      mode: 23, // Mode 23: Renew Contract
+      parameters: {
+        // Source contract to renew
+        ContractID: sourceContractId,
+
+        // New contract master data
+        ContractNo: renewalData.contract.ContractNo,
+        ContractStatus: renewalData.contract.ContractStatus || "Active",
+        CompanyID: renewalData.contract.CompanyID || 1,
+        CustomerID: renewalData.contract.CustomerID,
+        JointCustomerID: renewalData.contract.JointCustomerID,
+        TransactionDate: renewalData.contract.TransactionDate,
+        TotalAmount: renewalData.contract.TotalAmount || 0,
+        AdditionalCharges: renewalData.contract.AdditionalCharges || 0,
+        GrandTotal: renewalData.contract.GrandTotal || 0,
+        Remarks: renewalData.contract.Remarks,
+
+        // Approval fields
+        ApprovalStatus: renewalData.contract.ApprovalStatus || "Pending",
+        RequiresApproval: renewalData.contract.RequiresApproval !== undefined ? renewalData.contract.RequiresApproval : true,
+        ApprovalComments: renewalData.contract.ApprovalComments,
+
+        // JSON parameters for child records
+        UnitsJSON: unitsJSON,
+        AdditionalChargesJSON: additionalChargesJSON,
+        AttachmentsJSON: attachmentsJSON,
+      },
+    };
+
+    const response = await this.execute(request);
+
+    if (response.success) {
+      this.showSuccess("Contract renewed successfully");
+      return {
+        Status: 1,
+        Message: response.message || "Contract renewed successfully",
+        NewContractID: response.NewContractID,
+        OldContractID: response.OldContractID,
+      };
+    }
+
+    return {
+      Status: 0,
+      Message: response.message || "Failed to renew contract",
+    };
+  }
 }
 
 // Export a singleton instance
