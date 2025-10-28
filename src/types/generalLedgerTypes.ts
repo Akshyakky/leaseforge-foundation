@@ -185,6 +185,7 @@ export interface DetailedGLTransaction {
   Narration?: string;
   ReferenceType?: string;
   ReferenceNo?: string;
+  ReferenceID: number;
   CustomerID?: number;
   CustomerFullName?: string;
   SupplierID?: number;

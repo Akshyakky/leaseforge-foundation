@@ -15,6 +15,7 @@ interface GLTransactionSlipPreviewProps {
     PostingID: number;
     ReferenceType?: string;
     ReferenceNo?: string;
+    ReferenceID?: number;
   };
 }
 
@@ -23,12 +24,12 @@ interface GLTransactionSlipPreviewProps {
  */
 const getReportTypeForVoucher = (voucherType: string): { reportType: string; label: string } | null => {
   const typeMap: Record<string, { reportType: string; label: string }> = {
-    "Journal Voucher": { reportType: "journal-voucher-slip", label: "Journal Voucher Slip" },
+    Journal: { reportType: "journal-voucher-slip", label: "Journal Voucher Slip" },
     "Payment Voucher": { reportType: "payment-voucher-slip", label: "Payment Voucher Slip" },
-    "Receipt Voucher": { reportType: "receipt-slip", label: "Receipt Slip" },
+    "Lease Receipt": { reportType: "receipt-slip", label: "Receipt Slip" },
     "Petty Cash": { reportType: "petty-cash-slip", label: "Petty Cash Slip" },
-    Invoice: { reportType: "invoice-slip", label: "Invoice Slip" },
-    "Lease Transaction": { reportType: "lease-transaction-details", label: "Lease Transaction Details" },
+    "Lease Invoice": { reportType: "invoice-slip", label: "Invoice Slip" },
+    "Lease Revenue": { reportType: "lease-transaction-details", label: "Lease Transaction Details" },
   };
 
   return typeMap[voucherType] || null;
@@ -49,12 +50,12 @@ const buildReportParameters = (transaction: GLTransactionSlipPreviewProps["trans
 
     case "receipt-slip":
       return {
-        LeaseReceiptID: transaction.TransactionID || transaction.PostingID,
+        LeaseReceiptID: transaction.ReferenceID || transaction.PostingID,
       };
 
     case "invoice-slip":
       return {
-        LeaseInvoiceID: transaction.TransactionID || transaction.PostingID,
+        LeaseInvoiceID: transaction.ReferenceID || transaction.PostingID,
       };
 
     case "lease-transaction-details":

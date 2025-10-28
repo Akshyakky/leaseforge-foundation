@@ -300,7 +300,7 @@ const GLTransactions = () => {
 
   if (initialLoading) {
     return (
-      <div className="container mx-auto p-4">
+      <div className="w-full px-4 py-6">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -309,7 +309,7 @@ const GLTransactions = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="w-full px-4 lg:px-6 xl:px-8 py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
@@ -533,13 +533,13 @@ const GLTransactions = () => {
 
       {/* Transactions Table */}
       {transactions.length > 0 ? (
-        <Card>
+        <Card className="w-full">
           <CardHeader>
             <CardTitle>General Ledger Transactions</CardTitle>
             <CardDescription>Detailed transaction listing {selectedFiscalYear ? `for ${selectedFiscalYear.FYDescription}` : ""}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="border rounded-md overflow-x-auto">
+          <CardContent className="p-0 md:p-6">
+            <div className="w-full overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -653,7 +653,7 @@ const GLTransactions = () => {
             </div>
 
             {/* Totals Summary */}
-            <div className="mt-4 p-4 bg-muted rounded-md">
+            <div className="mt-4 p-4 bg-muted rounded-md mx-4 md:mx-0">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                 <div className="text-center">
                   <p className="text-muted-foreground">Total Transactions</p>
@@ -713,6 +713,7 @@ const GLTransactions = () => {
             PostingID: previewTransaction.PostingID,
             ReferenceType: previewTransaction.ReferenceType,
             ReferenceNo: previewTransaction.ReferenceNo,
+            ReferenceID: previewTransaction.ReferenceID,
           }}
         />
       )}

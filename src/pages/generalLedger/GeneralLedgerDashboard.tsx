@@ -190,13 +190,13 @@ const GeneralLedgerDashboard = () => {
 
   // Report configuration
   const reports = [
-    {
-      title: "Trial Balance",
-      description: "View trial balance with opening and closing balances",
-      icon: <Calculator className="h-8 w-8" />,
-      path: "/general-ledger/trial-balance",
-      color: "bg-blue-500",
-    },
+    // {
+    //   title: "Trial Balance",
+    //   description: "View trial balance with opening and closing balances",
+    //   icon: <Calculator className="h-8 w-8" />,
+    //   path: "/general-ledger/trial-balance",
+    //   color: "bg-blue-500",
+    // },
     {
       title: "Balance Sheet",
       description: "Assets, liabilities, and equity statement",
@@ -204,20 +204,20 @@ const GeneralLedgerDashboard = () => {
       path: "/general-ledger/balance-sheet",
       color: "bg-green-500",
     },
-    {
-      title: "Income Statement",
-      description: "Profit and loss statement for the period",
-      icon: <TrendingUp className="h-8 w-8" />,
-      path: "/general-ledger/income-statement",
-      color: "bg-purple-500",
-    },
-    {
-      title: "Account Ledger",
-      description: "Detailed account transactions with running balance",
-      icon: <BookOpen className="h-8 w-8" />,
-      path: "/general-ledger/account-ledger",
-      color: "bg-orange-500",
-    },
+    // {
+    //   title: "Income Statement",
+    //   description: "Profit and loss statement for the period",
+    //   icon: <TrendingUp className="h-8 w-8" />,
+    //   path: "/general-ledger/income-statement",
+    //   color: "bg-purple-500",
+    // },
+    // {
+    //   title: "Account Ledger",
+    //   description: "Detailed account transactions with running balance",
+    //   icon: <BookOpen className="h-8 w-8" />,
+    //   path: "/general-ledger/account-ledger",
+    //   color: "bg-orange-500",
+    // },
     {
       title: "GL Transactions",
       description: "Detailed general ledger transaction listing",
@@ -225,13 +225,13 @@ const GeneralLedgerDashboard = () => {
       path: "/general-ledger/transactions",
       color: "bg-cyan-500",
     },
-    {
-      title: "Bank Reconciliation",
-      description: "Reconcile bank accounts with book balances",
-      icon: <BarChart3 className="h-8 w-8" />,
-      path: "/general-ledger/bank-reconciliation",
-      color: "bg-red-500",
-    },
+    // {
+    //   title: "Bank Reconciliation",
+    //   description: "Reconcile bank accounts with book balances",
+    //   icon: <BarChart3 className="h-8 w-8" />,
+    //   path: "/general-ledger/bank-reconciliation",
+    //   color: "bg-red-500",
+    // },
   ];
 
   if (loading) {
@@ -351,7 +351,7 @@ const GeneralLedgerDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>Common general ledger tasks</CardDescription>
@@ -389,7 +389,7 @@ const GeneralLedgerDashboard = () => {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
     </div>
   );
 };

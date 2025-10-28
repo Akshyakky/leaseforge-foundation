@@ -38,6 +38,7 @@ import emailRoutes from "./emailRoutes";
 import countryRoutes from "./countryRoutes";
 import cityRoutes from "./cityRoutes";
 import paymentTermsRoutes from "./paymentTermsRoutes";
+import accountingPeriodRoutes from "./accountingPeriodRoutes";
 
 // Main routes component
 const AppRoutes = () => {
@@ -119,6 +120,8 @@ const AppRoutes = () => {
           {leaseRevenuePostingRoutes}
           {/* Payment Terms routes */}
           {paymentTermsRoutes}
+          {/* Accounting period routes */}
+          {accountingPeriodRoutes}
         </Route>
 
         {/* Catch-all route */}
