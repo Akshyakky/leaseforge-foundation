@@ -113,7 +113,7 @@ class PaymentVoucherService extends BaseService {
     }
 
     if (data.lines && data.lines.length > 0) {
-      const totalLineAmount = data.lines.reduce((sum, line) => sum + (line.DebitAmount || 0), 0);
+      const totalLineAmount = data.lines.reduce((sum, line) => sum + (line.BaseAmount || 0), 0);
 
       if (Math.abs(totalLineAmount - (data.voucher.TotalAmount || 0)) > 0.01) {
         errors.push("Total line amounts must equal the payment amount");
