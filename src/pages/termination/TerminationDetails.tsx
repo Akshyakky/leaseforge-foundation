@@ -1,4 +1,4 @@
-// src/pages/termination/TerminationDetails.tsx - Enhanced with Email Integration
+// src/pages/termination/TerminationDetails.tsx - Enhanced with Email Integration and Dark Mode Support
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { terminationService, ContractTermination, TerminationDeduction, TerminationAttachment } from "@/services/terminationService";
@@ -565,13 +565,13 @@ const TerminationDetails: React.FC = () => {
   const getApprovalStatusColor = (status: string) => {
     switch (status) {
       case "Approved":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
       case "Rejected":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
       case "Pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
     }
   };
 
@@ -627,7 +627,7 @@ const TerminationDetails: React.FC = () => {
                 </Badge>
               )}
               {isApproved && (
-                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800">
+                <Badge variant="outline" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400">
                   <Lock className="h-3 w-3 mr-1" />
                   Protected
                 </Badge>
@@ -702,18 +702,18 @@ const TerminationDetails: React.FC = () => {
                   {termination.ApprovalStatus === "Pending" && (
                     <>
                       <DropdownMenuItem onClick={() => openApprovalDialog("approve")}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-600 dark:text-green-400" />
                         Approve Termination
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openApprovalDialog("reject")}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                        <XCircle className="mr-2 h-4 w-4 text-red-600 dark:text-red-400" />
                         Reject Termination
                       </DropdownMenuItem>
                     </>
                   )}
                   {termination.ApprovalStatus !== "Pending" && (
                     <DropdownMenuItem onClick={() => openApprovalDialog("reset")}>
-                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600" />
+                      <RotateCcw className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                       Reset Approval
                     </DropdownMenuItem>
                   )}
@@ -797,10 +797,10 @@ const TerminationDetails: React.FC = () => {
           <Alert
             className={`border-l-4 ${
               termination.ApprovalStatus === "Approved"
-                ? "border-l-green-500 bg-green-50"
+                ? "border-l-green-500 bg-green-50 dark:bg-green-900/20"
                 : termination.ApprovalStatus === "Rejected"
-                ? "border-l-red-500 bg-red-50"
-                : "border-l-yellow-500 bg-yellow-50"
+                ? "border-l-red-500 bg-red-50 dark:bg-red-900/20"
+                : "border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
             }`}
           >
             <ApprovalIcon className="h-4 w-4" />
@@ -810,7 +810,7 @@ const TerminationDetails: React.FC = () => {
                 <div className="text-sm text-muted-foreground mt-1">
                   Approved by {termination.ApprovedBy} on {formatDate(termination.ApprovedOn)}
                   {termination.ApprovalComments && <div className="mt-1">Comments: {termination.ApprovalComments}</div>}
-                  <div className="mt-2 text-green-700 font-medium flex items-center">
+                  <div className="mt-2 text-green-700 dark:text-green-400 font-medium flex items-center">
                     <Shield className="h-4 w-4 mr-1" />
                     This termination is protected from modifications until approval is reset.
                   </div>
@@ -819,7 +819,7 @@ const TerminationDetails: React.FC = () => {
               {termination.ApprovalStatus === "Rejected" && termination.RejectedBy && (
                 <div className="text-sm text-muted-foreground mt-1">
                   Rejected by {termination.RejectedBy} on {formatDate(termination.RejectedOn)}
-                  {termination.RejectionReason && <div className="mt-1 text-red-700">Reason: {termination.RejectionReason}</div>}
+                  {termination.RejectionReason && <div className="mt-1 text-red-700 dark:text-red-400">Reason: {termination.RejectionReason}</div>}
                 </div>
               )}
               {termination.ApprovalStatus === "Pending" && <div className="text-sm text-muted-foreground mt-1">This termination is awaiting approval from a manager.</div>}
@@ -840,7 +840,7 @@ const TerminationDetails: React.FC = () => {
                 <CardTitle className="flex items-center">
                   <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
                   Termination Information
-                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600" />}
+                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600 dark:text-green-400" />}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1049,7 +1049,7 @@ const TerminationDetails: React.FC = () => {
                 <CardTitle className="flex items-center">
                   <HandCoins className="mr-2 h-5 w-5 text-muted-foreground" />
                   Deductions
-                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600" />}
+                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600 dark:text-green-400" />}
                 </CardTitle>
                 {canEditTermination ? (
                   <Button variant="outline" size="sm" disabled>
@@ -1127,7 +1127,7 @@ const TerminationDetails: React.FC = () => {
                 <CardTitle className="flex items-center">
                   <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
                   Documents
-                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600" />}
+                  {isApproved && <Lock className="ml-2 h-4 w-4 text-green-600 dark:text-green-400" />}
                 </CardTitle>
                 <div className="flex space-x-2">
                   {attachments.length > 0 && (
@@ -1158,7 +1158,7 @@ const TerminationDetails: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {attachments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900/50 rounded-md">
                     <p className="text-muted-foreground mb-4">No documents associated with this termination.</p>
                     {canEditTermination ? (
                       <Button variant="outline" onClick={() => navigate(`/terminations/edit/${termination.TerminationID}`)}>
@@ -1187,7 +1187,11 @@ const TerminationDetails: React.FC = () => {
                             <div className="flex-1 space-y-2">
                               <div className="flex items-center">
                                 <span className="font-medium">{attachment.DocumentName}</span>
-                                {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                                {attachment.DocTypeName && (
+                                  <Badge className="ml-2 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30">
+                                    {attachment.DocTypeName}
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-sm space-y-1">
                                 {attachment.DocIssueDate && (
@@ -1365,11 +1369,11 @@ const TerminationDetails: React.FC = () => {
             <div className="space-y-4">
               <p>Enter refund details for termination {termination.TerminationNo}:</p>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Refund Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Refund Date</label>
                 <DatePicker value={refundDate} onChange={setRefundDate} placeholder="Select refund date" />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Refund Reference</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Refund Reference</label>
                 <Input placeholder="Enter refund reference" value={refundReference} onChange={(e) => setRefundReference(e.target.value)} />
               </div>
               <Alert>

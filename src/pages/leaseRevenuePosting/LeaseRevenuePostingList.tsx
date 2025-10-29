@@ -1,4 +1,4 @@
-// src/pages/leaseRevenuePosting/LeaseRevenuePostingList.tsx
+// src/pages/leaseRevenuePosting/LeaseRevenuePostingList.tsx - Enhanced with Dark Mode Support
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
