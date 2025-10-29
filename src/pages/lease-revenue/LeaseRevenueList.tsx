@@ -1,4 +1,4 @@
-// src/pages/lease-revenue/LeaseRevenueList.tsx
+// src/pages/lease-revenue/LeaseRevenueList.tsx - Enhanced with Dark Mode Support
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -574,11 +574,11 @@ const LeaseRevenueList: React.FC = () => {
   // Render status badge
   const renderStatusBadge = (status: string) => {
     const statusConfig = {
-      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800" },
-      Completed: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800" },
-      Expired: { variant: "destructive" as const, icon: AlertCircle, className: "bg-orange-100 text-orange-800" },
-      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
-      Terminated: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800" },
+      Active: { variant: "default" as const, icon: CheckCircle, className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" },
+      Completed: { variant: "default" as const, icon: CheckCircle, className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" },
+      Expired: { variant: "destructive" as const, icon: AlertCircle, className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400" },
+      Cancelled: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" },
+      Terminated: { variant: "destructive" as const, icon: XCircle, className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.Active;
@@ -595,12 +595,12 @@ const LeaseRevenueList: React.FC = () => {
   // Render posting status badge
   const renderPostingStatusBadge = (isPosted: boolean) => {
     return isPosted ? (
-      <Badge className="bg-green-100 text-green-800">
+      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
         <CheckCircle className="w-3 h-3 mr-1" />
         Posted
       </Badge>
     ) : (
-      <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+      <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800">
         <Clock className="w-3 h-3 mr-1" />
         Unposted
       </Badge>
@@ -686,7 +686,7 @@ const LeaseRevenueList: React.FC = () => {
 
         {/* Summary Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <Building className="h-4 w-4 text-muted-foreground" />
@@ -697,59 +697,59 @@ const LeaseRevenueList: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-blue-600" />
+                <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-sm text-muted-foreground">Total Revenue</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalRevenue)}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(stats.totalRevenue)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm text-muted-foreground">Posted</span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.postedRevenue)}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(stats.postedRevenue)}</div>
               <div className="text-xs text-muted-foreground">{stats.postedCount} units</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-yellow-600" />
+                <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-muted-foreground">Unposted</span>
               </div>
-              <div className="text-2xl font-bold text-yellow-600">{formatCurrency(stats.unpostedRevenue)}</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{formatCurrency(stats.unpostedRevenue)}</div>
               <div className="text-xs text-muted-foreground">{stats.unpostedCount} units</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-purple-600" />
+                <Calculator className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 <span className="text-sm text-muted-foreground">Avg Rent/Day</span>
               </div>
-              <div className="text-lg font-bold text-purple-600">{formatCurrency(stats.averageRentPerDay)}</div>
+              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{formatCurrency(stats.averageRentPerDay)}</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-indigo-600" />
+                <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-sm text-muted-foreground">Posting Rate</span>
               </div>
-              <div className="text-2xl font-bold text-indigo-600">{stats.totalUnits > 0 ? Math.round((stats.postedCount / stats.totalUnits) * 100) : 0}%</div>
+              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{stats.totalUnits > 0 ? Math.round((stats.postedCount / stats.totalUnits) * 100) : 0}%</div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow">
+          <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg dark:hover:shadow-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -837,7 +837,7 @@ const LeaseRevenueList: React.FC = () => {
 
               {/* Advanced Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg dark:bg-muted/20">
                   <Select value={filters.selectedPropertyId || "all"} onValueChange={(value) => handleFilterChange("selectedPropertyId", value === "all" ? "" : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Filter by property" />
@@ -1075,7 +1075,11 @@ const LeaseRevenueList: React.FC = () => {
                       {filteredData.map((item) => (
                         <TableRow
                           key={item.ContractUnitID}
-                          className={cn("hover:bg-muted/50 transition-colors", selectedItems.has(item.ContractUnitID) && "bg-accent/50", item.IsPosted && "bg-green-50/30")}
+                          className={cn(
+                            "hover:bg-muted/50 transition-colors",
+                            selectedItems.has(item.ContractUnitID) && "bg-accent/50 dark:bg-accent/20",
+                            item.IsPosted && "bg-green-50/30 dark:bg-green-950/20"
+                          )}
                         >
                           <TableCell>
                             <Checkbox
@@ -1220,7 +1224,7 @@ const LeaseRevenueList: React.FC = () => {
                                 View Details
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-red-600" onClick={() => handleReversePosting(entry.VoucherNo)}>
+                              <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleReversePosting(entry.VoucherNo)}>
                                 <RotateCcw className="mr-2 h-4 w-4" />
                                 Reverse Posting
                               </DropdownMenuItem>
