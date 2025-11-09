@@ -248,8 +248,8 @@ const LeaseRevenueDetails: React.FC = () => {
     if (!entityData) return;
 
     const parameters = {
-      EntityType: isPostedEntry ? "PostedEntry" : "LeaseRevenueData",
-      EntityID: isPostedEntry ? postedEntry!.PostingID : leaseRevenueItem!.ContractUnitID,
+      TransactionType: isPostedEntry ? "PostedEntry" : "LeaseRevenueData",
+      TransactionID: isPostedEntry ? postedEntry!.PostingID : leaseRevenueItem!.ContractUnitID,
       IncludeRelatedEntries: true,
       IncludeContractDetails: true,
     };
@@ -268,27 +268,29 @@ const LeaseRevenueDetails: React.FC = () => {
       toast.success("Report generated successfully");
     }
   };
-
   const handlePreviewReport = async () => {
     const entityData = isPostedEntry ? postedEntry : leaseRevenueItem;
     if (!entityData) return;
 
     const parameters = {
-      EntityType: isPostedEntry ? "PostedEntry" : "LeaseRevenueData",
-      EntityID: isPostedEntry ? (postedEntry as PostedLeaseRevenueEntry).PostingID : (leaseRevenueItem as LeaseRevenueData).ContractUnitID,
+      TransactionType: isPostedEntry ? "ContractUnit" : "ContractUnit",
+      TransactionID: isPostedEntry ? (postedEntry as PostedLeaseRevenueEntry).PostingID : (leaseRevenueItem as LeaseRevenueData).ContractUnitID,
       IncludeRelatedEntries: true,
       IncludeContractDetails: true,
     };
 
-    setShowPdfPreview(true);
-    const response = await detailsPdfReport.generateReport("lease-revenue-details", parameters, {
+    // Generate the report first
+    const response = await detailsPdfReport.generateReport("lease-transaction-details", parameters, {
       orientation: "Portrait",
       download: false,
       showToast: false,
     });
 
-    if (!response.success) {
-      toast.error("Failed to generate report preview");
+    // Only open the modal if generation was successful
+    if (response.success) {
+      setShowPdfPreview(true);
+    } else {
+      toast.error(response.error || "Failed to generate report preview");
     }
   };
 
