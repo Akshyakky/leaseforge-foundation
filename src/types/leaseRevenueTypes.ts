@@ -437,6 +437,7 @@ export const LEASE_REVENUE_MODES = {
   PROCESS_LEASE_REVENUE_POSTING: 2,
   GET_POSTED_ENTRIES: 3,
   REVERSE_POSTING: 4,
+  GET_TRANSACTION_DETAILS: 5,
 } as const;
 
 export type PostingStatus = (typeof POSTING_STATUS)[keyof typeof POSTING_STATUS];

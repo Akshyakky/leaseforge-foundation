@@ -498,6 +498,95 @@ class LeaseRevenueService extends BaseService {
 
     return [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
   }
+  /**
+   * Get lease revenue details by Contract Unit ID
+   * @param contractUnitId - The contract unit ID
+   * @param companyId - Company ID
+   * @param fiscalYearId - Fiscal Year ID
+   * @returns Lease revenue data for the specific unit
+   */
+  async getLeaseRevenueDetails(contractUnitId: number, companyId: number, fiscalYearId: number): Promise<LeaseRevenueData | null> {
+    try {
+      // Fetch all data for current period and find the specific item
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+      const searchRequest: LeaseRevenueSearchRequest = {
+        PeriodFrom: startOfMonth,
+        PeriodTo: endOfMonth,
+        CompanyID: companyId,
+        FiscalYearID: fiscalYearId,
+        ShowUnpostedOnly: false, // Include both posted and unposted
+        IncludePMUnits: true, // Include all units
+      };
+
+      const data = await this.getLeaseRevenueData(searchRequest);
+      const item = data.find((d) => d.ContractUnitID === contractUnitId);
+
+      return item || null;
+    } catch (error) {
+      console.error("Error fetching lease revenue details:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get posted entry details by Posting ID
+   * @param postingId - The posting ID
+   * @param companyId - Company ID
+   * @returns Posted entry details
+   */
+  async getPostedEntryDetails(postingId: number, companyId: number): Promise<PostedLeaseRevenueEntry | null> {
+    try {
+      const request: BaseRequest = {
+        mode: LEASE_REVENUE_MODES.GET_TRANSACTION_DETAILS,
+        parameters: {
+          TransactionType: "PostedEntry",
+          TransactionID: postingId,
+          CompanyID: companyId,
+          CurrentUserID: this.getCurrentUserId(),
+          CurrentUserName: this.getCurrentUser(),
+        },
+      };
+
+      const response = await this.execute<any>(request);
+
+      if (response.success && response.data) {
+        // Transform the response to match PostedLeaseRevenueEntry interface
+        const data = Array.isArray(response.data) ? response.data[0] : response.data;
+
+        return {
+          PostingID: data.TransactionID || data.PostingID || postingId,
+          VoucherNo: data.TransactionNo || data.VoucherNo,
+          TransactionDate: data.TransactionDate,
+          PostingDate: data.PostingDate || data.TransactionDate,
+          AccountID: data.AccountID || 0,
+          AccountCode: data.AccountCode || "",
+          AccountName: data.AccountName || "",
+          TransactionType: data.EntryType || data.TransactionType || "Debit",
+          DebitAmount: data.DebitAmount || 0,
+          CreditAmount: data.CreditAmount || 0,
+          Description: data.Description || "",
+          Narration: data.Narration || "",
+          ContractUnitID: data.ContractUnitID,
+          UnitID: data.UnitID,
+          UnitNo: data.UnitNo,
+          PropertyName: data.PropertyName,
+          ContractNo: data.ContractNo,
+          CustomerFullName: data.CustomerName || data.CustomerFullName,
+          PostingStatus: data.PostingStatus || "Posted",
+          CreatedBy: data.CreatedBy,
+          CreatedOn: data.CreatedOn,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error fetching posted entry details:", error);
+      return null;
+    }
+  }
 }
 
 // Export a singleton instance

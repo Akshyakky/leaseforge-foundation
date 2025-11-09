@@ -1,5 +1,5 @@
 // src/pages/lease-revenue/LeaseRevenueDetails.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,11 +31,13 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAppSelector } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 // Services and Types
 import { leaseRevenueService } from "@/services/leaseRevenueService";
 import { contractService } from "@/services/contractService";
 import { companyService } from "@/services/companyService";
+import { fiscalYearService } from "@/services/fiscalYearService";
 import { LeaseRevenueData, PostedLeaseRevenueEntry, PostingResult } from "@/types/leaseRevenueTypes";
 
 // PDF Components
@@ -60,6 +62,7 @@ const LeaseRevenueDetails: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState("details");
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<any>(null);
 
   // Action states
   const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
@@ -69,25 +72,117 @@ const LeaseRevenueDetails: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const detailsPdfReport = useGenericPdfReport();
 
+  // Initialize company and fiscal year data
   useEffect(() => {
-    initializeCompany();
-    fetchDetails();
-  }, [id, location.pathname]);
+    const initializeCompany = async () => {
+      try {
+        const [companiesData, fiscalYearsData] = await Promise.all([companyService.getCompaniesForDropdown(true), fiscalYearService.getAllFiscalYears()]);
 
-  // Initialize company data
-  const initializeCompany = async () => {
+        if (companiesData.length > 0) {
+          const defaultCompany = companiesData[0];
+          setSelectedCompany(defaultCompany);
+
+          // Get current fiscal year for the company
+          try {
+            const currentFY = await fiscalYearService.getCurrentFiscalYear(defaultCompany.CompanyID);
+            if (currentFY) {
+              setSelectedFiscalYear(currentFY);
+            } else if (fiscalYearsData.length > 0) {
+              const companyFY = fiscalYearsData.find((fy) => fy.CompanyID === defaultCompany.CompanyID);
+              if (companyFY) {
+                setSelectedFiscalYear(companyFY);
+              }
+            }
+          } catch (error) {
+            console.error("Error fetching current fiscal year:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching company data:", error);
+      }
+    };
+
+    initializeCompany();
+  }, []);
+
+  // Fetch contract details by contract unit ID
+  const fetchContractDetailsByUnitId = useCallback(async (contractUnitId: number) => {
     try {
-      const companiesData = await companyService.getCompaniesForDropdown(true);
-      if (companiesData.length > 0) {
-        setSelectedCompany(companiesData[0]);
+      const contracts = await contractService.getAllContracts();
+      const contract = contracts.find((c) => c.ContractID);
+
+      if (contract) {
+        setContractDetails(contract);
       }
     } catch (error) {
-      console.error("Error fetching company data:", error);
+      console.error("Error fetching contract details:", error);
     }
-  };
+  }, []);
+
+  // Fetch posted entry details
+  const fetchPostedEntryDetails = useCallback(async () => {
+    if (!selectedCompany?.CompanyID || !id) {
+      throw new Error("Company information not available");
+    }
+
+    try {
+      const entry = await leaseRevenueService.getPostedEntryDetails(parseInt(id!), selectedCompany.CompanyID);
+
+      if (entry) {
+        setPostedEntry(entry);
+
+        // Get related entries if voucher number is available
+        if (entry.VoucherNo) {
+          const currentDate = new Date();
+          const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+          const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+          const allEntries = await leaseRevenueService.getPostedEntries({
+            PeriodFrom: startOfMonth,
+            PeriodTo: endOfMonth,
+            CompanyID: selectedCompany.CompanyID,
+          });
+
+          const related = allEntries.filter((e) => e.VoucherNo === entry.VoucherNo && e.PostingID !== entry.PostingID);
+          setRelatedEntries(related);
+        }
+
+        // If there's a contract unit ID, try to get contract details
+        if (entry.ContractUnitID) {
+          await fetchContractDetailsByUnitId(entry.ContractUnitID);
+        }
+      } else {
+        throw new Error("Posted entry not found");
+      }
+    } catch (error) {
+      console.error("Error in fetchPostedEntryDetails:", error);
+      throw error;
+    }
+  }, [selectedCompany, id, fetchContractDetailsByUnitId]);
+
+  // Fetch lease revenue details (unposted entry)
+  const fetchLeaseRevenueDetails = useCallback(async () => {
+    if (!selectedCompany?.CompanyID || !selectedFiscalYear?.FiscalYearID || !id) {
+      throw new Error("Company or fiscal year information not available");
+    }
+
+    try {
+      const item = await leaseRevenueService.getLeaseRevenueDetails(parseInt(id!), selectedCompany.CompanyID, selectedFiscalYear.FiscalYearID || 1);
+
+      if (item) {
+        setLeaseRevenueItem(item);
+        await fetchContractDetailsByUnitId(item.ContractUnitID);
+      } else {
+        throw new Error("Lease revenue entry not found");
+      }
+    } catch (error) {
+      console.error("Error in fetchLeaseRevenueDetails:", error);
+      throw error;
+    }
+  }, [selectedCompany, selectedFiscalYear, id, fetchContractDetailsByUnitId]);
 
   // Fetch details based on type
-  const fetchDetails = async () => {
+  const fetchDetails = useCallback(async () => {
     if (!id) {
       navigate("/lease-revenue");
       return;
@@ -108,80 +203,14 @@ const LeaseRevenueDetails: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, isPostedEntry, navigate, fetchPostedEntryDetails, fetchLeaseRevenueDetails]);
 
-  // Fetch posted entry details
-  const fetchPostedEntryDetails = async () => {
-    try {
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-      const entries = await leaseRevenueService.getPostedEntries({
-        PeriodFrom: startOfMonth,
-        PeriodTo: endOfMonth,
-        CompanyID: selectedCompany?.CompanyID || 0,
-      });
-
-      const entry = entries.find((e) => e.PostingID === parseInt(id!));
-      if (entry) {
-        setPostedEntry(entry);
-
-        // Get related entries for the same voucher
-        const related = entries.filter((e) => e.VoucherNo === entry.VoucherNo && e.PostingID !== entry.PostingID);
-        setRelatedEntries(related);
-
-        // If there's a contract unit ID, try to get contract details
-        if (entry.ContractUnitID) {
-          await fetchContractDetailsByUnitId(entry.ContractUnitID);
-        }
-      } else {
-        throw new Error("Posted entry not found");
-      }
-    } catch (error) {
-      throw error;
+  // Fetch details after company and fiscal year are initialized
+  useEffect(() => {
+    if (selectedCompany?.CompanyID && (isPostedEntry || selectedFiscalYear?.FiscalYearID)) {
+      fetchDetails();
     }
-  };
-
-  // Fetch lease revenue details (unposted entry)
-  const fetchLeaseRevenueDetails = async () => {
-    try {
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-      const data = await leaseRevenueService.getLeaseRevenueData({
-        PeriodFrom: startOfMonth,
-        PeriodTo: endOfMonth,
-        CompanyID: selectedCompany?.CompanyID || 0,
-        FiscalYearID: 1,
-      });
-
-      const item = data.find((d) => d.ContractUnitID === parseInt(id!));
-      if (item) {
-        setLeaseRevenueItem(item);
-        await fetchContractDetailsByUnitId(item.ContractUnitID);
-      } else {
-        throw new Error("Lease revenue entry not found");
-      }
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  // Fetch contract details by contract unit ID
-  const fetchContractDetailsByUnitId = async (contractUnitId: number) => {
-    try {
-      const contracts = await contractService.getAllContracts();
-      const contract = contracts.find((c) => c.ContractID);
-
-      if (contract) {
-        setContractDetails(contract);
-      }
-    } catch (error) {
-      console.error("Error fetching contract details:", error);
-    }
-  };
+  }, [id, location.pathname, selectedCompany, selectedFiscalYear, isPostedEntry, fetchDetails]);
 
   // Handle reverse posting
   const handleReversePosting = async () => {
@@ -285,16 +314,16 @@ const LeaseRevenueDetails: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
-        return "bg-green-100 text-green-800";
+        return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800";
       case "Completed":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800";
       case "Expired":
-        return "bg-orange-100 text-orange-800";
+        return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800";
       case "Cancelled":
       case "Terminated":
-        return "bg-red-100 text-red-800";
+        return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-800";
     }
   };
 
@@ -330,12 +359,12 @@ const LeaseRevenueDetails: React.FC = () => {
           <h1 className="text-2xl font-semibold">{isPostedEntry ? "Posted Entry Details" : "Lease Revenue Details"}</h1>
           <div className="ml-2 flex items-center gap-2">
             {isPostedEntry ? (
-              <Badge className="bg-green-100 text-green-800">
+              <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Posted
               </Badge>
             ) : (
-              <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
                 <Clock className="h-3 w-3 mr-1" />
                 Unposted
               </Badge>
@@ -481,7 +510,7 @@ const LeaseRevenueDetails: React.FC = () => {
                   <div className="space-y-1">
                     <div className="text-muted-foreground">Posting Status</div>
                     <div>
-                      <Badge className="bg-green-100 text-green-800">{postedEntry!.PostingStatus}</Badge>
+                      <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">{postedEntry!.PostingStatus}</Badge>
                     </div>
                   </div>
                 </div>
@@ -552,18 +581,18 @@ const LeaseRevenueDetails: React.FC = () => {
 
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Contract Status</h3>
-                      <Badge className={getStatusColor(leaseRevenueItem!.ContractStatus)}>{leaseRevenueItem!.ContractStatus}</Badge>
+                      <Badge className={cn("border", getStatusColor(leaseRevenueItem!.ContractStatus))}>{leaseRevenueItem!.ContractStatus}</Badge>
                     </div>
 
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Posting Status</h3>
                       {leaseRevenueItem!.IsPosted ? (
-                        <Badge className="bg-green-100 text-green-800">
+                        <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Posted
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+                        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
                           <Clock className="h-3 w-3 mr-1" />
                           Unposted
                         </Badge>
@@ -661,7 +690,7 @@ const LeaseRevenueDetails: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
-                      <Badge className={getStatusColor(contractDetails.ContractStatus)}>{contractDetails.ContractStatus}</Badge>
+                      <Badge className={cn("border", getStatusColor(contractDetails.ContractStatus))}>{contractDetails.ContractStatus}</Badge>
                     </div>
 
                     <div>
@@ -709,9 +738,9 @@ const LeaseRevenueDetails: React.FC = () => {
                     <div className="text-sm text-muted-foreground">Rent Per Day</div>
                     <div className="text-2xl font-bold">{formatCurrency(leaseRevenueItem.RentPerDay)}</div>
                   </div>
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-center p-4 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg">
                     <div className="text-sm text-muted-foreground">Posting Amount</div>
-                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(leaseRevenueItem.PostingAmount)}</div>
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(leaseRevenueItem.PostingAmount)}</div>
                   </div>
                 </div>
 
@@ -728,9 +757,9 @@ const LeaseRevenueDetails: React.FC = () => {
                 </Alert>
 
                 {leaseRevenueItem.Balance !== leaseRevenueItem.PostingAmount && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="font-medium text-yellow-800">Balance Information</div>
-                    <div className="text-sm text-yellow-700 mt-1">
+                  <div className="p-4 bg-yellow-500/10 dark:bg-yellow-500/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div className="font-medium text-yellow-800 dark:text-yellow-400">Balance Information</div>
+                    <div className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
                       Current Balance: {formatCurrency(leaseRevenueItem.Balance)}
                       <br />
                       Difference: {formatCurrency(leaseRevenueItem.Balance - leaseRevenueItem.PostingAmount)}
@@ -786,22 +815,22 @@ const LeaseRevenueDetails: React.FC = () => {
                 )}
 
                 {isPostedEntry && (
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                  <div className="flex justify-between items-center p-3 bg-green-500/10 dark:bg-green-500/20 rounded-lg">
                     <div>
                       <div className="font-medium">Posted</div>
                       <div className="text-sm text-muted-foreground">Entry posted to general ledger</div>
                     </div>
-                    <Badge className="bg-green-100 text-green-800">Posted</Badge>
+                    <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">Posted</Badge>
                   </div>
                 )}
 
                 {!isPostedEntry && leaseRevenueItem && !leaseRevenueItem.IsPosted && (
-                  <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex justify-between items-center p-3 bg-yellow-500/10 dark:bg-yellow-500/20 rounded-lg">
                     <div>
                       <div className="font-medium">Pending Posting</div>
                       <div className="text-sm text-muted-foreground">Revenue entry awaiting posting</div>
                     </div>
-                    <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
+                    <Badge className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">Pending</Badge>
                   </div>
                 )}
 
