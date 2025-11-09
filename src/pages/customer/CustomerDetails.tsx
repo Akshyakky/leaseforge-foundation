@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { toast } from "sonner";
 import { Customer, CustomerContact, CustomerAttachment, CustomerType, CustomerGLDetails, CustomerOutstandingBalance } from "@/types/customerTypes";
@@ -35,6 +35,7 @@ import { AttachmentGallery } from "@/components/attachments/AttachmentGallery";
 import { AttachmentThumbnail } from "@/components/attachments/AttachmentThumbnail";
 import { FileTypeIcon } from "@/components/attachments/FileTypeIcon";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export const CustomerDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -131,8 +132,8 @@ export const CustomerDetails = () => {
       <div className="container p-4">
         <div className="flex items-center justify-center h-screen">
           <div className="animate-pulse space-y-4">
-            <div className="h-12 bg-gray-200 rounded-md w-3/4 mx-auto"></div>
-            <div className="h-64 bg-gray-200 rounded-md w-full"></div>
+            <div className="h-12 bg-muted rounded-md w-3/4 mx-auto"></div>
+            <div className="h-64 bg-muted rounded-md w-full"></div>
           </div>
         </div>
       </div>
@@ -144,7 +145,7 @@ export const CustomerDetails = () => {
       <div className="container p-4">
         <Card>
           <CardContent className="flex flex-col items-center justify-center h-64">
-            <p className="text-xl text-red-500 mb-4">{error || "Customer not found"}</p>
+            <p className="text-xl text-destructive mb-4">{error || "Customer not found"}</p>
             <Button onClick={() => navigate("/customers")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Customers
@@ -243,7 +244,7 @@ export const CustomerDetails = () => {
                 {outstandingBalance && (
                   <div className="flex items-center gap-2">
                     <HandCoins className="h-4 w-4 text-muted-foreground" />
-                    <span className={`font-semibold ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`}>
+                    <span className={cn("font-semibold", outstandingBalance.OutstandingBalance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>
                       Outstanding Balance: {formatCurrency(outstandingBalance.OutstandingBalance)}
                     </span>
                   </div>
@@ -349,13 +350,13 @@ export const CustomerDetails = () => {
               {customer.Remark && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-2">Remarks</h3>
-                  <p className="p-4 bg-gray-50 rounded-md">{customer.Remark}</p>
+                  <p className="p-4 bg-accent rounded-md">{customer.Remark}</p>
                 </div>
               )}
 
               <div className="mt-6">
                 <h3 className="text-lg font-semibold mb-2">Address Information</h3>
-                <div className="p-4 bg-gray-50 rounded-md">
+                <div className="p-4 bg-accent rounded-md">
                   <p>{customer.Address || "No address information provided"}</p>
                   {customer.CityName && (
                     <div className="mt-2">
@@ -372,7 +373,7 @@ export const CustomerDetails = () => {
             </TabsContent>
             <TabsContent value="contacts" className="mt-6">
               {contacts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                <div className="flex flex-col items-center justify-center p-8 bg-accent rounded-md">
                   <p className="text-muted-foreground mb-4">No contacts associated with this customer.</p>
                   <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -388,7 +389,11 @@ export const CustomerDetails = () => {
                           <div className="space-y-2">
                             <div className="flex items-center">
                               <span className="font-medium">{contact.ContactName}</span>
-                              {contact.ContactTypeName && <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-100">{contact.ContactTypeName}</Badge>}
+                              {contact.ContactTypeName && (
+                                <Badge className="ml-2" variant="secondary">
+                                  {contact.ContactTypeName}
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-sm space-y-1">
                               {contact.EmailID && (
@@ -429,7 +434,7 @@ export const CustomerDetails = () => {
             </TabsContent>
             <TabsContent value="documents" className="mt-6">
               {attachments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                <div className="flex flex-col items-center justify-center p-8 bg-accent rounded-md">
                   <p className="text-muted-foreground mb-4">No documents associated with this customer.</p>
                   <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -458,7 +463,11 @@ export const CustomerDetails = () => {
                             <div className="flex-1 space-y-2">
                               <div className="flex items-center">
                                 <span className="font-medium">{attachment.DocumentName}</span>
-                                {attachment.DocTypeName && <Badge className="ml-2 bg-purple-100 text-purple-800 hover:bg-purple-100">{attachment.DocTypeName}</Badge>}
+                                {attachment.DocTypeName && (
+                                  <Badge className="ml-2" variant="outline">
+                                    {attachment.DocTypeName}
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-sm space-y-1">
                                 {attachment.DocIssueDate && (
@@ -519,12 +528,16 @@ export const CustomerDetails = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-muted-foreground">Current Outstanding Amount</p>
-                          <p className={`text-2xl font-bold ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`}>
+                          <p
+                            className={cn("text-2xl font-bold", outstandingBalance.OutstandingBalance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}
+                          >
                             {formatCurrency(outstandingBalance.OutstandingBalance)}
                           </p>
                         </div>
-                        <div className={`p-4 rounded-full ${outstandingBalance.OutstandingBalance >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
-                          <HandCoins className={`h-8 w-8 ${outstandingBalance.OutstandingBalance >= 0 ? "text-blue-700" : "text-red-700"}`} />
+                        <div className={cn("p-4 rounded-full", outstandingBalance.OutstandingBalance >= 0 ? "bg-blue-500/10" : "bg-red-500/10")}>
+                          <HandCoins
+                            className={cn("h-8 w-8", outstandingBalance.OutstandingBalance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}
+                          />
                         </div>
                       </div>
                     </CardContent>
@@ -533,7 +546,7 @@ export const CustomerDetails = () => {
 
                 {/* GL Account Details */}
                 {glDetails.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-md">
+                  <div className="flex flex-col items-center justify-center p-8 bg-accent rounded-md">
                     <p className="text-muted-foreground mb-4">No GL accounts associated with this customer.</p>
                     <Button variant="outline" onClick={() => navigate(`/customers/edit/${customer.CustomerID}`)}>
                       <Plus className="mr-2 h-4 w-4" />
@@ -571,7 +584,11 @@ export const CustomerDetails = () => {
                               </TableCell>
                               <TableCell>{account.CurrencyName || "N/A"}</TableCell>
                               <TableCell>
-                                {account.IsDefault ? <Badge className="bg-green-100 text-green-800">Default</Badge> : <Badge variant="secondary">Secondary</Badge>}
+                                {account.IsDefault ? (
+                                  <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20">Default</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Secondary</Badge>
+                                )}
                               </TableCell>
                               <TableCell className="text-muted-foreground">{account.Remarks || "—"}</TableCell>
                             </TableRow>

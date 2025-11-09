@@ -1,6 +1,6 @@
 // src/pages/lease-revenue/LeaseRevenueDetails.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -44,9 +44,13 @@ import { useGenericPdfReport } from "@/hooks/usePdfReports";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 const LeaseRevenueDetails: React.FC = () => {
-  const { id, type } = useParams<{ id: string; type?: string }>();
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAppSelector((state) => state.auth);
+
+  // Determine if this is a posted entry based on the URL path
+  const isPostedEntry = location.pathname.includes("/posted/");
 
   // State variables
   const [leaseRevenueItem, setLeaseRevenueItem] = useState<LeaseRevenueData | null>(null);
@@ -65,12 +69,10 @@ const LeaseRevenueDetails: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const detailsPdfReport = useGenericPdfReport();
 
-  const isPostedEntry = type === "posted";
-
   useEffect(() => {
     initializeCompany();
     fetchDetails();
-  }, [id, type]);
+  }, [id, location.pathname]);
 
   // Initialize company data
   const initializeCompany = async () => {
@@ -110,8 +112,6 @@ const LeaseRevenueDetails: React.FC = () => {
 
   // Fetch posted entry details
   const fetchPostedEntryDetails = async () => {
-    // In a real implementation, you would have a method to get specific posted entry details
-    // For now, we'll simulate this by getting entries and finding the matching one
     try {
       const currentDate = new Date();
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -145,8 +145,6 @@ const LeaseRevenueDetails: React.FC = () => {
 
   // Fetch lease revenue details (unposted entry)
   const fetchLeaseRevenueDetails = async () => {
-    // For unposted entries, we need to search through lease revenue data
-    // This is a simplified approach - in practice, you might want a specific API endpoint
     try {
       const currentDate = new Date();
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -156,7 +154,7 @@ const LeaseRevenueDetails: React.FC = () => {
         PeriodFrom: startOfMonth,
         PeriodTo: endOfMonth,
         CompanyID: selectedCompany?.CompanyID || 0,
-        FiscalYearID: 1, // You would get this from the user context
+        FiscalYearID: 1,
       });
 
       const item = data.find((d) => d.ContractUnitID === parseInt(id!));
@@ -174,23 +172,14 @@ const LeaseRevenueDetails: React.FC = () => {
   // Fetch contract details by contract unit ID
   const fetchContractDetailsByUnitId = async (contractUnitId: number) => {
     try {
-      // This would require a service method to get contract details by unit ID
-      // For now, we'll simulate this
       const contracts = await contractService.getAllContracts();
-
-      // Find contract that contains this unit (simplified approach)
-      const contract = contracts.find(
-        (c) =>
-          // This assumes you have unit information in the contract
-          c.ContractID // You would need to implement proper contract-unit relationship lookup
-      );
+      const contract = contracts.find((c) => c.ContractID);
 
       if (contract) {
         setContractDetails(contract);
       }
     } catch (error) {
       console.error("Error fetching contract details:", error);
-      // Don't throw error here as it's supplementary information
     }
   };
 
@@ -211,7 +200,6 @@ const LeaseRevenueDetails: React.FC = () => {
 
       if (response.Status === 1) {
         toast.success("Posting reversed successfully");
-        // Refresh the details
         await fetchDetails();
       } else {
         toast.error(response.Message || "Failed to reverse posting");

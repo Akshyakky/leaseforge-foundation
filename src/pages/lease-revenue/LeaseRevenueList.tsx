@@ -1,24 +1,21 @@
-// src/pages/lease-revenue/LeaseRevenueList.tsx - Enhanced with Dark Mode Support
+// src/pages/lease-revenue/LeaseRevenueList.tsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Loader2,
   MoreHorizontal,
   Search,
-  Plus,
   FileText,
   Building,
   Calendar,
   Eye,
-  Edit,
   CheckCircle,
   Clock,
   XCircle,
@@ -28,8 +25,6 @@ import {
   Filter,
   X,
   ChevronDown,
-  Settings,
-  BarChart3,
   TrendingUp,
   SortAsc,
   SortDesc,
@@ -44,7 +39,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Separator } from "@/components/ui/separator";
 import { debounce } from "lodash";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth } from "date-fns";

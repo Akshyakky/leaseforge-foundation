@@ -190,13 +190,13 @@ const GeneralLedgerDashboard = () => {
 
   // Report configuration
   const reports = [
-    // {
-    //   title: "Trial Balance",
-    //   description: "View trial balance with opening and closing balances",
-    //   icon: <Calculator className="h-8 w-8" />,
-    //   path: "/general-ledger/trial-balance",
-    //   color: "bg-blue-500",
-    // },
+    {
+      title: "Trial Balance",
+      description: "View trial balance with opening and closing balances",
+      icon: <Calculator className="h-8 w-8" />,
+      path: "/general-ledger/trial-balance",
+      color: "bg-blue-500",
+    },
     {
       title: "Balance Sheet",
       description: "Assets, liabilities, and equity statement",
@@ -204,20 +204,20 @@ const GeneralLedgerDashboard = () => {
       path: "/general-ledger/balance-sheet",
       color: "bg-green-500",
     },
-    // {
-    //   title: "Income Statement",
-    //   description: "Profit and loss statement for the period",
-    //   icon: <TrendingUp className="h-8 w-8" />,
-    //   path: "/general-ledger/income-statement",
-    //   color: "bg-purple-500",
-    // },
-    // {
-    //   title: "Account Ledger",
-    //   description: "Detailed account transactions with running balance",
-    //   icon: <BookOpen className="h-8 w-8" />,
-    //   path: "/general-ledger/account-ledger",
-    //   color: "bg-orange-500",
-    // },
+    {
+      title: "Income Statement",
+      description: "Profit and loss statement for the period",
+      icon: <TrendingUp className="h-8 w-8" />,
+      path: "/general-ledger/income-statement",
+      color: "bg-purple-500",
+    },
+    {
+      title: "Account Ledger",
+      description: "Detailed account transactions with running balance",
+      icon: <BookOpen className="h-8 w-8" />,
+      path: "/general-ledger/account-ledger",
+      color: "bg-orange-500",
+    },
     {
       title: "GL Transactions",
       description: "Detailed general ledger transaction listing",
@@ -351,7 +351,7 @@ const GeneralLedgerDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      {/* <Card>
+      <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>Common general ledger tasks</CardDescription>
@@ -368,7 +368,7 @@ const GeneralLedgerDashboard = () => {
               <span>Chart of Accounts</span>
             </Button>
 
-            <Button
+            {/* <Button
               variant="outline"
               className="h-auto p-4 flex flex-col items-center gap-2"
               onClick={() => navigateToReport("/general-ledger/aged-trial-balance")}
@@ -376,7 +376,7 @@ const GeneralLedgerDashboard = () => {
             >
               <Clock className="h-6 w-6" />
               <span>Aged Trial Balance</span>
-            </Button>
+            </Button> */}
 
             <Button
               variant="outline"
@@ -389,7 +389,7 @@ const GeneralLedgerDashboard = () => {
             </Button>
           </div>
         </CardContent>
-      </Card> */}
+      </Card>
     </div>
   );
 };
